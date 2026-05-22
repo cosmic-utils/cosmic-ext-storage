@@ -5,8 +5,10 @@
   <project_license>MPL-2.0</project_license>
   <name>Storage</name>
   <name xml:lang="cs">Úložiště</name>
+  <name xml:lang="fr">Stockage</name>
   <summary>A Storage Utility for the COSMIC™ desktop</summary>
   <summary xml:lang="cs">Nástroj správy úložiště pro prostředí COSMIC™</summary>
+  <summary xml:lang="fr">A Storage Utility for the COSMIC™ desktop</summary>
   <icon type="local" width="64" height="64">com.cosmic.ext.Storage</icon>
   <icon type="local" width="128" height="128">com.cosmic.ext.Storage</icon>
   <icon type="remote" width="64" height="64" scale="1">
