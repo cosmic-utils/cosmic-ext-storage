@@ -11,8 +11,9 @@ use crate::state::dialogs::{
     ChangePassphraseDialog, EditEncryptionOptionsDialog, EditEncryptionOptionsStep,
     TakeOwnershipDialog, UnlockEncryptedDialog,
 };
+use cosmic::iced::widget as iced_widget;
 use cosmic::{
-    Element, iced_widget,
+    Element,
     widget::text::caption,
     widget::{button, checkbox, dialog, text_input},
 };
@@ -26,7 +27,8 @@ pub fn take_ownership<'a>(state: TakeOwnershipDialog) -> Element<'a, Message> {
 
     let mut content = iced_widget::column![
         caption(fl!("take-ownership-warning")),
-        checkbox(fl!("take-ownership-recursive"), recursive)
+        checkbox(recursive)
+            .label(fl!("take-ownership-recursive"))
             .on_toggle(|v| TakeOwnershipMessage::RecursiveUpdate(v).into()),
     ]
     .spacing(12);
@@ -127,19 +129,19 @@ pub fn edit_encryption_options<'a>(state: EditEncryptionOptionsDialog) -> Elemen
 
     let controls_enabled = !use_defaults;
 
-    let mut defaults_cb = checkbox(fl!("user-session-defaults"), use_defaults);
+    let mut defaults_cb = checkbox(use_defaults).label(fl!("user-session-defaults"));
     if !running {
         defaults_cb =
             defaults_cb.on_toggle(|v| EditEncryptionOptionsMessage::UseDefaultsUpdate(v).into());
     }
 
-    let mut startup_cb = checkbox(fl!("unlock-at-startup"), unlock_at_startup);
+    let mut startup_cb = checkbox(unlock_at_startup).label(fl!("unlock-at-startup"));
     if controls_enabled && !running {
         startup_cb =
             startup_cb.on_toggle(|v| EditEncryptionOptionsMessage::UnlockAtStartupUpdate(v).into());
     }
 
-    let mut auth_cb = checkbox(fl!("require-auth-to-unlock"), require_auth);
+    let mut auth_cb = checkbox(require_auth).label(fl!("require-auth-to-unlock"));
     if controls_enabled && !running {
         auth_cb = auth_cb.on_toggle(|v| EditEncryptionOptionsMessage::RequireAuthUpdate(v).into());
     }
@@ -166,7 +168,7 @@ pub fn edit_encryption_options<'a>(state: EditEncryptionOptionsDialog) -> Elemen
             passphrase_input.on_input(|t| EditEncryptionOptionsMessage::PassphraseUpdate(t).into());
     }
 
-    let mut show_pass_cb = checkbox(fl!("show-passphrase"), show_passphrase);
+    let mut show_pass_cb = checkbox(show_passphrase).label(fl!("show-passphrase"));
     if controls_enabled && !running {
         show_pass_cb = show_pass_cb
             .on_toggle(|v| EditEncryptionOptionsMessage::ShowPassphraseUpdate(v).into());

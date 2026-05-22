@@ -28,8 +28,8 @@ toml = "0.9.8"
 thiserror = "2.0.18"
 which = "8.0.0"
 udisks2 = "0.3.1"
-zbus = "5.14.0"
-zbus_macros = "5.14.0"
+zbus = "5.15.0"
+zbus_macros = "5.15.0"
 tracing-subscriber = { version = "0.3.19", features = ["env-filter"] }
 tracing-appender = "0.2.3"
 num-format = "0.4.4"
@@ -57,7 +57,7 @@ features = ["fluent-system", "desktop-requester"]
 
 [workspace.dependencies.libcosmic]
 git = "https://github.com/pop-os/libcosmic.git"
-rev = "beddbf17703728182395a13267954d839226331d"
+rev = "2f02228"
 features = [
     # Accessibility support
     "a11y",

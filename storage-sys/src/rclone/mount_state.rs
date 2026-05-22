@@ -11,13 +11,13 @@ fn unescape_mount_path(s: &str) -> String {
         if c == '\\' {
             let mut octal = String::with_capacity(3);
             for _ in 0..3 {
-                if let Some(&next) = chars.as_str().as_bytes().first() {
-                    if (b'0'..=b'7').contains(&next) {
-                        octal.push(next as char);
-                        chars.next();
-                    } else {
-                        break;
-                    }
+                if let Some(&next) = chars.as_str().as_bytes().first()
+                    && (b'0'..=b'7').contains(&next)
+                {
+                    octal.push(next as char);
+                    chars.next();
+                } else {
+                    break;
                 }
             }
             if octal.len() == 3 {

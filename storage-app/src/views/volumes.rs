@@ -1,8 +1,8 @@
 use cosmic::{
     Element,
     cosmic_theme::palette::WithAlpha,
+    iced::widget::column,
     iced::{Alignment, Background, Length, Shadow},
-    iced_widget::{self, column},
     widget::{
         self, container,
         text::{caption, caption_heading},
@@ -21,7 +21,7 @@ impl Segment {
     pub fn get_segment_control<'a>(&self) -> Element<'a, Message> {
         if self.kind == DiskSegmentKind::FreeSpace {
             container(
-                iced_widget::column![
+                column![
                     caption_heading(fl!("free-space-caption")).center(),
                     caption(bytes_to_pretty(&self.size, false)).center()
                 ]
@@ -35,7 +35,7 @@ impl Segment {
             .into()
         } else if self.kind == DiskSegmentKind::Reserved {
             container(
-                iced_widget::column![
+                column![
                     caption_heading(fl!("reserved-space-caption")).center(),
                     caption(bytes_to_pretty(&self.size, false)).center()
                 ]
@@ -49,7 +49,7 @@ impl Segment {
             .into()
         } else {
             container(
-                iced_widget::column![
+                column![
                     caption_heading(self.name.clone()).center(),
                     caption(bytes_to_pretty(&self.size, false)).center()
                 ]
@@ -95,7 +95,7 @@ impl VolumesControl {
 
                     let top = cosmic::widget::button::custom(
                         container(
-                            iced_widget::column![
+                            column![
                                 caption_heading(segment.name.clone()).center(),
                                 caption(bytes_to_pretty(&segment.size, false)).center(),
                                 caption(state_text).center(),
@@ -121,7 +121,7 @@ impl VolumesControl {
 
                     let bottom_content: Element<Message> = if v.volume.locked {
                         container(
-                            iced_widget::column![caption(fl!("locked")).center()]
+                            column![caption(fl!("locked")).center()]
                                 .width(Length::Fill)
                                 .height(Length::Fill)
                                 .align_x(Alignment::Center),
@@ -130,7 +130,7 @@ impl VolumesControl {
                         .into()
                     } else {
                         let direct = &v.children;
-                        let mut col = iced_widget::column![].spacing(8);
+                        let mut col = column![].spacing(8);
                         col = col.width(Length::Fill).height(Length::Fill);
 
                         if direct.len() == 1 && !direct[0].children.is_empty() {
@@ -158,7 +158,7 @@ impl VolumesControl {
                         .width(Length::Fill);
 
                     return container(
-                        iced_widget::column![top, bottom]
+                        column![top, bottom]
                             .spacing(6)
                             .height(Length::Fixed(SEGMENT_BUTTON_HEIGHT)),
                     )
@@ -186,12 +186,13 @@ impl VolumesControl {
             Some(segment) => segment,
             None => {
                 return container(
-                    column![
+                    cosmic::widget::Column::from_vec(vec![
                         cosmic::widget::Row::from_vec(vec![])
                             .spacing(10)
-                            .width(Length::Fill),
-                        widget::Row::from_vec(vec![]).width(Length::Fill)
-                    ]
+                            .width(Length::Fill)
+                            .into(),
+                        widget::Row::from_vec(vec![]).width(Length::Fill).into(),
+                    ])
                     .spacing(10),
                 )
                 .width(Length::Fill)
@@ -227,12 +228,10 @@ fn volume_row_compact<'a>(
         let denom = total;
         let width = (((child.size as f64 / denom as f64) * 1000.).log10().ceil() as u16).max(1);
 
-        let col = iced_widget::column![
-            cosmic::widget::text::caption_heading(child.label.clone()).center(),
-        ]
-        .spacing(4)
-        .width(Length::Fill)
-        .align_x(Alignment::Center);
+        let col = column![cosmic::widget::text::caption_heading(child.label.clone()).center(),]
+            .spacing(4)
+            .width(Length::Fill)
+            .align_x(Alignment::Center);
 
         let is_selected = selected_volume.is_some_and(|p| p == child_device_path);
         let active_state = if is_selected {

@@ -1,7 +1,7 @@
-use cosmic::iced::alignment::Horizontal;
+use cosmic::Element;
+use cosmic::iced::widget as iced_widget;
 use cosmic::iced::{Alignment, Color, Font, Length, Pixels, Point, Rectangle, mouse};
 use cosmic::widget::{self};
-use cosmic::{Element, iced_widget};
 use storage_types::bytes_to_pretty;
 
 use crate::app::Message;
@@ -157,8 +157,8 @@ impl<M> iced_widget::canvas::Program<M, cosmic::Theme, cosmic::Renderer> for Dis
                 weight: cosmic::iced::font::Weight::Semibold,
                 ..Default::default()
             },
-            horizontal_alignment: Horizontal::Center,
-            vertical_alignment: cosmic::iced::alignment::Vertical::Center,
+            align_x: cosmic::iced::widget::text::Alignment::Center,
+            align_y: cosmic::iced::alignment::Vertical::Center,
             ..Default::default()
         });
 
@@ -222,18 +222,19 @@ pub fn disk_usage_pie<'a>(
         let mut legend_items: Vec<Element<'a, Message>> = Vec::new();
         for (i, seg) in segments.iter().enumerate() {
             let color = segment_color(i);
-            let swatch: Element<'a, Message> = widget::container(widget::Space::new(10.0, 10.0))
-                .style(
-                    move |_theme: &cosmic::Theme| iced_widget::container::Style {
-                        background: Some(cosmic::iced::Background::Color(color)),
-                        border: cosmic::iced::Border {
-                            radius: 2.0.into(),
+            let swatch: Element<'a, Message> =
+                widget::container(widget::Space::new().width(10.0).height(10.0))
+                    .style(
+                        move |_theme: &cosmic::Theme| iced_widget::container::Style {
+                            background: Some(cosmic::iced::Background::Color(color)),
+                            border: cosmic::iced::Border {
+                                radius: 2.0.into(),
+                                ..Default::default()
+                            },
                             ..Default::default()
                         },
-                        ..Default::default()
-                    },
-                )
-                .into();
+                    )
+                    .into();
 
             let label = iced_widget::column![
                 widget::text::caption(seg.name.clone()).font(cosmic::iced::font::Font {

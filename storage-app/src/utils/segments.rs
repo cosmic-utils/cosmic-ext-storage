@@ -155,7 +155,7 @@ pub fn compute_disk_segments(
         };
     }
 
-    partitions.sort_by(|a, b| a.offset.cmp(&b.offset));
+    partitions.sort_by_key(|partition| partition.offset);
 
     let mut segments = Vec::new();
 

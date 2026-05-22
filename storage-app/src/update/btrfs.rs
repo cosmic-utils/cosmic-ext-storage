@@ -68,19 +68,13 @@ pub(super) fn handle_btrfs_message(app: &mut AppModel, message: Message) -> Task
             let subvol_name = path.rsplit('/').next().unwrap_or(&path).to_string();
 
             // Get a dummy FilesystemTarget (required by ConfirmActionDialog but not used for BTRFS)
-            let target = if let Some(volumes_control) = app.nav.active_data::<VolumesControl>() {
-                if let Some(segment) = volumes_control
+            let target = if let Some(volumes_control) = app.nav.active_data::<VolumesControl>()
+                && let Some(segment) = volumes_control
                     .segments
                     .get(volumes_control.selected_segment)
-                {
-                    if let Some(volume) = &segment.volume {
-                        FilesystemTarget::Volume(volume.clone())
-                    } else {
-                        return Task::none();
-                    }
-                } else {
-                    return Task::none();
-                }
+                && let Some(volume) = &segment.volume
+            {
+                FilesystemTarget::Volume(volume.clone())
             } else {
                 return Task::none();
             };

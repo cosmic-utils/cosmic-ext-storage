@@ -3,9 +3,10 @@ use crate::controls::usage_pie;
 use crate::fl;
 use crate::message::volumes::VolumesControlMessage;
 use crate::state::btrfs::BtrfsState;
+use cosmic::Element;
 use cosmic::iced::Length;
+use cosmic::iced::widget as iced_widget;
 use cosmic::widget;
-use cosmic::{Element, iced_widget};
 use std::collections::HashMap;
 use storage_types::{BtrfsSubvolume, VolumeInfo};
 
@@ -87,7 +88,7 @@ pub fn btrfs_management_section<'a>(
         }
 
         // Spacing after usage section
-        content_items.push(widget::vertical_space().height(8).into());
+        content_items.push(widget::space().height(8).into());
     }
 
     // === Subvolumes Section ===
@@ -163,7 +164,7 @@ pub fn btrfs_management_section<'a>(
     }
 
     // Spacing at end
-    content_items.push(widget::vertical_space().height(8).into());
+    content_items.push(widget::space().height(8).into());
 
     iced_widget::column(content_items).spacing(8).into()
 }
@@ -222,7 +223,7 @@ fn render_subvolume_row<'a>(
     // Indentation
     if indent_level > 0 {
         row_items.push(
-            widget::horizontal_space()
+            widget::Space::new()
                 .width((indent_level * 20) as f32)
                 .into(),
         );
@@ -244,7 +245,7 @@ fn render_subvolume_row<'a>(
         row_items.push(expander_btn.into());
     } else {
         // Spacer where expander would be
-        row_items.push(widget::horizontal_space().width(20.0).into());
+        row_items.push(widget::space().width(20.0).into());
     }
 
     // Path (normal text size, fills space)

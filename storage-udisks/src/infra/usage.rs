@@ -26,11 +26,11 @@ pub fn usage_for_mount_point(mount_point: &str, filesystem: Option<&str>) -> Res
     let free = stat.f_bfree.saturating_mul(frsize);
     let available = stat.f_bavail.saturating_mul(frsize);
     let used = total.saturating_sub(free);
-    let percent = if total == 0 {
-        0
-    } else {
-        ((used.saturating_mul(100)) / total).min(100) as u32
-    };
+    let percent = used
+        .saturating_mul(100)
+        .checked_div(total)
+        .unwrap_or(0)
+        .min(100) as u32;
 
     Ok(Usage {
         filesystem: filesystem.unwrap_or_default().to_string(),
