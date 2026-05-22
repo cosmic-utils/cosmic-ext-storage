@@ -1,8 +1,10 @@
 [Desktop Entry]
 Name=Storage
-Name[zh_CN]=存储
 Comment=Storage utility for the COSMIC™ desktop
+Name[zh_CN]=存储
 Comment[zh_CN]=COSMIC™ 桌面的存储工具
+Name[cs]=Úložiště
+Comment[cs]=Nástroj správy úložiště pro prostředí COSMIC™
 Type=Application
 Icon=com.cosmic.ext.Storage
 Exec=cosmic-ext-storage %F
