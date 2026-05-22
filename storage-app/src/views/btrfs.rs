@@ -224,7 +224,6 @@ fn render_subvolume_row<'a>(
     if indent_level > 0 {
         row_items.push(
             widget::Space::new()
-                .width(Length::Fill)
                 .width((indent_level * 20) as f32)
                 .into(),
         );
