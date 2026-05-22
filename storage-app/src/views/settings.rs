@@ -12,11 +12,12 @@ pub fn settings<'a>(config: &Config) -> Element<'a, Message> {
         space_s, space_m, ..
     } = theme::active().cosmic().spacing;
 
-    let show_reserved_toggle = widget::checkbox("Show Reserved Space", config.show_reserved)
+    let show_reserved_toggle = widget::checkbox(config.show_reserved)
+        .label("Show Reserved Space")
         .on_toggle(Message::ToggleShowReserved);
 
     let volumes_section = widget::container(
-        widget::column()
+        widget::Column::new()
             .push(widget::text::title4("Volumes"))
             .push(show_reserved_toggle)
             .spacing(space_s)
@@ -38,7 +39,7 @@ pub fn settings<'a>(config: &Config) -> Element<'a, Message> {
     .width(cosmic::iced::Length::Shrink);
 
     let usage_section = widget::container(
-        widget::column()
+        widget::Column::new()
             .push(widget::text::title4("Usage"))
             .push(widget::text::caption(fl!("usage-scan-parallelism-label")))
             .push(usage_parallelism_dropdown)
@@ -63,12 +64,13 @@ pub fn settings<'a>(config: &Config) -> Element<'a, Message> {
     .width(cosmic::iced::Length::Shrink);
 
     let logging_section = widget::container(
-        widget::column()
+        widget::Column::new()
             .push(widget::text::title4("Logging"))
             .push(widget::text::caption("Log level"))
             .push(logging_level_dropdown)
             .push(
-                widget::checkbox("Log to disk", config.log_to_disk)
+                widget::checkbox(config.log_to_disk)
+                    .label("Log to disk")
                     .on_toggle(Message::ToggleLogToDisk),
             )
             .spacing(space_s)
@@ -76,7 +78,7 @@ pub fn settings<'a>(config: &Config) -> Element<'a, Message> {
     )
     .width(Length::Fill);
 
-    widget::column()
+    widget::Column::new()
         .push(volumes_section)
         .push(usage_section)
         .push(logging_section)
@@ -116,7 +118,7 @@ pub fn settings_footer<'a>(filesystem_tools: &[FilesystemToolInfo]) -> Element<'
 
     let repo_footer = widget::container(
         widget::row::with_capacity(3)
-            .push(widget::Space::new(Length::Fill, 0))
+            .push(widget::Space::new().width(Length::Fill))
             .push(commit_info)
             .push(
                 widget::button::custom(github_icon)
@@ -136,7 +138,7 @@ pub fn settings_footer<'a>(filesystem_tools: &[FilesystemToolInfo]) -> Element<'
     if !missing_tools.is_empty() {
         let tools_description = widget::text::caption(fl!("fs-tools-missing-desc"));
 
-        let mut tools_list = widget::column().spacing(space_xxs);
+        let mut tools_list = widget::Column::new().spacing(space_xxs);
         for tool in &missing_tools {
             let tool_text = widget::text::caption(format!(
                 "• {} - {}",
@@ -147,7 +149,7 @@ pub fn settings_footer<'a>(filesystem_tools: &[FilesystemToolInfo]) -> Element<'
         }
 
         let warning_callout = widget::container(
-            widget::column()
+            widget::Column::new()
                 .push(tools_description)
                 .push(tools_list)
                 .spacing(space_xxs),
@@ -166,17 +168,18 @@ pub fn settings_footer<'a>(filesystem_tools: &[FilesystemToolInfo]) -> Element<'
                     radius: cosmic.corner_radii.radius_s.into(),
                 },
                 shadow: cosmic::iced::Shadow::default(),
+                snap: false,
             }
         });
 
-        widget::column()
+        widget::Column::new()
             .push(warning_callout)
             .push(repo_footer)
             .spacing(space_s)
             .width(Length::Fill)
             .into()
     } else {
-        widget::column()
+        widget::Column::new()
             .push(repo_footer)
             .spacing(space_m)
             .width(Length::Fill)

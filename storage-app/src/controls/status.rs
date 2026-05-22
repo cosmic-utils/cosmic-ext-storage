@@ -67,6 +67,7 @@ pub fn warning_style(theme: &Theme) -> widget::container::Style {
             offset: iced::Vector::new(0.0, 0.0),
             blur_radius: 0.0,
         },
+        snap: false,
     }
 }
 
@@ -87,6 +88,7 @@ pub fn error_style(theme: &Theme) -> widget::container::Style {
             offset: iced::Vector::new(0.0, 0.0),
             blur_radius: 0.0,
         },
+        snap: false,
     }
 }
 
@@ -107,6 +109,7 @@ pub fn success_style(theme: &Theme) -> widget::container::Style {
             offset: iced::Vector::new(0.0, 0.0),
             blur_radius: 0.0,
         },
+        snap: false,
     }
 }
 
@@ -127,5 +130,6 @@ pub fn info_style(theme: &Theme) -> widget::container::Style {
             offset: iced::Vector::new(0.0, 0.0),
             blur_radius: 0.0,
         },
+        snap: false,
     }
 }

@@ -15,7 +15,7 @@ use crate::state::dialogs::{
 };
 use crate::utils::SizeUnit;
 use cosmic::{
-    Element, Theme, iced, iced_widget,
+    Element, Theme, iced,
     widget::text::caption,
     widget::{button, checkbox, container, dialog, divider, dropdown, slider, text, text_input},
 };
@@ -44,7 +44,7 @@ pub fn create_partition<'a>(state: CreatePartitionDialog) -> Element<'a, Message
         _ => &[],
     };
 
-    let mut content = iced_widget::column![];
+    let mut content = cosmic::iced::widget::column![];
     let mut basics_has_selection = false;
 
     match current_step {
@@ -157,7 +157,7 @@ pub fn create_partition<'a>(state: CreatePartitionDialog) -> Element<'a, Message
 
             let label_width = iced::Length::Fixed(120.);
 
-            let size_row = iced_widget::row![
+            let size_row = cosmic::iced::widget::row![
                 text(fl!("partition-size")).width(label_width),
                 button::text("-")
                     .on_press(CreateMessage::SizeUpdate((size - step).max(0.) as u64).into()),
@@ -180,7 +180,7 @@ pub fn create_partition<'a>(state: CreatePartitionDialog) -> Element<'a, Message
             .spacing(8)
             .align_y(iced::Alignment::Center);
 
-            let free_row = iced_widget::row![
+            let free_row = cosmic::iced::widget::row![
                 text(fl!("free-space")).width(label_width),
                 button::text("-")
                     .on_press(CreateMessage::SizeUpdate((size + step).min(len) as u64).into()),
@@ -209,12 +209,14 @@ pub fn create_partition<'a>(state: CreatePartitionDialog) -> Element<'a, Message
         }
         CreatePartitionStep::Options => {
             content = content.push(
-                checkbox(fl!("overwrite-data-slow"), create.erase)
+                checkbox(create.erase)
+                    .label(fl!("overwrite-data-slow"))
                     .on_toggle(|v| CreateMessage::EraseUpdate(v).into()),
             );
 
             content = content.push(
-                checkbox(fl!("password-protected-luks"), create.password_protected)
+                checkbox(create.password_protected)
+                    .label(fl!("password-protected-luks"))
                     .on_toggle(|v| CreateMessage::PasswordProtectedUpdate(v).into()),
             );
 
@@ -348,7 +350,7 @@ pub fn format_partition<'a>(state: FormatPartitionDialog) -> Element<'a, Message
         _ => &[],
     };
 
-    let mut content = iced_widget::column![caption(fl!(
+    let mut content = cosmic::iced::widget::column![caption(fl!(
         "format-partition-description",
         size = size_pretty
     )),];
@@ -431,7 +433,8 @@ pub fn format_partition<'a>(state: FormatPartitionDialog) -> Element<'a, Message
         }
     } else {
         content = content.push(
-            checkbox(fl!("overwrite-data-slow"), create.erase)
+            checkbox(create.erase)
+                .label(fl!("overwrite-data-slow"))
                 .on_toggle(|v| CreateMessage::EraseUpdate(v).into()),
         );
     }
@@ -534,7 +537,7 @@ pub fn edit_partition<'a>(state: EditPartitionDialog) -> Element<'a, Message> {
         .map(|t: &PartitionTypeInfo| format!("{} - {}", t.name, t.ty))
         .collect();
 
-    let mut content = iced_widget::column![].spacing(12);
+    let mut content = cosmic::iced::widget::column![].spacing(12);
 
     match step {
         EditPartitionStep::Basics => {
@@ -549,15 +552,18 @@ pub fn edit_partition<'a>(state: EditPartitionDialog) -> Element<'a, Message> {
         }
         EditPartitionStep::Flags => {
             content = content.push(
-                checkbox(fl!("flag-legacy-bios-bootable"), legacy_bios_bootable)
+                checkbox(legacy_bios_bootable)
+                    .label(fl!("flag-legacy-bios-bootable"))
                     .on_toggle(|v| EditPartitionMessage::LegacyBiosBootableUpdate(v).into()),
             );
             content = content.push(
-                checkbox(fl!("flag-system-partition"), system_partition)
+                checkbox(system_partition)
+                    .label(fl!("flag-system-partition"))
                     .on_toggle(|v| EditPartitionMessage::SystemPartitionUpdate(v).into()),
             );
             content = content.push(
-                checkbox(fl!("flag-hide-from-firmware"), hidden)
+                checkbox(hidden)
+                    .label(fl!("flag-hide-from-firmware"))
                     .on_toggle(|v| EditPartitionMessage::HiddenUpdate(v).into()),
             );
         }
@@ -692,7 +698,7 @@ pub fn resize_partition<'a>(state: ResizePartitionDialog) -> Element<'a, Message
 
     let can_resize = max_size_bytes.saturating_sub(min_size_bytes) >= 1024;
 
-    let mut content = iced_widget::column![].spacing(12);
+    let mut content = cosmic::iced::widget::column![].spacing(12);
 
     if wizard_step == ResizePartitionStep::Sizing {
         content = content
@@ -808,7 +814,7 @@ pub fn edit_filesystem_label<'a>(state: EditFilesystemLabelDialog) -> Element<'a
         running,
     } = state;
 
-    let mut content = iced_widget::column![
+    let mut content = cosmic::iced::widget::column![
         text_input(fl!("filesystem-label"), label)
             .label(fl!("filesystem-label"))
             .on_input(|t| EditFilesystemLabelMessage::LabelUpdate(t).into()),

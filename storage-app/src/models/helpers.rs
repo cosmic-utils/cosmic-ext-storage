@@ -54,15 +54,13 @@ pub fn build_volume_tree(
         let device = vol_info.device_path.clone();
 
         // Recursively build children
-        let children = if let Some(device_path) = &device {
-            if let Some(child_infos) = tree_map.get(&Some(device_path.clone())) {
-                child_infos
-                    .iter()
-                    .map(|child_info| attach_children(child_info.clone(), tree_map, fs_client))
-                    .collect::<Result<Vec<_>, _>>()?
-            } else {
-                Vec::new()
-            }
+        let children = if let Some(device_path) = &device
+            && let Some(child_infos) = tree_map.get(&Some(device_path.clone()))
+        {
+            child_infos
+                .iter()
+                .map(|child_info| attach_children(child_info.clone(), tree_map, fs_client))
+                .collect::<Result<Vec<_>, _>>()?
         } else {
             Vec::new()
         };

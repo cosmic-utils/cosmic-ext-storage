@@ -6,8 +6,9 @@ use crate::controls::wizard::{
 use crate::fl;
 use crate::message::dialogs::{EditMountOptionsMessage, UnmountBusyMessage};
 use crate::state::dialogs::{EditMountOptionsDialog, EditMountOptionsStep, UnmountBusyDialog};
+use cosmic::iced::widget as iced_widget;
 use cosmic::{
-    Element, iced_widget,
+    Element,
     widget::text::{caption, caption_heading},
     widget::{button, checkbox, dialog, dropdown, scrollable, text_input},
 };
@@ -38,24 +39,24 @@ pub fn edit_mount_options<'a>(state: EditMountOptionsDialog) -> Element<'a, Mess
 
     let controls_enabled = !use_defaults;
 
-    let mut defaults_cb = checkbox(fl!("user-session-defaults"), use_defaults);
+    let mut defaults_cb = checkbox(use_defaults).label(fl!("user-session-defaults"));
     if !running {
         defaults_cb =
             defaults_cb.on_toggle(|v| EditMountOptionsMessage::UseDefaultsUpdate(v).into());
     }
 
-    let mut mount_start_cb = checkbox(fl!("mount-at-startup"), mount_at_startup);
+    let mut mount_start_cb = checkbox(mount_at_startup).label(fl!("mount-at-startup"));
     if controls_enabled && !running {
         mount_start_cb =
             mount_start_cb.on_toggle(|v| EditMountOptionsMessage::MountAtStartupUpdate(v).into());
     }
 
-    let mut auth_cb = checkbox(fl!("require-auth-to-mount"), require_auth);
+    let mut auth_cb = checkbox(require_auth).label(fl!("require-auth-to-mount"));
     if controls_enabled && !running {
         auth_cb = auth_cb.on_toggle(|v| EditMountOptionsMessage::RequireAuthUpdate(v).into());
     }
 
-    let mut show_cb = checkbox(fl!("show-in-ui"), show_in_ui);
+    let mut show_cb = checkbox(show_in_ui).label(fl!("show-in-ui"));
     if controls_enabled && !running {
         show_cb = show_cb.on_toggle(|v| EditMountOptionsMessage::ShowInUiUpdate(v).into());
     }

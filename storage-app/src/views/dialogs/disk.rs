@@ -3,8 +3,9 @@ use crate::controls::wizard::{wizard_action_row, wizard_shell};
 use crate::fl;
 use crate::message::dialogs::{FormatDiskMessage, SmartDialogMessage};
 use crate::state::dialogs::{FormatDiskDialog, SmartDataDialog};
+use cosmic::iced::widget as iced_widget;
 use cosmic::{
-    Element, iced_widget,
+    Element,
     widget::text::{caption, caption_heading},
     widget::{button, dialog, dropdown},
 };

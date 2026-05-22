@@ -9,10 +9,10 @@ use crate::message::dialogs::{
 use crate::state::dialogs::{
     AttachDiskImageDialog, ImageOperationDialog, ImageOperationKind, NewDiskImageDialog,
 };
+use cosmic::iced::widget as iced_widget;
 use cosmic::{
     Element,
     iced::{Alignment, Length},
-    iced_widget,
     widget::button,
     widget::text::caption,
 };
@@ -228,7 +228,7 @@ pub fn image_operation<'a>(state: ImageOperationDialog) -> Element<'a, Message> 
                 0.0_f32
             };
             content =
-                content.push(iced_widget::progress_bar(0.0..=1.0, fraction).width(Length::Fill));
+                content.push(iced_widget::progress_bar(0.0..=1.0, fraction).length(Length::Fill));
             if total_bytes > 0 {
                 let done = storage_types::bytes_to_pretty(&bytes_completed, false);
                 let total = storage_types::bytes_to_pretty(&total_bytes, false);

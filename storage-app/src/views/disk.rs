@@ -1,6 +1,7 @@
+use cosmic::Element;
+use cosmic::iced::widget as iced_widget;
 use cosmic::iced::{Alignment, Length};
 use cosmic::widget::{self, icon};
-use cosmic::{Element, iced_widget};
 
 use crate::app::Message;
 use crate::controls::usage_pie::{self, PieSegmentData};

@@ -103,7 +103,7 @@ fn section_header(label: String) -> Element<'static, Message> {
 fn image_section_header(controls_enabled: bool) -> Element<'static, Message> {
     let mut children: Vec<Element<'static, Message>> = vec![
         widget::text::caption_heading(Section::Images.label()).into(),
-        widget::Space::new(Length::Fill, 0).into(),
+        widget::Space::new().width(Length::Fill).into(),
     ];
 
     if controls_enabled {
@@ -157,7 +157,10 @@ fn drive_row(
         }
         button.into()
     } else {
-        widget::Space::new(EXPANDER_WIDTH, EXPANDER_WIDTH).into()
+        widget::Space::new()
+            .width(EXPANDER_WIDTH)
+            .height(EXPANDER_WIDTH)
+            .into()
     };
 
     let drive_icon_name = if drive.disk.removable {
@@ -237,7 +240,10 @@ fn volume_row(
         }
         button.into()
     } else {
-        widget::Space::new(EXPANDER_WIDTH, EXPANDER_WIDTH).into()
+        widget::Space::new()
+            .width(EXPANDER_WIDTH)
+            .height(EXPANDER_WIDTH)
+            .into()
     };
 
     let title_text = if node.volume.label.trim().is_empty() {
@@ -305,7 +311,7 @@ fn volume_row(
     let item = row_container(row, selected, controls_enabled);
 
     if indent > 0 {
-        widget::Row::with_children(vec![widget::Space::new(indent, 0).into(), item])
+        widget::Row::with_children(vec![widget::Space::new().width(indent).into(), item])
             .spacing(0)
             .align_y(cosmic::iced::Alignment::Center)
             .width(Length::Fill)

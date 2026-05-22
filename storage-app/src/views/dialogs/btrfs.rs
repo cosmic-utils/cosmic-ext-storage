@@ -1,6 +1,7 @@
+use cosmic::Element;
+use cosmic::iced::widget as iced_widget;
 use cosmic::widget::text::caption;
 use cosmic::widget::{button, checkbox, dropdown, text, text_input};
-use cosmic::{Element, iced_widget};
 
 use crate::app::Message;
 use crate::controls::wizard::{wizard_action_row, wizard_shell};
@@ -78,7 +79,8 @@ pub fn create_snapshot<'a>(state: BtrfsCreateSnapshotDialog) -> Element<'a, Mess
         text_input(fl!("btrfs-snapshot-name"), snapshot_name)
             .label(fl!("btrfs-snapshot-name"))
             .on_input(|t| BtrfsCreateSnapshotMessage::NameUpdate(t).into()),
-        checkbox(fl!("btrfs-read-only"), read_only)
+        checkbox(read_only)
+            .label(fl!("btrfs-read-only"))
             .on_toggle(|v| BtrfsCreateSnapshotMessage::ReadOnlyUpdate(v).into()),
     ]
     .spacing(12);

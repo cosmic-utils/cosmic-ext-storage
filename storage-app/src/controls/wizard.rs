@@ -1,10 +1,11 @@
 // SPDX-License-Identifier: GPL-3.0-only
 
+use cosmic::Element;
 use cosmic::cosmic_theme::palette::WithAlpha;
 use cosmic::iced::Alignment;
 use cosmic::iced::Length;
+use cosmic::iced::widget as iced_widget;
 use cosmic::widget::{self, button};
-use cosmic::{Element, iced_widget};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) enum WizardBreadcrumbStatus {
@@ -61,7 +62,7 @@ pub(crate) fn wizard_action_row<'a, Message: Clone + 'static>(
         row = row.push(action);
     }
 
-    row = row.push(widget::Space::new(Length::Fill, 0));
+    row = row.push(widget::Space::new().width(Length::Fill));
 
     for action in right_actions {
         row = row.push(action);
@@ -119,7 +120,7 @@ pub(crate) fn wizard_breadcrumb<'a, Message: Clone + 'static>(
                     theme.cosmic().background.component.on.with_alpha(0.4)
                 };
 
-                cosmic::iced_widget::container::Style {
+                cosmic::iced::widget::container::Style {
                     text_color: Some(color.into()),
                     ..Default::default()
                 }
@@ -141,7 +142,7 @@ pub(crate) fn wizard_breadcrumb<'a, Message: Clone + 'static>(
         if index > 0 {
             let separator =
                 widget::container(widget::text::caption("  >  ".to_string())).style(|theme| {
-                    cosmic::iced_widget::container::Style {
+                    cosmic::iced::widget::container::Style {
                         text_color: Some(
                             theme
                                 .cosmic()

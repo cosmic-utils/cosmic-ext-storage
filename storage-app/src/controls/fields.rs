@@ -3,13 +3,14 @@
 use std::borrow::Cow;
 use storage_types::pretty_to_bytes;
 
+use cosmic::iced::widget as iced_widget;
 use cosmic::{
     Element,
     cosmic_theme::Spacing,
     iced::{Alignment, Length, alignment},
-    iced_widget::{self, row},
     widget::{self, button, container},
 };
+use iced_widget::row;
 
 pub fn input_spinner<'a, Message: 'static + Clone>(
     value_string: impl Into<Cow<'a, str>>,

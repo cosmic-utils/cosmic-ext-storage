@@ -17,8 +17,9 @@ use crate::state::network::{
 };
 use cosmic::cosmic_theme::palette::WithAlpha;
 use cosmic::iced::Length;
+use cosmic::iced::widget as iced_widget;
 use cosmic::widget::{self, button, dropdown, icon, text_input};
-use cosmic::{Apply, Element, iced_widget};
+use cosmic::{Apply, Element};
 use std::collections::BTreeMap;
 use storage_types::rclone::{ConfigScope, MountStatus, rclone_provider, supported_remote_types};
 
@@ -103,7 +104,7 @@ pub fn network_mount_item(
 
     // Compose the row
     let row = widget::Row::with_children(vec![
-        widget::Space::new(20, 0).into(), // Indent to match drive tree
+        widget::Space::new().width(20).into(), // Indent to match drive tree
         select_button.into(),
     ])
     .spacing(8)
@@ -124,7 +125,7 @@ fn sidebar_section_header(label: &str, controls_enabled: bool) -> Element<'stati
             .padding(4)
             .class(cosmic::theme::Button::Link)
             .on_press(NetworkMessage::BeginCreateRemote);
-        children.push(widget::Space::new(Length::Fill, 0).into());
+        children.push(widget::Space::new().width(Length::Fill).into());
         children.push(add_btn.into());
     }
 
@@ -185,7 +186,7 @@ pub fn network_section(
 
         if !system_mounts.is_empty() {
             if has_user_mounts {
-                children.push(widget::Space::new(0, 4).into());
+                children.push(widget::Space::new().height(4).into());
             }
             for (name, scope) in &system_mounts {
                 children.push(network_mount_item(state, name, *scope, controls_enabled));
@@ -241,7 +242,7 @@ fn status_label(status: &MountStatus) -> &'static str {
 }
 
 fn status_badge(text: String, running: bool, unsaved: bool) -> Element<'static, NetworkMessage> {
-    use cosmic::iced_widget::container;
+    use cosmic::iced::widget::container;
 
     let badge = widget::text::caption(text);
 
@@ -424,7 +425,7 @@ fn editor_header(
 
     iced_widget::row![
         widget::text::title2(title),
-        widget::Space::new(Length::Fill, 0),
+        widget::Space::new().width(Length::Fill),
         status_badge,
         actions_row
     ]
@@ -505,14 +506,16 @@ fn editor_form(
 
             if has_advanced {
                 toggle_row.push(
-                    widget::checkbox("Show advanced options", editor.show_advanced)
+                    widget::checkbox(editor.show_advanced)
+                        .label("Show advanced options")
                         .on_toggle(NetworkMessage::EditorShowAdvanced)
                         .into(),
                 );
             }
             if has_hidden {
                 toggle_row.push(
-                    widget::checkbox("Show internal options", editor.show_hidden)
+                    widget::checkbox(editor.show_hidden)
+                        .label("Show internal options")
                         .on_toggle(NetworkMessage::EditorShowHidden)
                         .into(),
                 );
@@ -687,26 +690,26 @@ fn editor_view(
         .spacing(16)
         .width(Length::Fill);
 
-    if let Some(mount) = selected_mount {
-        if mount.is_mounted() {
-            let mount_point = mount.config.mount_point().to_string_lossy().to_string();
-            let mount_row = iced_widget::row![
-                widget::text::caption("Mounted at:"),
-                widget::button::link(mount_point.clone())
-                    .padding(0)
-                    .on_press(NetworkMessage::OpenMountPath(mount_point))
-            ]
-            .spacing(4)
-            .align_y(cosmic::iced::Alignment::Center);
-            layout = layout.push(mount_row);
-        } else {
-            layout = layout.push(widget::text::caption("Not mounted"));
-        }
+    if let Some(mount) = selected_mount
+        && mount.is_mounted()
+    {
+        let mount_point = mount.config.mount_point().to_string_lossy().to_string();
+        let mount_row = iced_widget::row![
+            widget::text::caption("Mounted at:"),
+            widget::button::link(mount_point.clone())
+                .padding(0)
+                .on_press(NetworkMessage::OpenMountPath(mount_point))
+        ]
+        .spacing(4)
+        .align_y(cosmic::iced::Alignment::Center);
+        layout = layout.push(mount_row);
+    } else if selected_mount.is_some() {
+        layout = layout.push(widget::text::caption("Not mounted"));
     }
 
     if !editor.is_new {
         let checked = editor.mount_on_boot.unwrap_or(false);
-        let mut mount_on_boot = widget::checkbox("Mount on boot", checked);
+        let mut mount_on_boot = widget::checkbox(checked).label("Mount on boot");
         if controls_enabled && !editor.running && editor.mount_on_boot.is_some() {
             mount_on_boot = mount_on_boot.on_toggle(NetworkMessage::ToggleMountOnBoot);
         }
@@ -863,7 +866,7 @@ fn wizard_select_type(wizard: &NetworkWizardState) -> Element<'static, NetworkMe
             "Select a common provider below, or choose Advanced to see all available types."
                 .to_string()
         ),
-        widget::Space::new(0, 8),
+        widget::Space::new().height(8),
         grid,
     ]
     .spacing(8)
@@ -886,12 +889,12 @@ fn wizard_name_scope(wizard: &NetworkWizardState) -> Element<'static, NetworkMes
     let mut col = iced_widget::column![
         widget::text::title3("Name your remote"),
         widget::text::body(format!("Type: {provider_label}")),
-        widget::Space::new(0, 8),
+        widget::Space::new().height(8),
         text_input("my-remote", wizard.name.clone())
             .label("Remote Name")
             .on_input(NetworkMessage::WizardSetName),
         widget::text::caption("Use only letters, numbers, dashes, and underscores.".to_string()),
-        widget::Space::new(0, 4),
+        widget::Space::new().height(4),
         widget::text::caption("Configuration Scope"),
         dropdown(scopes, Some(scope_index), |idx| {
             NetworkMessage::WizardSetScope(idx)
@@ -920,7 +923,7 @@ fn wizard_connection(wizard: &NetworkWizardState) -> Element<'static, NetworkMes
     let mut col = iced_widget::column![
         widget::text::title3("Connection settings"),
         widget::text::body("Configure how to connect to the remote.".to_string()),
-        widget::Space::new(0, 8),
+        widget::Space::new().height(8),
     ]
     .spacing(8)
     .width(Length::Fill)
@@ -971,7 +974,7 @@ fn wizard_authentication(wizard: &NetworkWizardState) -> Element<'static, Networ
     let mut col = iced_widget::column![
         widget::text::title3("Authentication"),
         widget::text::body("Enter credentials for the remote.".to_string()),
-        widget::Space::new(0, 8),
+        widget::Space::new().height(8),
     ]
     .spacing(8)
     .width(Length::Fill)
@@ -1030,7 +1033,7 @@ fn wizard_review(wizard: &NetworkWizardState) -> Element<'static, NetworkMessage
     let mut col = iced_widget::column![
         widget::text::title3("Review"),
         widget::text::body("Review your remote configuration before creating it.".to_string()),
-        widget::Space::new(0, 8),
+        widget::Space::new().height(8),
     ]
     .spacing(8)
     .width(Length::Fill)
@@ -1069,7 +1072,7 @@ fn wizard_review(wizard: &NetworkWizardState) -> Element<'static, NetworkMessage
             .class(cosmic::style::Container::Card),
     );
 
-    col = col.push(widget::Space::new(0, 4));
+    col = col.push(widget::Space::new().height(4));
     col = col.push(widget::text::caption(
         "You can configure additional options after creating the remote.".to_string(),
     ));

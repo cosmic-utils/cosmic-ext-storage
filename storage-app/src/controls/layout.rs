@@ -23,7 +23,7 @@ pub(crate) fn row_container<'a, Message: 'a>(
                 on = theme.cosmic().accent_color();
             }
 
-            cosmic::iced_widget::container::Style {
+            cosmic::iced::widget::container::Style {
                 icon_color: Some(on.into()),
                 text_color: Some(on.into()),
                 background: None,
@@ -32,6 +32,7 @@ pub(crate) fn row_container<'a, Message: 'a>(
                     ..Default::default()
                 },
                 shadow: Shadow::default(),
+                snap: false,
             }
         }))
         .into()

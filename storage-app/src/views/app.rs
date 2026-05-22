@@ -20,8 +20,9 @@ use cosmic::iced::Color;
 use cosmic::iced::Length;
 use cosmic::iced::alignment::{Alignment, Horizontal, Vertical};
 use cosmic::iced::mouse;
+use cosmic::iced::widget as iced_widget;
 use cosmic::widget::{self, Space, icon, text_input};
-use cosmic::{Apply, Element, iced_widget};
+use cosmic::{Apply, Element};
 use storage_types::{UsageCategory, VolumeInfo, VolumeKind, bytes_to_pretty};
 
 /// Custom button style for header tabs with accent color background.
@@ -398,7 +399,7 @@ pub(crate) fn view(app: &AppModel) -> Element<'_, Message> {
                     &volumes_control.segments,
                     &volumes_control.volumes
                 ),
-                Space::new(0, 10),
+                Space::new().height(10),
                 volumes_control.view(),
             ]
             .spacing(10)
@@ -460,12 +461,12 @@ fn volume_detail_view<'a>(
         usage_tab_view(volumes_control)
     } else if has_btrfs && volumes_control.detail_tab == DetailTab::BtrfsManagement {
         // BTRFS Management tab
-        if let Some(btrfs_state) = &volumes_control.btrfs_state {
-            if let Some(volume) = &segment.volume {
-                btrfs_management_section(volume, btrfs_state)
-            } else {
-                widget::text("No volume data available").into()
-            }
+        if let Some(btrfs_state) = &volumes_control.btrfs_state
+            && let Some(volume) = &segment.volume
+        {
+            btrfs_management_section(volume, btrfs_state)
+        } else if volumes_control.btrfs_state.is_some() {
+            widget::text("No volume data available").into()
         } else {
             widget::text("Initializing BTRFS state...").into()
         }
@@ -567,12 +568,12 @@ fn usage_tab_view<'a>(volumes_control: &'a VolumesControl) -> Element<'a, Messag
         let loading = iced_widget::column![
             iced_widget::row![
                 widget::text(fl!("usage-scanning")).size(16),
-                widget::Space::new(Length::Fill, 0),
+                widget::Space::new().width(Length::Fill),
                 widget::text::body(format!("{} / {}", processed, total)),
             ]
             .align_y(Alignment::Center)
             .width(Length::Fill),
-            iced_widget::progress_bar(0.0..=1.0, fraction).width(Length::Fill),
+            iced_widget::progress_bar(0.0..=1.0, fraction).length(Length::Fill),
         ]
         .spacing(10)
         .width(Length::Fill)
@@ -633,9 +634,13 @@ fn usage_tab_view<'a>(volumes_control: &'a VolumesControl) -> Element<'a, Messag
 
     let segmented_bar: Element<'a, Message> = if non_zero_categories.is_empty() && unused_bytes == 0
     {
-        widget::container(widget::Space::new(Length::Fill, Length::Fixed(36.0)))
-            .class(cosmic::style::Container::List)
-            .into()
+        widget::container(
+            widget::Space::new()
+                .width(Length::Fill)
+                .height(Length::Fixed(36.0)),
+        )
+        .class(cosmic::style::Container::List)
+        .into()
     } else {
         let row_with_categories = non_zero_categories.into_iter().fold(
             iced_widget::row!().spacing(0).width(Length::Fill),
@@ -649,14 +654,18 @@ fn usage_tab_view<'a>(volumes_control: &'a VolumesControl) -> Element<'a, Messag
                     .map(crate::controls::usage_pie::segment_color)
                     .unwrap_or(crate::controls::usage_pie::segment_color(0));
                 row.push(
-                    widget::container(widget::Space::new(Length::Fill, Length::Fixed(36.0)))
-                        .style(
-                            move |_theme: &cosmic::Theme| iced_widget::container::Style {
-                                background: Some(cosmic::iced::Background::Color(color)),
-                                ..Default::default()
-                            },
-                        )
-                        .width(Length::FillPortion(portion)),
+                    widget::container(
+                        widget::Space::new()
+                            .width(Length::Fill)
+                            .height(Length::Fixed(36.0)),
+                    )
+                    .style(
+                        move |_theme: &cosmic::Theme| iced_widget::container::Style {
+                            background: Some(cosmic::iced::Background::Color(color)),
+                            ..Default::default()
+                        },
+                    )
+                    .width(Length::FillPortion(portion)),
                 )
             },
         );
@@ -667,14 +676,18 @@ fn usage_tab_view<'a>(volumes_control: &'a VolumesControl) -> Element<'a, Messag
                 .max(1.0) as u16;
             row_with_categories
                 .push(
-                    widget::container(widget::Space::new(Length::Fill, Length::Fixed(36.0)))
-                        .style(move |theme: &cosmic::Theme| iced_widget::container::Style {
-                            background: Some(cosmic::iced::Background::Color(
-                                theme.cosmic().background.component.divider.into(),
-                            )),
-                            ..Default::default()
-                        })
-                        .width(Length::FillPortion(unused_portion)),
+                    widget::container(
+                        widget::Space::new()
+                            .width(Length::Fill)
+                            .height(Length::Fixed(36.0)),
+                    )
+                    .style(move |theme: &cosmic::Theme| iced_widget::container::Style {
+                        background: Some(cosmic::iced::Background::Color(
+                            theme.cosmic().background.component.divider.into(),
+                        )),
+                        ..Default::default()
+                    })
+                    .width(Length::FillPortion(unused_portion)),
                 )
                 .into()
         } else {
@@ -807,7 +820,7 @@ fn usage_tab_view<'a>(volumes_control: &'a VolumesControl) -> Element<'a, Messag
         top_files_input,
         refresh_button,
         configure_button,
-        widget::Space::new(Length::Fill, 0),
+        widget::Space::new().width(Length::Fill),
         widget::text::body(fl!("usage-selected-count", count = selected_count)),
         clear_selection_button,
         delete_button,
@@ -864,7 +877,7 @@ fn usage_tab_view<'a>(volumes_control: &'a VolumesControl) -> Element<'a, Messag
                 let cosmic = theme.cosmic();
                 let accent = cosmic.accent_color();
 
-                cosmic::iced_widget::container::Style {
+                cosmic::iced::widget::container::Style {
                     icon_color: if selected { Some(accent.into()) } else { None },
                     text_color: if selected { Some(accent.into()) } else { None },
                     background: if selected {
@@ -884,6 +897,7 @@ fn usage_tab_view<'a>(volumes_control: &'a VolumesControl) -> Element<'a, Messag
                         },
                     },
                     shadow: Shadow::default(),
+                    snap: false,
                 }
             }));
 
@@ -903,7 +917,7 @@ fn usage_tab_view<'a>(volumes_control: &'a VolumesControl) -> Element<'a, Messag
         segmented_bar,
         widget::text::caption(totals_line),
         category_tabs,
-        Space::new(0, 4),
+        Space::new().height(4),
         action_bar,
         iced_widget::row![
             widget::text(" ").width(Length::Fixed(24.0)),
@@ -929,10 +943,8 @@ fn usage_tab_view<'a>(volumes_control: &'a VolumesControl) -> Element<'a, Messag
 fn usage_scan_wizard_view<'a>(
     usage_state: &'a crate::state::volumes::UsageTabState,
 ) -> Element<'a, Message> {
-    let mut show_all_toggle = widget::checkbox(
-        fl!("usage-show-all-root-mode"),
-        usage_state.wizard_show_all_files,
-    );
+    let mut show_all_toggle =
+        widget::checkbox(usage_state.wizard_show_all_files).label(fl!("usage-show-all-root-mode"));
     show_all_toggle = show_all_toggle.on_toggle(Message::UsageWizardShowAllFilesToggled);
 
     let parallelism_options = vec![
@@ -997,7 +1009,7 @@ fn usage_scan_wizard_view<'a>(
     let mut wizard = iced_widget::column![
         widget::text::title3(fl!("usage-choose-mount-points")),
         widget::text::body(fl!("usage-choose-mount-points-desc")),
-        widget::Space::new(0, 8),
+        widget::Space::new().height(8),
     ]
     .spacing(8)
     .width(Length::Fill);
@@ -1011,7 +1023,7 @@ fn usage_scan_wizard_view<'a>(
     }
 
     wizard = wizard
-        .push(widget::Space::new(0, 4))
+        .push(widget::Space::new().height(4))
         .push(show_all_toggle)
         .push(widget::text::caption(fl!("usage-parallelism")))
         .push(parallelism_dropdown)
@@ -1323,12 +1335,11 @@ fn build_partition_info<'a>(
 
     // Pie chart showing usage (right side, matching disk header layout)
     // For LUKS containers, aggregate children's usage
-    let used = if let Some(vol) = volume_node {
-        if vol.kind == VolumeKind::CryptoContainer && !vol.children.is_empty() {
-            aggregate_children_usage(vol)
-        } else {
-            v.usage.as_ref().map(|u| u.used).unwrap_or(0)
-        }
+    let used = if let Some(vol) = volume_node
+        && vol.kind == VolumeKind::CryptoContainer
+        && !vol.children.is_empty()
+    {
+        aggregate_children_usage(vol)
     } else {
         v.usage.as_ref().map(|u| u.used).unwrap_or(0)
     };
@@ -1368,31 +1379,17 @@ fn build_partition_info<'a>(
     let uuid_text = widget::text::caption(format!("{}: {}", fl!("uuid"), &p.uuid));
 
     // Only show mount info if it's not a LUKS container (containers don't mount, their children do)
-    let text_column = if let Some(v) = volume_node {
-        if v.volume.kind == VolumeKind::CryptoContainer {
-            iced_widget::column![name_text, type_text, device_text, uuid_text]
-                .spacing(4)
-                .width(Length::Fill)
-        } else {
-            let mount_text: Element<Message> = if let Some(mount_point) = p.mount_points.first() {
-                iced_widget::row![
-                    widget::text::caption(format!("{}: ", fl!("mounted-at"))),
-                    cosmic::widget::button::link(mount_point.clone())
-                        .padding(0)
-                        .on_press(Message::OpenPath(mount_point.clone()))
-                ]
-                .align_y(Alignment::Center)
-                .into()
-            } else {
-                widget::text::caption(fl!("not-mounted")).into()
-            };
-
-            iced_widget::column![name_text, type_text, device_text, uuid_text, mount_text]
-                .spacing(4)
-                .width(Length::Fill)
-        }
+    let text_column = if let Some(v) = volume_node
+        && v.volume.kind == VolumeKind::CryptoContainer
+    {
+        iced_widget::column![name_text, type_text, device_text, uuid_text]
+            .spacing(4)
+            .width(Length::Fill)
     } else {
-        let mount_text: Element<Message> = if let Some(mount_point) = v.mount_points.first() {
+        let mount_points = volume_node
+            .map(|v| v.mount_points.as_slice())
+            .unwrap_or(p.mount_points.as_slice());
+        let mount_text: Element<Message> = if let Some(mount_point) = mount_points.first() {
             iced_widget::row![
                 widget::text::caption(format!("{}: ", fl!("mounted-at"))),
                 cosmic::widget::button::link(mount_point.clone())
