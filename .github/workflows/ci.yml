@@ -27,6 +27,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - run: rustup update
+      - run: rustup component add clippy rustfmt
       - uses: Swatinem/rust-cache@v2
         with:
           shared-key: workspace-${{ runner.os }}
@@ -48,6 +49,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - run: rustup update
+      - run: rustup component add clippy
       - uses: Swatinem/rust-cache@v2
         with:
           shared-key: workspace-${{ runner.os }}
@@ -68,6 +70,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - run: rustup update
+      - run: rustup component add rustfmt
 
       - name: Run rustfmt
         run: cargo fmt --all --check --verbose
