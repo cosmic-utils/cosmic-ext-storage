@@ -9,104 +9,73 @@ env:
 
 jobs:
   test:
-    name: Test
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - run: rustup update
       - run: rustup component add clippy rustfmt
       - uses: Swatinem/rust-cache@v2
-        with:
-          shared-key: workspace-${{ runner.os }}
-      - name: install system deps
-        run: sudo apt install libxkbcommon-dev libbtrfsutil-dev
-      - name: Run tests
-        run: cargo test --workspace --all-features --locked
-      - name: Run clippy
-        run: cargo clippy --workspace --all-features --locked
-      - name: Run rustfmt
-        run: cargo fmt --all --check --verbose
+      - run: sudo apt install -y libxkbcommon-dev libbtrfsutil-dev
+      - run: cargo test --workspace --all-features --locked
+      - run: cargo clippy --workspace --all-features --locked
+      - run: cargo fmt --all -- --check
 
   publish:
-    name: Build and Publish
-    needs: [test]
+    needs: test
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
-
       - run: rustup update
-      - run: rustup component add clippy rustfmt
       - uses: Swatinem/rust-cache@v2
         with:
-          shared-key: workspace-${{ runner.os }}
           save-if: false
-      - name: install system deps
-        run: sudo apt install libxkbcommon-dev libbtrfsutil-dev
-
-      - name: Extract version from tag
-        run: |
-          VERSION="${GITHUB_REF_NAME#v}"
-          echo "VERSION=$VERSION" >> "$GITHUB_ENV"
-          echo "Release version: $VERSION"
-
-      - name: Verify versions match tag
+      - run: sudo apt install -y libxkbcommon-dev libbtrfsutil-dev
+      - name: Verify versions and build
         run: |
           set -euo pipefail
-          UI_VERSION=$(grep -E '^version\s*=\s*"' storage-app/Cargo.toml | head -n1 | cut -d'"' -f2)
-          DBUS_VERSION=$(grep -E '^version\s*=\s*"' storage-udisks/Cargo.toml | head -n1 | cut -d'"' -f2)
-          ROOT_DEP_VERSION=$(grep -E '^storage-udisks\s*=\s*\{.*version\s*=\s*"' Cargo.toml | head -n1 | sed -E 's/.*version\s*=\s*"([^"]+)".*/\1/')
-
-          echo "storage-app version: $UI_VERSION"
-          echo "storage-udisks version: $DBUS_VERSION"
-          echo "root dep version: $ROOT_DEP_VERSION"
-
-          if [ "$UI_VERSION" != "$VERSION" ]; then
-            echo "storage-app/Cargo.toml version ($UI_VERSION) does not match tag version ($VERSION)" >&2
-            exit 1
-          fi
-
-          if [ "$DBUS_VERSION" != "$VERSION" ]; then
-            echo "storage-udisks/Cargo.toml version ($DBUS_VERSION) does not match tag version ($VERSION)" >&2
-            exit 1
-          fi
-
-          if [ "$ROOT_DEP_VERSION" != "$VERSION" ]; then
-            echo "Cargo.toml workspace dep version ($ROOT_DEP_VERSION) does not match tag version ($VERSION)" >&2
-            exit 1
-          fi
-
-      - name: Verify clean tree
-        run: |
-          git status --porcelain
-          test -z "$(git status --porcelain)"
-
-      - name: Build
-        run: cargo build --workspace --release --locked
-
-      - name: Publish cosmic-ext-storage-udisks
+          VERSION="${GITHUB_REF_NAME#v}"
+          for manifest in Cargo.toml crates/storage-types/Cargo.toml crates/storage-contracts/Cargo.toml crates/storage-btrfs/Cargo.toml crates/storage-sys/Cargo.toml crates/storage-udisks/Cargo.toml; do
+            test "$(sed -n 's/^version = "\(.*\)"/\1/p' "$manifest" | head -n1)" = "$VERSION"
+          done
+          cargo build --workspace --release --locked
+          cargo package --manifest-path crates/storage-types/Cargo.toml --allow-dirty --no-verify
+          cargo package --manifest-path crates/storage-contracts/Cargo.toml --allow-dirty --no-verify
+          cargo package --manifest-path crates/storage-btrfs/Cargo.toml --allow-dirty --no-verify
+          cargo package --manifest-path crates/storage-sys/Cargo.toml --allow-dirty --no-verify
+          cargo package --manifest-path crates/storage-udisks/Cargo.toml --allow-dirty --no-verify
+          cargo package --manifest-path Cargo.toml --allow-dirty --no-verify
+      - name: Publish dependency layers
         env:
           CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
         run: |
-          cd storage-udisks
-          cargo publish --locked
-
-      - name: Wait for index update
-        run: sleep 30
-
-      - name: Publish cosmic-ext-storage
-        env:
-          CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
-        run: |
-          cd storage-app
-          cargo publish --locked
-
-      - name: Create GitHub Release
-        uses: softprops/action-gh-release@v1
+          set -euo pipefail
+          VERSION="${GITHUB_REF_NAME#v}"
+          wait_for() {
+            for attempt in $(seq 1 20); do
+              missing=''
+              for package in "$@"; do
+                cargo info "${package}@${VERSION}" --registry crates-io >/dev/null 2>&1 || missing="${missing} ${package}"
+              done
+              test -z "$missing" && return 0
+              test "$attempt" = 20 && { echo "Unresolved packages:${missing}" >&2; return 1; }
+              sleep 15
+            done
+          }
+          cargo publish --manifest-path crates/storage-types/Cargo.toml --locked
+          wait_for storage-types
+          cargo publish --manifest-path crates/storage-contracts/Cargo.toml --locked
+          wait_for storage-contracts
+          cargo publish --manifest-path crates/storage-btrfs/Cargo.toml --locked &
+          first=$!
+          cargo publish --manifest-path crates/storage-sys/Cargo.toml --locked &
+          second=$!
+          wait "$first" "$second"
+          wait_for storage-btrfs cosmic-ext-storage-storage-sys
+          cargo publish --manifest-path crates/storage-udisks/Cargo.toml --locked
+          wait_for storage-udisks
+          cargo publish --manifest-path Cargo.toml --locked
+      - uses: softprops/action-gh-release@v1
         with:
-          tag_name: v${{ env.VERSION }}
-          name: v${{ env.VERSION }}
           generate_release_notes: true
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

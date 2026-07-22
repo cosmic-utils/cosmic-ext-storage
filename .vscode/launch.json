@@ -1,36 +1,14 @@
 {
-  // Use IntelliSense to learn about possible attributes.
-  // Hover to view descriptions of existing attributes.
-  // For more information, visit: https://go.microsoft.com/fwlink/?linkid=830387
   "version": "0.2.0",
   "configurations": [
     {
       "type": "lldb",
       "request": "launch",
-      "name": "Debug executable 'hardware-disks-rs'",
+      "name": "Debug COSMIC Storage",
       "cargo": {
-        "args": ["build", "--bin=hardware-disks-rs", "--package=hardware-disks-rs"],
+        "args": ["build", "--bin=cosmic-ext-storage", "--package=cosmic-ext-storage"],
         "filter": {
-          "name": "hardware-disks-rs",
-          "kind": "bin"
-        }
-      },
-      "args": [],
-      "cwd": "${workspaceFolder}"
-    },
-    {
-      "type": "lldb",
-      "request": "launch",
-      "name": "Debug unit tests in executable 'cosmos-apxui'",
-      "cargo": {
-        "args": [
-          "test",
-          "--no-run",
-          "--bin=cosmos-apxui",
-          "--package=cosmos-apxui"
-        ],
-        "filter": {
-          "name": "cosmos-apxui",
+          "name": "cosmic-ext-storage",
           "kind": "bin"
         }
       },

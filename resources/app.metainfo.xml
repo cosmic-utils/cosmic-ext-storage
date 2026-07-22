@@ -1,0 +1,42 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<component type="desktop-application">
+  <id>com.cosmic.ext.Storage</id>
+  <metadata_license>CC0-1.0</metadata_license>
+  <project_license>MPL-2.0</project_license>
+  <name>Storage</name>
+  <name xml:lang="cs">Úložiště</name>
+  <name xml:lang="fr">Stockage</name>
+  <summary>A Storage Utility for the COSMIC™ desktop</summary>
+  <summary xml:lang="cs">Nástroj správy úložiště pro prostředí COSMIC™</summary>
+  <summary xml:lang="fr">A Storage Utility for the COSMIC™ desktop</summary>
+  <icon type="local" width="64" height="64">com.cosmic.ext.Storage</icon>
+  <icon type="local" width="128" height="128">com.cosmic.ext.Storage</icon>
+  <icon type="remote" width="64" height="64" scale="1">
+    https://github.com/cosmic-utils/cosmic-ext-storage/raw/main/resources/icons/hicolor/scalable/apps/com.cosmic.ext.Storage.svg
+  </icon>
+  <url
+        type="vcs-browser"
+    >https://github.com/cosmic-utils/cosmic-ext-storage</url>
+  <launchable type="desktop-id">com.cosmic.ext.Storage.desktop</launchable>
+  <provides>
+    <id>com.cosmic.ext.Storage</id>
+    <binaries>
+      <binary>cosmic-ext-storage</binary>
+    </binaries>
+  </provides>
+  <requires>
+    <display_length compare="ge">360</display_length>
+  </requires>
+  <supports>
+    <control>keyboard</control>
+    <control>pointing</control>
+    <control>touch</control>
+  </supports>
+  <categories>
+    <category>COSMIC</category>
+  </categories>
+  <keywords>
+    <keyword>COSMIC</keyword>
+  </keywords>
+  <content_rating type="oars-1.1" />
+</component>

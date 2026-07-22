@@ -8,114 +8,41 @@ permissions:
   contents: write
   pull-requests: write
 
-env:
-  CARGO_TERM_COLOR: always
-
 jobs:
   bump:
-    name: Bump version, commit, tag
-    runs-on: ubuntu-latest
     if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
-
-      - run: rustup update
-      - run: rustup component add clippy rustfmt
-      - uses: Swatinem/rust-cache@v2
-        with:
-          shared-key: workspace-${{ runner.os }}
-
-      - name: install system deps
-        run: sudo apt install libxkbcommon-dev libbtrfsutil-dev
-
-      - name: Get Next Version
-        id: semver
+      - id: semver
         uses: paulhatch/semantic-version@v5.4.0
         with:
           tag_prefix: "v"
-          major_pattern: "(MAJOR)"
-          minor_pattern: "(MINOR)"
           version_format: "${major}.${minor}.${patch}"
           version_from_branch: false
-
-      - name: Export VERSION
+      - name: Update every published manifest
         run: |
           set -euo pipefail
           VERSION="${{ steps.semver.outputs.version }}"
-          if [ -z "$VERSION" ]; then
-            VERSION="0.0.1"
-          fi
-          echo "Calculated version: $VERSION"
-          echo "VERSION=$VERSION" >> "$GITHUB_ENV"
-
-      - name: Check for existing version PR
-        id: pr_check
-        uses: actions/github-script@v7
-        with:
-          script: |
-            const owner = context.repo.owner;
-            const repo = context.repo.repo;
-            const branchPrefix = 'chore/release-v';
-
-            const { data: pulls } = await github.rest.pulls.list({
-              owner,
-              repo,
-              state: 'open',
-              per_page: 100,
-            });
-
-            const exists = pulls.some(pr => pr.head && typeof pr.head.ref === 'string' && pr.head.ref.startsWith(branchPrefix));
-            core.setOutput('exists', exists ? 'true' : 'false');
-            core.info(exists
-              ? `Found existing open release PR (branch starts with ${branchPrefix}); skipping.`
-              : `No open release PR found (branch starts with ${branchPrefix}); continuing.`);
-
-      - name: Skip (existing version PR)
-        if: steps.pr_check.outputs.exists == 'true'
-        run: echo "Version PR already exists for v$VERSION; skipping remaining steps."
-
-      - name: Set versions in Cargo.toml
-        if: steps.pr_check.outputs.exists != 'true'
-        run: |
-          set -euo pipefail
-          VERSION="$VERSION"
-          sed -i 's/^version = ".*"/version = "'$VERSION'"/' storage-udisks/Cargo.toml
-          sed -i 's/^version = ".*"/version = "'$VERSION'"/' storage-app/Cargo.toml
-
-          # Keep the workspace dependency version in sync so cargo can publish without mutating files.
-          sed -i 's|storage-udisks = { package = "cosmic-ext-storage-udisks", path = "storage-udisks", version = ".*" }|storage-udisks = { package = "cosmic-ext-storage-udisks", path = "storage-udisks", version = "'$VERSION'" }|' Cargo.toml
-
-      - name: Run fmt
-        if: steps.pr_check.outputs.exists != 'true'
-        run: cargo fmt --all
-
-      - name: Run tests
-        if: steps.pr_check.outputs.exists != 'true'
-        run: cargo test --workspace --all-features --locked
-
-      - name: Run clippy
-        if: steps.pr_check.outputs.exists != 'true'
-        run: cargo clippy --workspace --all-features --locked
-
-      - name: Commit version bump
-        if: steps.pr_check.outputs.exists != 'true'
-        uses: peter-evans/create-pull-request@v6
+          test -n "$VERSION" || VERSION=0.0.1
+          for manifest in Cargo.toml crates/storage-types/Cargo.toml crates/storage-contracts/Cargo.toml crates/storage-btrfs/Cargo.toml crates/storage-sys/Cargo.toml crates/storage-udisks/Cargo.toml; do
+            sed -i "0,/^version = \".*\"/s//version = \"${VERSION}\"/" "$manifest"
+          done
+          cargo fmt --all
+          cargo test --workspace --all-features --locked
+      - uses: peter-evans/create-pull-request@v6
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
-          commit-message: "chore(release): v${{ env.VERSION }}"
-          committer: "github-actions[bot] <41898282+github-actions[bot]@users.noreply.github.com>"
-          author: "github-actions[bot] <41898282+github-actions[bot]@users.noreply.github.com>"
+          commit-message: "chore(release): v${{ steps.semver.outputs.version }}"
+          branch: "chore/release-v${{ steps.semver.outputs.version }}"
+          delete-branch: true
+          title: "chore(release): v${{ steps.semver.outputs.version }}"
           add-paths: |
             Cargo.toml
-            storage-udisks/Cargo.toml
-            storage-app/Cargo.toml
-          branch: "chore/release-v${{ env.VERSION }}"
-          delete-branch: true
-          base: main
-          title: "chore(release): v${{ env.VERSION }}"
-          body: |
-            Automated version bump to v${{ env.VERSION }}.
-
-            This PR was created because `main` is protected/locked.
+            crates/storage-types/Cargo.toml
+            crates/storage-contracts/Cargo.toml
+            crates/storage-btrfs/Cargo.toml
+            crates/storage-sys/Cargo.toml
+            crates/storage-udisks/Cargo.toml
