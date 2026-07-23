@@ -12,6 +12,7 @@ pub mod encryption;
 pub mod filesystem;
 pub mod gpt;
 pub mod image;
+pub mod logical;
 pub mod lvm;
 pub mod manager;
 pub mod partition;

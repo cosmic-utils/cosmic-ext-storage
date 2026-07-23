@@ -42,6 +42,9 @@ libc.workspace = true
 clap.workspace = true
 rayon = "1.10.0"
 
+[dev-dependencies]
+futures.workspace = true
+
 [lib]
 name = "storage_sys"
 path = "src/lib.rs"
