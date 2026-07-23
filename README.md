@@ -7,7 +7,8 @@ COSMIC Storage is a desktop storage utility for the COSMIC desktop. It runs as t
 
 ### Prerequisites
 You will need the following packages/services:
- - `udisks2` (system service) - required for device enumeration, events, and native Polkit-authorized operations
+- `udisks2` (system service) - required for device enumeration, events, and native Polkit-authorized operations
+- UDisks2's LVM2, MD RAID, and Btrfs plugins for logical-storage discovery and actions
  - `just` (task runner) - install via `cargo install just` or your package manager
  
 For partition type support:
@@ -22,6 +23,14 @@ Recommended:
 - Optional: `rclone` for per-user network-drive configurations. Configurations live under the desktop user’s `~/.config/rclone/`; mounts and mount-on-login units are also user-scoped.
 
 The application uses the backend-neutral `storage-contracts` API. The currently shipped block-storage adapter is `UdisksBackend`; additional local or network adapters can be registered at the application composition root without making UI code depend on their implementation.
+
+## Logical storage
+
+Logical storage discovery covers LVM volume groups and logical volumes, MD RAID
+arrays, and Btrfs filesystems/subvolumes. Actions are sent directly to UDisks2
+through typed requests and use its native Polkit prompts. There is no
+project-owned privileged service or fallback command path. Destructive actions
+show their typed confirmation before they are submitted.
 
 ## Development
 
@@ -39,9 +48,16 @@ just check              # Run fmt, clippy, and tests
 just run                # Build and run the app
 just install            # Install the app binary and desktop assets
 just uninstall          # Remove installed app files
+just harness-nondestructive # Run required safe harness scenarios
 ```
 
 `just install` installs the application binary, desktop entry, metainfo, and icon. It does not install service, policy, or socket files.
+
+The full disposable-fixture suite is intentionally gated: run
+`STORAGE_TESTING_ENABLE_DESTRUCTIVE=1 just harness` only in a dedicated VM
+with loop-backed fixture media and the UDisks2 LVM2, MD RAID, and Btrfs
+plugins available. Both harness profiles write a versioned `run-report.json`
+and fixture ledger below their fresh run-artifact directory.
 
 ## Logging
 

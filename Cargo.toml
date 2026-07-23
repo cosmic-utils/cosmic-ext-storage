@@ -63,6 +63,7 @@ members = [
     "crates/storage-types",
     "crates/storage-contracts",
     "crates/storage-sys",
+    "tools/storage-testing",
 ]
 default-members = ["."]
 resolver = "2"

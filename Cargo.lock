@@ -5195,6 +5195,22 @@ dependencies = [
 ]
 
 [[package]]
+name = "storage-testing"
+version = "0.1.0"
+dependencies = [
+ "clap",
+ "libc",
+ "serde",
+ "serde_json",
+ "storage-contracts",
+ "storage-types",
+ "storage-udisks",
+ "thiserror 2.0.19",
+ "tokio",
+ "toml 1.1.3+spec-1.1.0",
+]
+
+[[package]]
 name = "storage-types"
 version = "0.1.0"
 dependencies = [

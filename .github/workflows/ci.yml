@@ -38,6 +38,11 @@ jobs:
       - name: Run tests
         run: cargo test --workspace --all-features --locked
 
+      - name: Run required safe harness profile
+        run: |
+          cargo install just --locked
+          just harness-nondestructive
+
   clippy:
     name: Clippy on ${{ matrix.os }}
     if: github.event.pull_request.draft == false
