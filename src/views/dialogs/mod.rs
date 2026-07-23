@@ -3,6 +3,7 @@ mod common;
 mod disk;
 mod encryption;
 mod image;
+mod logical;
 mod mount;
 mod partition;
 
@@ -13,6 +14,7 @@ pub use encryption::{
     change_passphrase, edit_encryption_options, take_ownership, unlock_encrypted,
 };
 pub use image::{attach_disk_image, image_operation, new_disk_image};
+pub use logical::confirmation as logical_confirmation;
 pub use mount::{edit_mount_options, unmount_busy};
 pub use partition::{
     create_partition, edit_filesystem_label, edit_partition, format_partition, resize_partition,

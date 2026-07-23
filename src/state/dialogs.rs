@@ -1,4 +1,5 @@
 use crate::models::{UiDrive, UiVolume};
+use storage_contracts::LogicalAction;
 use storage_types::{
     CreatePartitionInfo, FilesystemToolInfo, PartitionTypeInfo, ProcessInfo, SmartAttribute,
     SmartStatus, VolumeInfo,
@@ -26,6 +27,7 @@ pub enum ShowDialog {
     UnmountBusy(UnmountBusyDialog),
     BtrfsCreateSubvolume(BtrfsCreateSubvolumeDialog),
     BtrfsCreateSnapshot(BtrfsCreateSnapshotDialog),
+    LogicalActionConfirmation(LogicalActionConfirmationDialog),
     Info {
         title: String,
         body: String,
@@ -344,4 +346,13 @@ pub struct BtrfsCreateSnapshotDialog {
     pub read_only: bool,
     pub running: bool,
     pub error: Option<String>,
+}
+
+/// A typed logical action awaiting an explicit user confirmation.
+#[derive(Debug, Clone)]
+pub struct LogicalActionConfirmationDialog {
+    pub action: LogicalAction,
+    pub title: String,
+    pub body: String,
+    pub running: bool,
 }

@@ -170,13 +170,32 @@ pub(crate) fn update(app: &mut AppModel, message: Message) -> Task<Message> {
         Message::LogicalActionPrompted(action) => {
             app.logical.action_status =
                 Some(format!("Ready to {}", logical::action_label(&action)));
+            if app.dialog.is_none() {
+                app.dialog = Some(ShowDialog::LogicalActionConfirmation(
+                    crate::state::dialogs::LogicalActionConfirmationDialog {
+                        title: format!("Confirm {}", logical::action_label(&action)),
+                        body: logical::action_confirmation_body(&action),
+                        action,
+                        running: false,
+                    },
+                ));
+            }
         }
         Message::LogicalActionCancelled => {
             if app.logical.pending.is_none() {
                 app.logical.action_status = None;
+                if matches!(app.dialog, Some(ShowDialog::LogicalActionConfirmation(_))) {
+                    app.dialog = None;
+                }
             }
         }
         Message::LogicalActionConfirmed(action) => {
+            if let Some(ShowDialog::LogicalActionConfirmation(dialog)) = app.dialog.as_mut() {
+                if dialog.action != action || dialog.running {
+                    return Task::none();
+                }
+                dialog.running = true;
+            }
             let entity = logical::action_entity(&action);
             let generation = match app.logical.begin_action(action.clone(), entity) {
                 Ok(generation) => generation,
@@ -208,8 +227,16 @@ pub(crate) fn update(app: &mut AppModel, message: Message) -> Task<Message> {
         }
         Message::LogicalActionFinished { generation, result } => {
             let succeeded = result.is_ok();
-            if app.logical.finish_action(generation, result) && succeeded {
-                return Task::done(cosmic::Action::App(Message::LoadLogicalEntities));
+            if app.logical.finish_action(generation, result) {
+                if matches!(app.dialog, Some(ShowDialog::LogicalActionConfirmation(_))) {
+                    app.dialog = None;
+                }
+                if succeeded {
+                    return Task::batch([
+                        Task::done(cosmic::Action::App(Message::LoadLogicalEntities)),
+                        Task::done(cosmic::Action::App(Message::LoadDrivesIncremental)),
+                    ]);
+                }
             }
         }
         Message::UsageScanLoad {

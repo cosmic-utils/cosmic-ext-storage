@@ -163,6 +163,10 @@ pub(crate) fn dialog(app: &AppModel) -> Option<Element<'_, Message>> {
             | crate::state::dialogs::ShowDialog::BtrfsCreateSubvolume(_)
             | crate::state::dialogs::ShowDialog::BtrfsCreateSnapshot(_) => None,
 
+            crate::state::dialogs::ShowDialog::LogicalActionConfirmation(state) => {
+                Some(dialogs::logical_confirmation(state.clone()))
+            }
+
             crate::state::dialogs::ShowDialog::DeletePartition(state) => {
                 Some(dialogs::confirmation(
                     fl!("delete", name = state.name.clone()),

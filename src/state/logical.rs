@@ -60,6 +60,14 @@ impl LogicalState {
                 self.source_statuses = topology.sources;
                 self.selected =
                     selected.filter(|id| self.entities.iter().any(|entity| &entity.id == id));
+                if self.selected.is_none() {
+                    self.selected = self
+                        .entities
+                        .iter()
+                        .find(|entity| entity.parent_id.is_none())
+                        .or_else(|| self.entities.first())
+                        .map(|entity| entity.id.clone());
+                }
                 self.last_refresh_error = None;
             }
             Err(error) => self.last_refresh_error = Some(error),

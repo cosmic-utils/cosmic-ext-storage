@@ -47,3 +47,25 @@ pub(super) fn action_label(action: &LogicalAction) -> &'static str {
         storage_types::LogicalOperation::SetDefaultSubvolume => "set default subvolume",
     }
 }
+
+pub(super) fn action_confirmation_body(action: &LogicalAction) -> String {
+    match action {
+        LogicalAction::DeleteLvmVolumeGroup { volume_group, .. } => {
+            format!("Delete volume group {volume_group} and preserve member signatures.")
+        }
+        LogicalAction::DeleteLvmLogicalVolume { logical_volume, .. } => {
+            format!("Delete logical volume {logical_volume}. This cannot be undone.")
+        }
+        LogicalAction::DeleteMdRaidArray { array, .. } => {
+            format!("Delete MD RAID array {array} and preserve member signatures.")
+        }
+        LogicalAction::DeactivateLvmLogicalVolume { logical_volume } => {
+            format!("Deactivate logical volume {logical_volume}.")
+        }
+        LogicalAction::StopMdRaidArray { array } => format!("Stop MD RAID array {array}."),
+        _ => format!(
+            "Apply the {} operation through UDisks.",
+            action_label(action)
+        ),
+    }
+}
