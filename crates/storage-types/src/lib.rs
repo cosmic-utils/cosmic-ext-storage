@@ -28,6 +28,7 @@ pub mod common;
 pub mod disk;
 pub mod encryption;
 pub mod filesystem;
+pub mod logical;
 pub mod lvm;
 pub mod network;
 pub mod partition;
@@ -49,6 +50,14 @@ pub use encryption::{EncryptionOptionsSettings, LuksInfo, LuksVersion};
 pub use filesystem::{
     CheckResult, FilesystemInfo, FilesystemToolInfo, FilesystemType, FormatOptions, KillResult,
     MountOptions, MountOptionsSettings, ProcessInfo, UnmountResult,
+};
+pub use logical::{
+    BlockDeviceFingerprint, BlockDeviceId, BlockDeviceRef, ConfirmedDestructiveScope,
+    LogicalAggregateSummary, LogicalBlockedReason, LogicalCapabilities, LogicalEntity,
+    LogicalEntityId, LogicalEntityKind, LogicalIdentityError, LogicalMember, LogicalMemberId,
+    LogicalOperation, LogicalSource, LogicalSourceAvailability, LogicalSourceStatus,
+    LogicalTopology, LogicalTopologyError, ProgressRatio, all_logical_operations,
+    btrfs_default_subvolume_id, summarize_entities,
 };
 pub use lvm::{LogicalVolumeInfo, PhysicalVolumeInfo, VolumeGroupInfo};
 pub use network::{

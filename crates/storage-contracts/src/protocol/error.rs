@@ -14,6 +14,7 @@ pub enum StorageErrorKind {
     Busy,
     Timeout,
     Unavailable,
+    Other,
     Internal,
 }
 
@@ -28,6 +29,7 @@ impl StorageErrorKind {
             Self::Busy => 423,
             Self::Timeout => 504,
             Self::Unavailable => 503,
+            Self::Other => 520,
             Self::Internal => 500,
         }
     }

@@ -7,7 +7,10 @@ pub use protocol::{
     OperationEvent, OperationId, OperationKind, OperationProgress, StorageError, StorageErrorKind,
 };
 pub use traits::{
-    BackendMetadata, BlockStorageBackend, BtrfsBackend, BtrfsOperations, DeviceEventSource,
-    DiskDiscovery, DriveOperations, EncryptionOperations, FilesystemOperations,
-    ImageDeviceOperations, NetworkDriveBackend, PartitionOperations,
+    BackendMetadata, BlockStorageBackend, BtrfsBackend, BtrfsOperations, BtrfsResizeRequest,
+    ConfigurationCleanupPolicy, DeviceEventSource, DiskDiscovery, DriveOperations,
+    EncryptionOperations, FilesystemOperations, ImageDeviceOperations, LogicalAction,
+    LogicalActionOutcome, LogicalOperations, LogicalTopologySource, LvmWipePolicy,
+    MdRaidCreateProfile, MdRaidLevel, MdRaidMemberWipePolicy, MdRaidName, MdRaidSyncAction,
+    NetworkDriveBackend, PartitionOperations,
 };

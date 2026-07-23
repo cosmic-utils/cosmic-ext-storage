@@ -26,6 +26,7 @@ pub struct StorageBackendCapabilities {
     pub filesystem_operations: bool,
     pub encryption_operations: bool,
     pub image_operations: bool,
+    pub logical_storage: bool,
 }
 
 /// Typed local-device notification emitted by a backend.
