@@ -44,7 +44,6 @@ impl Application for AppModel {
             config: Config::load(Self::APP_ID),
         };
 
-        app.sidebar.set_logical_loading(true);
         app.sidebar.set_network_loading(true);
 
         let command = app.update_title();
@@ -75,17 +74,9 @@ impl Application for AppModel {
 
         let network_command = Task::done(cosmic::Action::App(Message::LoadNetworkRemotes));
 
-        let logical_command = Task::done(cosmic::Action::App(Message::LoadLogicalEntities));
-
         (
             app,
-            Task::batch(vec![
-                command,
-                nav_command,
-                tools_command,
-                network_command,
-                logical_command,
-            ]),
+            Task::batch(vec![command, nav_command, tools_command, network_command]),
         )
     }
 

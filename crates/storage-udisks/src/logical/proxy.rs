@@ -9,6 +9,9 @@ use zbus::{
 
 type Options<'a> = HashMap<&'a str, Value<'a>>;
 
+/// UDisks' `GetSubvolumes` item: subvolume ID, parent ID, and path.
+type BtrfsSubvolume = (u64, u64, String);
+
 #[proxy(
     interface = "org.freedesktop.UDisks2.Manager.LVM2",
     default_service = "org.freedesktop.UDisks2",
@@ -91,11 +94,12 @@ pub trait Btrfs {
     #[zbus(name = "SetDefaultSubvolumeID")]
     fn set_default_subvolume_id(&self, id: u32, options: Options<'_>) -> zbus::Result<()>;
     #[zbus(name = "GetSubvolumes")]
+    /// UDisks returns `a(tts)i`: subvolume ID, parent ID, path, then count.
     fn get_subvolumes(
         &self,
         snapshots_only: bool,
         options: Options<'_>,
-    ) -> zbus::Result<Vec<(u64, String)>>;
+    ) -> zbus::Result<(Vec<BtrfsSubvolume>, i32)>;
     #[zbus(name = "GetDefaultSubvolumeID")]
-    fn get_default_subvolume_id(&self, options: Options<'_>) -> zbus::Result<u64>;
+    fn get_default_subvolume_id(&self, options: Options<'_>) -> zbus::Result<u32>;
 }

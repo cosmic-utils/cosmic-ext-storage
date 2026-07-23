@@ -27,7 +27,6 @@ pub struct SidebarState {
 
     /// Selected (focused) child node. Drive selection is still managed via `app.nav`.
     pub selected_child: Option<SidebarNodeKey>,
-    pub logical_loading: bool,
     pub drives_loading: bool,
     pub network_loading: bool,
     pub drive_builds_pending: usize,
@@ -46,10 +45,6 @@ impl SidebarState {
 
     pub fn set_drive_entities(&mut self, entities: HashMap<String, nav_bar::Id>) {
         self.drive_entities = entities;
-    }
-
-    pub fn set_logical_loading(&mut self, loading: bool) {
-        self.logical_loading = loading;
     }
 
     pub fn set_network_loading(&mut self, loading: bool) {

@@ -115,20 +115,31 @@ pub(crate) fn sidebar_section(
             .padding([8, 12, 4, 12])
             .into(),
     ];
-    if state.loading {
-        rows.push(
-            widget::container(widget::text::body("Loading logical storage…"))
-                .padding([2, 12])
-                .into(),
-        );
+
+    // This root node deliberately requires no logical-topology request. The
+    // detail page starts the UDisks/local discovery only once the user opens
+    // it, so a privileged or unavailable detail source cannot erase Logical
+    // from the sidebar.
+    let mut root_button = widget::button::custom(
+        widget::Row::with_children(vec![
+            icon::from_name("drive-harddisk-symbolic").size(16).into(),
+            widget::text::body("Logical storage").into(),
+        ])
+        .spacing(8)
+        .width(Length::Fill),
+    )
+    .padding([4, 12])
+    .width(Length::Fill)
+    .class(if state.view_requested {
+        cosmic::theme::Button::Suggested
+    } else {
+        cosmic::theme::Button::Link
+    });
+    if controls_enabled {
+        root_button = root_button.on_press(Message::LogicalViewRequested);
     }
-    if let Some(error) = &state.last_refresh_error {
-        rows.push(
-            widget::container(widget::text::caption(error.clone()))
-                .padding([2, 12])
-                .into(),
-        );
-    }
+    rows.push(root_button.into());
+
     for entity in &state.entities {
         let selected = state.selected.as_ref() == Some(&entity.id);
         let title = if entity.name.is_empty() {
@@ -178,8 +189,35 @@ pub(crate) fn sidebar_section(
 }
 
 pub(crate) fn detail<'a>(state: &'a LogicalState) -> Element<'a, Message> {
+    if state.loading {
+        return widget::text::title1("Loading logical storage…")
+            .apply(widget::container)
+            .width(Length::Fill)
+            .height(Length::Fill)
+            .center_x(Length::Fill)
+            .center_y(Length::Fill)
+            .into();
+    }
+
+    if let Some(error) = &state.last_refresh_error {
+        return widget::container(
+            widget::Column::with_children(vec![
+                widget::text::title1("Logical storage could not be loaded").into(),
+                widget::text::body(error.clone()).into(),
+                widget::button::text("Retry")
+                    .on_press(Message::LogicalViewRequested)
+                    .into(),
+            ])
+            .spacing(12),
+        )
+        .padding(20)
+        .width(Length::Fill)
+        .height(Length::Fill)
+        .into();
+    }
+
     let Some(entity) = state.selected_entity() else {
-        return widget::text::title1("Select a logical storage item")
+        return widget::text::title1("No logical storage was found")
             .apply(widget::container)
             .width(Length::Fill)
             .height(Length::Fill)

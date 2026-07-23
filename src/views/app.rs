@@ -326,7 +326,7 @@ pub(crate) fn view(app: &AppModel) -> Element<'_, Message> {
         return network_main_view(&app.network, controls_enabled).map(Message::Network);
     }
 
-    if app.logical.selected.is_some() {
+    if app.logical.view_requested {
         return crate::views::logical::detail(&app.logical);
     }
 

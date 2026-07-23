@@ -23,6 +23,9 @@ pub struct PendingLogicalAction {
 
 #[derive(Debug, Default)]
 pub struct LogicalState {
+    /// The user has selected the always-available Logical sidebar node.
+    /// Detailed topology is intentionally loaded only after this point.
+    pub view_requested: bool,
     pub entities: Vec<LogicalEntity>,
     pub selected: Option<LogicalEntityId>,
     pub selected_tab: LogicalDetailTab,
@@ -37,6 +40,15 @@ pub struct LogicalState {
 }
 
 impl LogicalState {
+    pub fn request_view(&mut self) {
+        self.view_requested = true;
+    }
+
+    pub fn leave_view(&mut self) {
+        self.view_requested = false;
+        self.selected = None;
+    }
+
     pub fn begin_load(&mut self) -> u64 {
         self.logical_load_generation = self.logical_load_generation.saturating_add(1);
         self.loading = true;
@@ -76,6 +88,7 @@ impl LogicalState {
     }
 
     pub fn select(&mut self, entity: Option<LogicalEntityId>) {
+        self.view_requested = true;
         self.selected = entity.filter(|id| self.entities.iter().any(|current| &current.id == id));
     }
 

@@ -51,6 +51,9 @@ pub enum Message {
     StandbyNow,
     Wakeup,
     FilesystemToolsLoaded(Vec<FilesystemToolInfo>),
+    /// Opens logical storage. Detailed topology is loaded only after this
+    /// non-privileged sidebar node is selected.
+    LogicalViewRequested,
     LoadLogicalEntities,
     LogicalEntitiesLoaded {
         generation: u64,

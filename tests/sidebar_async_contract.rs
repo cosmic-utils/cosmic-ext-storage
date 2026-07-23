@@ -54,8 +54,13 @@ fn event_and_action_refresh_coalesce() {
 }
 
 #[test]
-fn physical_network_and_logical_loading_do_not_block_startup() {
-    let startup_tasks = ["drives", "network", "logical"];
-    assert_eq!(startup_tasks.len(), 3);
-    assert!(startup_tasks.contains(&"logical"));
+fn logical_detail_loading_is_deferred_until_the_sidebar_node_is_opened() {
+    let startup_tasks = ["drives", "network"];
+    assert_eq!(startup_tasks.len(), 2);
+    assert!(!startup_tasks.contains(&"logical"));
+
+    let mut logical = LogicalState::default();
+    assert!(!logical.view_requested);
+    logical.request_view();
+    assert!(logical.view_requested);
 }

@@ -307,11 +307,11 @@ async fn btrfs_filesystems(
             metadata.insert("default_subvolume_id".into(), default_id.to_string());
         }
         let mut children = Vec::new();
-        for (subvolume_id, subvolume_path) in proxy
+        let (subvolumes, _subvolume_count) = proxy
             .get_subvolumes(false, HashMap::new())
             .await
-            .map_err(native_error)?
-        {
+            .map_err(native_error)?;
+        for (subvolume_id, parent_subvolume_id, subvolume_path) in subvolumes {
             children.push(LogicalEntity {
                 id: LogicalEntityId(format!("btrfs-subvolume:{fsid}:{subvolume_id}")),
                 kind: LogicalEntityKind::BtrfsSubvolume,
@@ -326,7 +326,13 @@ async fn btrfs_filesystems(
                 progress_fraction: None,
                 members: Vec::new(),
                 capabilities: LogicalCapabilities::default(),
-                metadata: BTreeMap::from([("subvolume_id".into(), subvolume_id.to_string())]),
+                metadata: BTreeMap::from([
+                    ("subvolume_id".into(), subvolume_id.to_string()),
+                    (
+                        "parent_subvolume_id".into(),
+                        parent_subvolume_id.to_string(),
+                    ),
+                ]),
             });
         }
         output.push(LogicalEntity {

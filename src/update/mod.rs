@@ -143,8 +143,17 @@ pub(crate) fn update(app: &mut AppModel, message: Message) -> Task<Message> {
                 None,
             )));
         }
+        Message::LogicalViewRequested => {
+            app.network.select(None, None);
+            app.network.clear_editor();
+            app.sidebar.selected_child = None;
+            app.logical.request_view();
+            if app.logical.loading {
+                return Task::none();
+            }
+            return Task::done(cosmic::Action::App(Message::LoadLogicalEntities));
+        }
         Message::LoadLogicalEntities => {
-            app.sidebar.set_logical_loading(true);
             let generation = app.logical.begin_load();
             return Task::perform(
                 async move {
@@ -161,9 +170,7 @@ pub(crate) fn update(app: &mut AppModel, message: Message) -> Task<Message> {
             );
         }
         Message::LogicalEntitiesLoaded { generation, result } => {
-            if app.logical.finish_load(generation, result) {
-                app.sidebar.set_logical_loading(false);
-            }
+            app.logical.finish_load(generation, result);
         }
         Message::LogicalSelectionChanged(entity) => app.logical.select(entity),
         Message::LogicalDetailTabSelected(tab) => app.logical.selected_tab = tab,
@@ -1076,6 +1083,7 @@ pub(crate) fn update(app: &mut AppModel, message: Message) -> Task<Message> {
         Message::SidebarSelectDrive { device_path } => {
             app.network.select(None, None);
             app.network.clear_editor();
+            app.logical.leave_view();
             app.sidebar.selected_child = None;
             if let Some(id) = app.sidebar.drive_entities.get(&device_path).copied() {
                 return on_nav_select(app, id);
@@ -1087,6 +1095,7 @@ pub(crate) fn update(app: &mut AppModel, message: Message) -> Task<Message> {
         Message::SidebarSelectChild { device_path } => {
             app.network.select(None, None);
             app.network.clear_editor();
+            app.logical.leave_view();
             app.sidebar.selected_child = Some(SidebarNodeKey::Volume(device_path.clone()));
 
             // Find which drive contains this volume node

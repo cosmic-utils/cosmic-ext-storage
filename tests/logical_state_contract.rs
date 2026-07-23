@@ -70,6 +70,22 @@ fn logical_refresh_preserves_selection() {
 }
 
 #[test]
+fn leaving_logical_view_keeps_cached_topology_but_returns_to_physical_storage() {
+    let mut state = LogicalState::default();
+    let generation = state.begin_load();
+    state.finish_load(
+        generation,
+        Ok(LogicalTopology::new(vec![entity("lvm-vg:one")], vec![]).unwrap()),
+    );
+    state.request_view();
+    state.leave_view();
+
+    assert!(!state.view_requested);
+    assert!(state.selected.is_none());
+    assert_eq!(state.entities.len(), 1);
+}
+
+#[test]
 fn failed_action_preserves_form_and_topology() {
     let mut state = LogicalState::default();
     let generation = state.begin_load();
