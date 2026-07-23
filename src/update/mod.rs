@@ -1,6 +1,7 @@
 mod btrfs;
 mod drive;
 mod image;
+mod logical;
 mod nav;
 mod network;
 mod smart;
@@ -18,6 +19,7 @@ use crate::message::app::{ImagePathPickerKind, Message};
 use crate::message::network::NetworkMessage;
 use crate::models::load_all_drives;
 use crate::operations::FilesystemsClient;
+use crate::operations::shared;
 use crate::state::app::AppModel;
 use crate::state::dialogs::ShowDialog;
 use crate::state::sidebar::SidebarNodeKey;
@@ -96,6 +98,72 @@ pub(crate) fn update(app: &mut AppModel, message: Message) -> Task<Message> {
         }
         Message::FilesystemToolsLoaded(tools) => {
             app.filesystem_tools = tools;
+        }
+        Message::LoadLogicalEntities => {
+            let generation = app.logical.begin_load();
+            return Task::perform(
+                async move {
+                    let result = match shared().await {
+                        Ok(operations) => operations
+                            .load_logical_topology()
+                            .await
+                            .map_err(|error| error.to_string()),
+                        Err(error) => Err(error.to_string()),
+                    };
+                    Message::LogicalEntitiesLoaded { generation, result }
+                },
+                |message| message.into(),
+            );
+        }
+        Message::LogicalEntitiesLoaded { generation, result } => {
+            app.logical.finish_load(generation, result);
+        }
+        Message::LogicalSelectionChanged(entity) => app.logical.select(entity),
+        Message::LogicalDetailTabSelected(tab) => app.logical.selected_tab = tab,
+        Message::LogicalActionPrompted(action) => {
+            app.logical.action_status =
+                Some(format!("Ready to {}", logical::action_label(&action)));
+        }
+        Message::LogicalActionCancelled => {
+            if app.logical.pending.is_none() {
+                app.logical.action_status = None;
+            }
+        }
+        Message::LogicalActionConfirmed(action) => {
+            let entity = logical::action_entity(&action);
+            let generation = match app.logical.begin_action(action.clone(), entity) {
+                Ok(generation) => generation,
+                Err(error) => {
+                    app.logical.action_status = Some(error);
+                    return Task::none();
+                }
+            };
+            return Task::perform(
+                async move {
+                    let result = match shared().await {
+                        Ok(operations) => operations
+                            .execute_logical_action(action)
+                            .await
+                            .map(|_| ())
+                            .map_err(|error| error.to_string()),
+                        Err(error) => Err(error.to_string()),
+                    };
+                    Message::LogicalActionFinished { generation, result }
+                },
+                |message| message.into(),
+            );
+        }
+        Message::LogicalActionProgressed {
+            generation,
+            progress,
+        } => {
+            app.logical.progress(generation, progress);
+        }
+        Message::LogicalActionFinished { generation, result } => {
+            let succeeded = result.is_ok();
+            if app.logical.finish_action(generation, result) && succeeded {
+                return Task::done(cosmic::Action::App(Message::LoadLogicalEntities));
+            }
         }
         Message::UsageScanLoad {
             scan_id,

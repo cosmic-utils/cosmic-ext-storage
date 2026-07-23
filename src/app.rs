@@ -9,6 +9,7 @@ use crate::config::Config;
 use crate::models::load_all_drives;
 use crate::operations::FilesystemsClient;
 use crate::operations::RcloneClient;
+use crate::state::logical::LogicalState;
 use crate::state::network::NetworkState;
 use crate::state::sidebar::SidebarState;
 use cosmic::app::{Core, Task};
@@ -41,6 +42,7 @@ impl Application for AppModel {
             image_op_operation_id: None,
             filesystem_tools: vec![],
             network: NetworkState::new(),
+            logical: LogicalState::default(),
             config: Config::load(Self::APP_ID),
         };
 
@@ -108,12 +110,15 @@ impl Application for AppModel {
             },
         );
 
+        let logical_command = Task::done(cosmic::Action::App(Message::LoadLogicalEntities));
+
         (
             app,
             command
                 .chain(nav_command)
                 .chain(tools_command)
-                .chain(network_command),
+                .chain(network_command)
+                .chain(logical_command),
         )
     }
 

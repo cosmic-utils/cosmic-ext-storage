@@ -4,6 +4,7 @@ use crate::config::Config;
 use crate::fl;
 use crate::message::app::Message;
 use crate::state::dialogs::ShowDialog;
+use crate::state::logical::LogicalState;
 use crate::state::network::NetworkState;
 use crate::state::sidebar::SidebarState;
 use cosmic::ApplicationExt;
@@ -43,6 +44,7 @@ pub struct AppModel {
 
     /// Network mounts state (RClone, Samba, FTP)
     pub(crate) network: NetworkState,
+    pub(crate) logical: LogicalState,
 }
 
 impl AppModel {

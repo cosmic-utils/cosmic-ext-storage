@@ -8,10 +8,12 @@ use crate::message::volumes::VolumesControlMessage;
 use crate::models::UiDrive;
 use crate::state::app::ContextPage;
 use crate::state::dialogs::ShowDialog;
+use storage_contracts::LogicalAction;
 use storage_types::{
     FilesystemToolInfo, UsageCategory, UsageDeleteResult, UsageScanParallelismPreset,
     UsageScanResult,
 };
+use storage_types::{LogicalEntityId, LogicalTopology, ProgressRatio};
 
 /// Messages emitted by the application and its widgets.
 #[derive(Debug, Clone)]
@@ -38,6 +40,24 @@ pub enum Message {
     StandbyNow,
     Wakeup,
     FilesystemToolsLoaded(Vec<FilesystemToolInfo>),
+    LoadLogicalEntities,
+    LogicalEntitiesLoaded {
+        generation: u64,
+        result: Result<LogicalTopology, String>,
+    },
+    LogicalSelectionChanged(Option<LogicalEntityId>),
+    LogicalDetailTabSelected(crate::state::logical::LogicalDetailTab),
+    LogicalActionPrompted(LogicalAction),
+    LogicalActionConfirmed(LogicalAction),
+    LogicalActionCancelled,
+    LogicalActionFinished {
+        generation: u64,
+        result: Result<(), String>,
+    },
+    LogicalActionProgressed {
+        generation: u64,
+        progress: ProgressRatio,
+    },
     UsageScanLoad {
         scan_id: String,
         top_files_per_category: u32,

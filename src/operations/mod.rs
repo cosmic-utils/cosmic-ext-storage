@@ -8,7 +8,10 @@
 
 use std::{collections::BTreeMap, sync::Arc};
 
-use storage_contracts::{BlockStorageBackend, BtrfsBackend, NetworkDriveBackend};
+use storage_contracts::{
+    BlockStorageBackend, BtrfsBackend, LogicalOperations, LogicalTopologySource,
+    NetworkDriveBackend,
+};
 use storage_types::{NetworkBackendAvailability, NetworkBackendId};
 use tokio::sync::OnceCell;
 
@@ -17,6 +20,7 @@ pub mod disks;
 pub mod error;
 pub mod filesystems;
 pub mod image;
+pub mod logical;
 pub mod luks;
 pub mod partitions;
 pub mod protected_paths;
@@ -38,6 +42,8 @@ pub struct BackendRegistry {
     pub btrfs: Option<Arc<dyn BtrfsBackend>>,
     pub network: BTreeMap<NetworkBackendId, Arc<dyn NetworkDriveBackend>>,
     pub network_availability: BTreeMap<NetworkBackendId, NetworkBackendAvailability>,
+    pub logical_topology_sources: Vec<Arc<dyn LogicalTopologySource>>,
+    pub logical_operations: Arc<dyn LogicalOperations>,
 }
 
 impl BackendRegistry {
@@ -73,8 +79,14 @@ impl std::fmt::Debug for StorageOperations {
 
 impl StorageOperations {
     pub async fn new() -> Result<Arc<Self>, OperationError> {
-        let block =
-            Arc::new(storage_udisks::UdisksBackend::new().await?) as Arc<dyn BlockStorageBackend>;
+        let udisks = Arc::new(storage_udisks::UdisksBackend::new().await?);
+        let block = udisks.clone() as Arc<dyn BlockStorageBackend>;
+        let logical_topology_sources: Vec<Arc<dyn LogicalTopologySource>> = vec![
+            udisks.clone() as Arc<dyn LogicalTopologySource>,
+            Arc::new(storage_sys::LocalLogicalTopologySource::new())
+                as Arc<dyn LogicalTopologySource>,
+        ];
+        let logical_operations = udisks as Arc<dyn LogicalOperations>;
         let btrfs = Some(Arc::new(disks_btrfs::BtrfsUtilBackend::new()) as Arc<dyn BtrfsBackend>);
 
         let mut network = BTreeMap::new();
@@ -102,6 +114,8 @@ impl StorageOperations {
                 btrfs,
                 network,
                 network_availability,
+                logical_topology_sources,
+                logical_operations,
             },
             filesystem_tools: filesystems::detect_filesystem_tools(),
             image_manager: image::ImageOperationManager::default(),
