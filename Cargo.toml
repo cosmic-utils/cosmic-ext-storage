@@ -1,15 +1,70 @@
+[package]
+name = "cosmic-ext-storage"
+version = "0.1.0"
+edition = "2024"
+license = "GPL-3.0-only"
+description = "A Storage utility for the COSMIC™ desktop"
+repository = "https://github.com/cosmic-utils/cosmic-ext-storage"
+
+[features]
+default = [
+    "btrfs-tools",
+    "lvm-tools",
+    "rclone-tools",
+    "fs-ext4",
+    "fs-xfs",
+    "fs-btrfs",
+    "fs-vfat",
+    "fs-ntfs",
+    "fs-exfat",
+]
+btrfs-tools = []
+lvm-tools = []
+rclone-tools = []
+fs-ext4 = []
+fs-xfs = []
+fs-btrfs = []
+fs-vfat = []
+fs-ntfs = []
+fs-exfat = []
+
+[build-dependencies]
+vergen = { workspace = true }
+
+[dependencies]
+anyhow.workspace = true
+futures-util.workspace = true
+i18n-embed.workspace = true
+i18n-embed-fl.workspace = true
+libc.workspace = true
+libcosmic.workspace = true
+num-format.workspace = true
+open.workspace = true
+rust-embed.workspace = true
+serde.workspace = true
+storage-contracts.workspace = true
+storage-types.workspace = true
+storage-udisks.workspace = true
+storage-btrfs = { path = "crates/storage-btrfs", version = "0.2.0" }
+storage-sys = { path = "crates/storage-sys", package = "cosmic-ext-storage-storage-sys", version = "0.1.0" }
+thiserror.workspace = true
+tokio.workspace = true
+tracing.workspace = true
+tracing-appender.workspace = true
+tracing-subscriber.workspace = true
+uuid.workspace = true
+which.workspace = true
+
 [workspace]
 members = [
-    "storage-udisks",
-    "storage-app",
-    "storage-btrfs",         # New library
-    "storage-service",       # New D-Bus service
-    "storage-macros", # Procedural macros for authorization
-    "storage-types",         # Shared data models
-    "storage-contracts",     # Shared service/tool contracts
-    "storage-sys",           # Low-level system operations
+    ".",
+    "crates/storage-udisks",
+    "crates/storage-btrfs",
+    "crates/storage-types",
+    "crates/storage-contracts",
+    "crates/storage-sys",
 ]
-default-members = ["storage-app"]
+default-members = ["."]
 resolver = "2"
 
 [workspace.dependencies]
@@ -24,7 +79,7 @@ libc = "0.2.180"
 duct = "1.0.0"
 serde = { version = "1.0.219", features = ["derive"] }
 serde_json = "1.0.140"
-toml = "0.9.8"
+toml = "1.0"
 thiserror = "2.0.18"
 which = "8.0.0"
 udisks2 = "0.3.1"
@@ -44,12 +99,12 @@ clap = { version = "4.5.60", features = ["derive"] }
 async-trait = "0.1.89"
 
 # workspace dependencies
-storage-udisks = { package = "storage-udisks", path = "storage-udisks", version = "0.1.0" }
-storage-types = { path = "storage-types", version = "0.1.0" }
-storage-contracts = { path = "storage-contracts", version = "0.1.0" }
+storage-udisks = { package = "storage-udisks", path = "crates/storage-udisks", version = "0.1.0" }
+storage-types = { path = "crates/storage-types", version = "0.1.0" }
+storage-contracts = { path = "crates/storage-contracts", version = "0.1.0" }
 
 # build dependencies
-vergen = { version = "8.3.2", features = ["build", "cargo", "rustc", "si", "git", "git2"] }
+vergen = { package = "vergen-git2", version = "10", features = ["build", "cargo", "rustc", "si"] }
 
 [workspace.dependencies.i18n-embed]
 version = "0.16"
@@ -57,7 +112,7 @@ features = ["fluent-system", "desktop-requester"]
 
 [workspace.dependencies.libcosmic]
 git = "https://github.com/pop-os/libcosmic.git"
-rev = "2f02228"
+rev = "ef162b8e16ba4493e05c169cd56c7b9f77f0fda5"
 features = [
     # Accessibility support
     "a11y",

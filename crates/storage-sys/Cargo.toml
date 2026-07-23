@@ -1,0 +1,47 @@
+[package]
+name = "cosmic-ext-storage-storage-sys"
+version = "0.1.0"
+edition = "2024"
+license = "GPL-3.0-only"
+
+[features]
+default = [
+	"btrfs-tools",
+	"lvm-tools",
+	"rclone-tools",
+	"fs-ext4",
+	"fs-xfs",
+	"fs-btrfs",
+	"fs-vfat",
+	"fs-ntfs",
+	"fs-exfat",
+]
+btrfs-tools = []
+lvm-tools = []
+rclone-tools = []
+fs-ext4 = []
+fs-xfs = []
+fs-btrfs = []
+fs-vfat = []
+fs-ntfs = []
+fs-exfat = []
+
+[dependencies]
+thiserror.workspace = true
+anyhow.workspace = true
+which.workspace = true
+configparser = "3.0"
+tokio.workspace = true
+tracing.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+storage-types.workspace = true
+storage-contracts.workspace = true
+async-trait.workspace = true
+libc.workspace = true
+clap.workspace = true
+rayon = "1.10.0"
+
+[lib]
+name = "storage_sys"
+path = "src/lib.rs"

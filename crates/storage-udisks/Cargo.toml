@@ -1,0 +1,31 @@
+[package]
+name = "storage-udisks"
+description = "DBus interface for disk management"
+version = "0.1.0"
+edition = "2024"
+license = "GPL-3.0-only"
+
+[dependencies]
+storage-types.workspace = true
+storage-contracts.workspace = true
+async-trait.workspace = true
+udisks2.workspace = true
+zbus.workspace = true
+tokio.workspace = true
+zbus_macros.workspace = true
+serde.workspace = true
+toml.workspace = true
+tracing.workspace = true
+anyhow.workspace = true
+thiserror.workspace = true
+tracing-subscriber.workspace = true
+futures.workspace = true
+enumflags2.workspace = true
+num-format.workspace = true
+libc.workspace = true
+procfs.workspace = true
+nix.workspace = true
+btrfsutil.workspace = true
+uuid.workspace = true
+chrono.workspace = true
+serde_json.workspace = true

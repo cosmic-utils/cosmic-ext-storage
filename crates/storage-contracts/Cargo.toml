@@ -1,0 +1,15 @@
+[package]
+name = "storage-contracts"
+version = "0.1.0"
+edition = "2024"
+license = "GPL-3.0-only"
+description = "Service/tool contracts for COSMIC Ext Storage"
+
+[dependencies]
+async-trait.workspace = true
+futures.workspace = true
+thiserror.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+uuid.workspace = true
+storage-types.workspace = true
