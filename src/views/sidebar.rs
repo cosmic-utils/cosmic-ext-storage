@@ -1,8 +1,10 @@
 use crate::app::Message;
 use crate::controls::layout::{row_container, transparent_button_class};
 use crate::models::{UiDrive, UiVolume};
+use crate::state::logical::LogicalState;
 use crate::state::network::NetworkState;
 use crate::state::sidebar::{SidebarNodeKey, SidebarState};
+use crate::views::logical::sidebar_section;
 use crate::views::network::network_section;
 use cosmic::iced::Length;
 use cosmic::widget::{self, icon};
@@ -367,6 +369,7 @@ pub(crate) fn sidebar(
     app_nav: &cosmic::widget::nav_bar::Model,
     sidebar: &SidebarState,
     network: &NetworkState,
+    logical_state: &LogicalState,
     controls_enabled: bool,
 ) -> Element<'static, Message> {
     let active_drive = sidebar.active_drive_block_path(app_nav);
@@ -386,6 +389,7 @@ pub(crate) fn sidebar(
     }
 
     let mut rows: Vec<Element<'static, Message>> = Vec::new();
+    rows.extend(sidebar_section(logical_state, controls_enabled));
 
     let add_section =
         |rows: &mut Vec<Element<'static, Message>>, section: Section, drives: Vec<&UiDrive>| {

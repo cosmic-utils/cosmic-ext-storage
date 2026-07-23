@@ -257,14 +257,20 @@ pub(crate) fn nav_bar(app: &AppModel) -> Option<Element<'_, cosmic::Action<Messa
 
     let controls_enabled = app.dialog.is_none();
 
-    let mut nav = sidebar::sidebar(&app.nav, &app.sidebar, &app.network, controls_enabled)
-        .map(Into::into)
-        .apply(widget::container)
-        .padding(8)
-        .class(cosmic::style::Container::Background)
-        // Both width and height must be Shrink for flex layout to respect the max_width constraint
-        .width(cosmic::iced::Length::Shrink)
-        .height(cosmic::iced::Length::Shrink);
+    let mut nav = sidebar::sidebar(
+        &app.nav,
+        &app.sidebar,
+        &app.network,
+        &app.logical,
+        controls_enabled,
+    )
+    .map(Into::into)
+    .apply(widget::container)
+    .padding(8)
+    .class(cosmic::style::Container::Background)
+    // Both width and height must be Shrink for flex layout to respect the max_width constraint
+    .width(cosmic::iced::Length::Shrink)
+    .height(cosmic::iced::Length::Shrink);
 
     if !app.core.is_condensed() {
         nav = nav.max_width(280);
@@ -314,6 +320,10 @@ pub(crate) fn view(app: &AppModel) -> Element<'_, Message> {
     {
         let controls_enabled = app.dialog.is_none();
         return network_main_view(&app.network, controls_enabled).map(Message::Network);
+    }
+
+    if app.logical.selected.is_some() {
+        return crate::views::logical::detail(&app.logical);
     }
 
     match app.nav.active_data::<UiDrive>() {
