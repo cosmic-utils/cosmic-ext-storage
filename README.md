@@ -73,4 +73,13 @@ just uninstall          # Remove installed app files
 
 Fluent translations are in [i18n](i18n). The root [justfile](justfile) includes vendoring helpers for distribution builds.
 
-![Screenshot of COSMIC Storage](resources/screenshots/cosmic-ext-storage.png)
+
+![Screenshot of Storage App](https://github.com/cosmic-utils/cosmic-ext-storage/blob/main/resources/screenshots/cosmic-ext-storage.png)
+
+
+### Notes on use of AI
+AI has been used as a ***tool*** for development of this project, and has not been treated as a self-sufficient engineer.
+
+I have been a professional software engineer since 2012, and I am very much against AI slop and the existential threat it imposes on our industry.
+
+That being said, I believe when it's used correctly, it is an invaulable tool for a sole developer on a FOSS project as large as this; Especially when the threat of taking somebody's job isn't a concern.
