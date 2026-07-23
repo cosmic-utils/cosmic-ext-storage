@@ -41,6 +41,15 @@ fn all_actions_have_typed_validation() {
         resize.validate().unwrap_err().kind,
         StorageErrorKind::InvalidInput
     );
+
+    let traversal = LogicalAction::CreateBtrfsSubvolume {
+        filesystem: LogicalEntityId::new("btrfs:fsid").unwrap(),
+        name: "../unsafe".into(),
+    };
+    assert_eq!(
+        traversal.validate().unwrap_err().kind,
+        StorageErrorKind::InvalidInput
+    );
 }
 
 #[test]

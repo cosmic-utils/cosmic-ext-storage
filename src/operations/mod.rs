@@ -80,6 +80,12 @@ impl std::fmt::Debug for StorageOperations {
 impl StorageOperations {
     pub async fn new() -> Result<Arc<Self>, OperationError> {
         let udisks = Arc::new(storage_udisks::UdisksBackend::new().await?);
+        if let Err(error) = udisks.enable_optional_modules().await {
+            // Module availability is discovered per feature below.  Failing to
+            // load an optional plugin must not prevent ordinary disks from
+            // opening, nor trigger a direct-command fallback.
+            tracing::warn!(%error, "UDisks optional modules are unavailable");
+        }
         let block = udisks.clone() as Arc<dyn BlockStorageBackend>;
         let logical_topology_sources: Vec<Arc<dyn LogicalTopologySource>> = vec![
             udisks.clone() as Arc<dyn LogicalTopologySource>,

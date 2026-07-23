@@ -11,7 +11,6 @@ use crate::state::dialogs::{BtrfsCreateSnapshotDialog, BtrfsCreateSubvolumeDialo
 
 pub fn create_subvolume<'a>(state: BtrfsCreateSubvolumeDialog) -> Element<'a, Message> {
     let BtrfsCreateSubvolumeDialog {
-        mount_point: _,
         block_path: _,
         name,
         running,
@@ -57,7 +56,6 @@ pub fn create_subvolume<'a>(state: BtrfsCreateSubvolumeDialog) -> Element<'a, Me
 
 pub fn create_snapshot<'a>(state: BtrfsCreateSnapshotDialog) -> Element<'a, Message> {
     let BtrfsCreateSnapshotDialog {
-        mount_point: _,
         block_path: _,
         subvolumes,
         selected_source_index,

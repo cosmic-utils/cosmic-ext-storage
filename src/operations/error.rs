@@ -21,9 +21,9 @@ pub enum OperationError {
     Busy(String),
     #[error("Storage state changed: {0}")]
     Conflict(String),
-    #[error("Storage operation failed: {0}")]
+    #[error("{0}")]
     Other(String),
-    #[error("Storage operation failed: {0}")]
+    #[error("{0}")]
     Failed(String),
 }
 
@@ -40,5 +40,22 @@ impl From<StorageError> for OperationError {
             StorageErrorKind::Other => Self::Other(error.message),
             _ => Self::Failed(error.message),
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::OperationError;
+
+    #[test]
+    fn generic_failures_do_not_add_another_prefix() {
+        assert_eq!(
+            OperationError::Failed("native denial".into()).to_string(),
+            "native denial"
+        );
+        assert_eq!(
+            OperationError::Other("native failure".into()).to_string(),
+            "native failure"
+        );
     }
 }

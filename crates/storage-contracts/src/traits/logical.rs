@@ -113,6 +113,20 @@ pub enum LogicalAction {
         filesystem: LogicalEntityId,
         subvolume_id: NonZeroU32,
     },
+    CreateBtrfsSubvolume {
+        filesystem: LogicalEntityId,
+        name: String,
+    },
+    DeleteBtrfsSubvolume {
+        filesystem: LogicalEntityId,
+        path: String,
+    },
+    CreateBtrfsSnapshot {
+        filesystem: LogicalEntityId,
+        source: String,
+        destination: String,
+        readonly: bool,
+    },
 }
 
 impl LogicalAction {
@@ -226,6 +240,24 @@ impl LogicalAction {
                     return invalid("Btrfs default subvolume ID must be non-zero");
                 }
             }
+            Self::CreateBtrfsSubvolume { filesystem, name } => {
+                validate_target(filesystem, "btrfs:")?;
+                validate_btrfs_subvolume_path(name, "Btrfs subvolume name")?;
+            }
+            Self::DeleteBtrfsSubvolume { filesystem, path } => {
+                validate_target(filesystem, "btrfs:")?;
+                validate_btrfs_subvolume_path(path, "Btrfs subvolume path")?;
+            }
+            Self::CreateBtrfsSnapshot {
+                filesystem,
+                source,
+                destination,
+                ..
+            } => {
+                validate_target(filesystem, "btrfs:")?;
+                validate_btrfs_subvolume_path(source, "Btrfs snapshot source")?;
+                validate_btrfs_subvolume_path(destination, "Btrfs snapshot destination")?;
+            }
         }
         Ok(())
     }
@@ -234,10 +266,13 @@ impl LogicalAction {
         match self {
             Self::CreateLvmVolumeGroup { .. }
             | Self::CreateLvmLogicalVolume { .. }
-            | Self::CreateMdRaidArray { .. } => LogicalOperation::Create,
+            | Self::CreateMdRaidArray { .. }
+            | Self::CreateBtrfsSubvolume { .. }
+            | Self::CreateBtrfsSnapshot { .. } => LogicalOperation::Create,
             Self::DeleteLvmVolumeGroup { .. }
             | Self::DeleteLvmLogicalVolume { .. }
-            | Self::DeleteMdRaidArray { .. } => LogicalOperation::Delete,
+            | Self::DeleteMdRaidArray { .. }
+            | Self::DeleteBtrfsSubvolume { .. } => LogicalOperation::Delete,
             Self::ResizeLvmLogicalVolume { .. } | Self::ResizeBtrfsFilesystem { .. } => {
                 LogicalOperation::Resize
             }
@@ -391,6 +426,24 @@ fn validate_name(value: &str, noun: &str) -> Result<(), StorageError> {
     if value.is_empty() || value.contains('/') || value.contains('\0') || value.len() > 127 {
         return invalid(format!(
             "{noun} must be non-empty, at most 127 bytes, and contain no slash or NUL"
+        ));
+    }
+    Ok(())
+}
+
+/// UDisks receives Btrfs subvolume names relative to the filesystem root.
+/// Keeping that boundary typed prevents callers from smuggling a host path or
+/// parent traversal into the native helper.
+fn validate_btrfs_subvolume_path(value: &str, noun: &str) -> Result<(), StorageError> {
+    if value.is_empty()
+        || value.starts_with('/')
+        || value.contains('\0')
+        || value
+            .split('/')
+            .any(|part| part.is_empty() || part == "." || part == "..")
+    {
+        return invalid(format!(
+            "{noun} must be a non-empty relative path without traversal or NUL"
         ));
     }
     Ok(())

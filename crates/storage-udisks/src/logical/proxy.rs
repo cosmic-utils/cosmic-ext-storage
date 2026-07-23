@@ -77,12 +77,25 @@ pub trait LogicalVolume {
 pub trait Btrfs {
     fn add_device(&self, device: &ObjectPath<'_>, options: Options<'_>) -> zbus::Result<()>;
     fn remove_device(&self, device: &ObjectPath<'_>, options: Options<'_>) -> zbus::Result<()>;
+    fn create_subvolume(&self, name: &str, options: Options<'_>) -> zbus::Result<()>;
+    fn remove_subvolume(&self, name: &str, options: Options<'_>) -> zbus::Result<()>;
+    fn create_snapshot(
+        &self,
+        source: &str,
+        destination: &str,
+        readonly: bool,
+        options: Options<'_>,
+    ) -> zbus::Result<()>;
     fn resize(&self, size: u64, options: Options<'_>) -> zbus::Result<()>;
     fn set_label(&self, label: &str, options: Options<'_>) -> zbus::Result<()>;
     #[zbus(name = "SetDefaultSubvolumeID")]
     fn set_default_subvolume_id(&self, id: u32, options: Options<'_>) -> zbus::Result<()>;
     #[zbus(name = "GetSubvolumes")]
-    fn get_subvolumes(&self, options: Options<'_>) -> zbus::Result<Vec<(u64, String)>>;
+    fn get_subvolumes(
+        &self,
+        snapshots_only: bool,
+        options: Options<'_>,
+    ) -> zbus::Result<Vec<(u64, String)>>;
     #[zbus(name = "GetDefaultSubvolumeID")]
     fn get_default_subvolume_id(&self, options: Options<'_>) -> zbus::Result<u64>;
 }

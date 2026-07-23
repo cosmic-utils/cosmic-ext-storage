@@ -308,9 +308,9 @@ async fn btrfs_filesystems(
         }
         let mut children = Vec::new();
         for (subvolume_id, subvolume_path) in proxy
-            .get_subvolumes(HashMap::new())
+            .get_subvolumes(false, HashMap::new())
             .await
-            .unwrap_or_default()
+            .map_err(native_error)?
         {
             children.push(LogicalEntity {
                 id: LogicalEntityId(format!("btrfs-subvolume:{fsid}:{subvolume_id}")),
@@ -348,6 +348,8 @@ async fn btrfs_filesystems(
             members: Vec::new(),
             capabilities: LogicalCapabilities::normalized(
                 vec![
+                    LogicalOperation::Create,
+                    LogicalOperation::Delete,
                     LogicalOperation::AddMember,
                     LogicalOperation::RemoveMember,
                     LogicalOperation::Resize,

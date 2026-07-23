@@ -80,9 +80,7 @@ pub fn btrfs_management_section<'a>(
                     );
                 }
                 Err(error) => {
-                    content_items.push(
-                        widget::text::caption(fl!("btrfs-usage-error", error = error)).into(),
-                    );
+                    content_items.push(widget::text::caption(error).into());
                 }
             }
         }
@@ -158,7 +156,7 @@ pub fn btrfs_management_section<'a>(
                 }
             }
             Err(error) => {
-                content_items.push(widget::text::caption(format!("Error: {}", error)).into());
+                content_items.push(widget::text::caption(error).into());
             }
         }
     }

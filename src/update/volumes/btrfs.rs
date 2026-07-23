@@ -22,9 +22,9 @@ pub(super) fn open_create_subvolume(
         return Task::none();
     };
 
-    let Some(mount_point) = &btrfs_state.mount_point else {
+    if btrfs_state.mount_point.is_none() {
         return Task::none();
-    };
+    }
 
     let Some(block_path) = &btrfs_state.block_path else {
         return Task::none();
@@ -32,7 +32,6 @@ pub(super) fn open_create_subvolume(
 
     *dialog = Some(ShowDialog::BtrfsCreateSubvolume(
         BtrfsCreateSubvolumeDialog {
-            mount_point: mount_point.clone(),
             block_path: block_path.clone(),
             name: String::new(),
             running: false,
@@ -85,14 +84,16 @@ pub(super) fn btrfs_create_subvolume_message(
             state.running = true;
             state.error = None;
 
-            let mount_point = state.mount_point.clone();
             let block_path = state.block_path.clone();
+            let block_path_for_task = block_path.clone();
             let name = name.to_string();
 
             return Task::perform(
                 async move {
                     let btrfs_client = BtrfsClient::new().await?;
-                    btrfs_client.create_subvolume(&mount_point, &name).await?;
+                    btrfs_client
+                        .create_subvolume(&block_path_for_task, &name)
+                        .await?;
                     load_all_drives().await
                 },
                 move |result| match result {
@@ -131,9 +132,9 @@ pub(super) fn open_create_snapshot(
         return Task::none();
     };
 
-    let Some(mount_point) = &btrfs_state.mount_point else {
+    if btrfs_state.mount_point.is_none() {
         return Task::none();
-    };
+    }
 
     let Some(block_path) = &btrfs_state.block_path else {
         return Task::none();
@@ -149,7 +150,6 @@ pub(super) fn open_create_snapshot(
     };
 
     *dialog = Some(ShowDialog::BtrfsCreateSnapshot(BtrfsCreateSnapshotDialog {
-        mount_point: mount_point.clone(),
         block_path: block_path.clone(),
         subvolumes,
         selected_source_index: 0,
@@ -218,14 +218,14 @@ pub(super) fn btrfs_create_snapshot_message(
             let source = source_subvol.path.clone();
             let dest = name.to_string(); // dest is a string, not std::path::PathBuf
             let read_only = state.read_only;
-            let mount_point = state.mount_point.clone();
             let block_path = state.block_path.clone();
+            let block_path_for_task = block_path.clone();
 
             return Task::perform(
                 async move {
                     let btrfs_client = BtrfsClient::new().await?;
                     btrfs_client
-                        .create_snapshot(&mount_point, &source, &dest, read_only)
+                        .create_snapshot(&block_path_for_task, &source, &dest, read_only)
                         .await?;
                     load_all_drives().await
                 },

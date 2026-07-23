@@ -330,7 +330,6 @@ pub struct UnmountBusyDialog {
 
 #[derive(Debug, Clone)]
 pub struct BtrfsCreateSubvolumeDialog {
-    pub mount_point: String,
     pub block_path: String,
     pub name: String,
     pub running: bool,
@@ -339,7 +338,6 @@ pub struct BtrfsCreateSubvolumeDialog {
 
 #[derive(Debug, Clone)]
 pub struct BtrfsCreateSnapshotDialog {
-    pub mount_point: String,
     pub block_path: String,
     pub subvolumes: Vec<storage_types::BtrfsSubvolume>,
     pub selected_source_index: usize,

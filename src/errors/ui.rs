@@ -42,6 +42,9 @@ pub(crate) fn log_error_and_show_dialog(
 
     Message::Dialog(Box::new(ShowDialog::Info {
         title: title.into(),
-        body: format!("{err:#}"),
+        // The error chain is retained in tracing above.  Showing it verbatim
+        // in the dialog produces nested "failed" prefixes that obscure the
+        // actionable root message.
+        body: err.to_string(),
     }))
 }

@@ -55,6 +55,13 @@ impl UdisksBackend {
         &self.manager
     }
 
+    /// Ask UDisks to load optional modules (notably the Btrfs module) through
+    /// the system daemon. This is deliberately separate from any direct
+    /// `btrfs` command so native operations retain UDisks/Polkit handling.
+    pub async fn enable_optional_modules(&self) -> Result<(), StorageError> {
+        self.manager.enable_modules().await.map_err(unavailable)
+    }
+
     pub(crate) fn logical_epoch(&self) -> u64 {
         self.object_manager_epoch.load(Ordering::Acquire)
     }

@@ -40,11 +40,9 @@ impl SubvolumeManager {
             })?;
 
         if !output.status.success() {
-            let stderr = String::from_utf8_lossy(&output.stderr);
-            return Err(BtrfsError::CommandFailed(format!(
-                "btrfs command failed: {}",
-                stderr
-            )));
+            return Err(BtrfsError::CommandFailed(
+                String::from_utf8_lossy(&output.stderr).trim().to_owned(),
+            ));
         }
 
         let stdout = String::from_utf8_lossy(&output.stdout);

@@ -305,6 +305,32 @@ impl LogicalOperations for UdisksBackend {
                     .await
                     .map_err(native_error)?;
             }
+            LogicalAction::CreateBtrfsSubvolume { filesystem, name } => {
+                let proxy = btrfs_proxy(self, filesystem).await?;
+                proxy
+                    .create_subvolume(name, empty_options())
+                    .await
+                    .map_err(native_error)?;
+            }
+            LogicalAction::DeleteBtrfsSubvolume { filesystem, path } => {
+                let proxy = btrfs_proxy(self, filesystem).await?;
+                proxy
+                    .remove_subvolume(path, empty_options())
+                    .await
+                    .map_err(native_error)?;
+            }
+            LogicalAction::CreateBtrfsSnapshot {
+                filesystem,
+                source,
+                destination,
+                readonly,
+            } => {
+                let proxy = btrfs_proxy(self, filesystem).await?;
+                proxy
+                    .create_snapshot(source, destination, *readonly, empty_options())
+                    .await
+                    .map_err(native_error)?;
+            }
         }
         Ok(LogicalActionOutcome {
             action,
@@ -612,7 +638,10 @@ fn action_affected_ids(action: &LogicalAction) -> Vec<LogicalEntityId> {
         | LogicalAction::RemoveBtrfsDevice { filesystem, .. }
         | LogicalAction::ResizeBtrfsFilesystem { filesystem, .. }
         | LogicalAction::SetBtrfsLabel { filesystem, .. }
-        | LogicalAction::SetBtrfsDefaultSubvolume { filesystem, .. } => vec![filesystem.clone()],
+        | LogicalAction::SetBtrfsDefaultSubvolume { filesystem, .. }
+        | LogicalAction::CreateBtrfsSubvolume { filesystem, .. }
+        | LogicalAction::DeleteBtrfsSubvolume { filesystem, .. }
+        | LogicalAction::CreateBtrfsSnapshot { filesystem, .. } => vec![filesystem.clone()],
         LogicalAction::CreateLvmVolumeGroup { .. } | LogicalAction::CreateMdRaidArray { .. } => {
             Vec::new()
         }

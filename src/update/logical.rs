@@ -23,7 +23,10 @@ pub(super) fn action_entity(action: &LogicalAction) -> Option<LogicalEntityId> {
         | LogicalAction::RemoveBtrfsDevice { filesystem, .. }
         | LogicalAction::ResizeBtrfsFilesystem { filesystem, .. }
         | LogicalAction::SetBtrfsLabel { filesystem, .. }
-        | LogicalAction::SetBtrfsDefaultSubvolume { filesystem, .. } => Some(filesystem.clone()),
+        | LogicalAction::SetBtrfsDefaultSubvolume { filesystem, .. }
+        | LogicalAction::CreateBtrfsSubvolume { filesystem, .. }
+        | LogicalAction::DeleteBtrfsSubvolume { filesystem, .. }
+        | LogicalAction::CreateBtrfsSnapshot { filesystem, .. } => Some(filesystem.clone()),
         LogicalAction::CreateLvmVolumeGroup { .. } | LogicalAction::CreateMdRaidArray { .. } => {
             None
         }
