@@ -17,7 +17,7 @@ use crate::fl;
 use crate::logging;
 use crate::message::app::{ImagePathPickerKind, Message};
 use crate::message::network::NetworkMessage;
-use crate::models::load_all_drives;
+use crate::models::{build_drive_timed, load_all_drives, load_drive_candidates};
 use crate::operations::FilesystemsClient;
 use crate::operations::shared;
 use crate::state::app::AppModel;
@@ -99,7 +99,52 @@ pub(crate) fn update(app: &mut AppModel, message: Message) -> Task<Message> {
         Message::FilesystemToolsLoaded(tools) => {
             app.filesystem_tools = tools;
         }
+        Message::LoadDrivesIncremental => {
+            return Task::perform(
+                async {
+                    load_drive_candidates()
+                        .await
+                        .map_err(|error| error.to_string())
+                },
+                |result| Message::DriveListLoaded(result).into(),
+            );
+        }
+        Message::DriveListLoaded(result) => match result {
+            Ok(disks) => {
+                app.sidebar.start_drive_loading(disks.len());
+                if disks.is_empty() {
+                    return Task::done(cosmic::Action::App(Message::DriveLoadFinished));
+                }
+                return Task::batch(disks.into_iter().map(|disk| {
+                    Task::perform(build_drive_timed(disk), |(result, elapsed_ms)| {
+                        Message::DriveLoaded { result, elapsed_ms }.into()
+                    })
+                }));
+            }
+            Err(error) => {
+                app.sidebar.finish_drive_loading();
+                tracing::error!(%error, "failed to load drive candidates");
+            }
+        },
+        Message::DriveLoadStarted { total } => app.sidebar.start_drive_loading(total),
+        Message::DriveLoaded { result, elapsed_ms } => {
+            tracing::debug!(elapsed_ms, "incremental drive load completed");
+            if let Ok(drive) = result {
+                app.sidebar.upsert_drive_sorted(drive);
+            }
+            if app.sidebar.mark_drive_build_finished() {
+                return Task::done(cosmic::Action::App(Message::DriveLoadFinished));
+            }
+        }
+        Message::DriveLoadFinished => {
+            app.sidebar.finish_drive_loading();
+            return Task::done(cosmic::Action::App(Message::UpdateNav(
+                app.sidebar.drives.clone(),
+                None,
+            )));
+        }
         Message::LoadLogicalEntities => {
+            app.sidebar.set_logical_loading(true);
             let generation = app.logical.begin_load();
             return Task::perform(
                 async move {
@@ -116,7 +161,9 @@ pub(crate) fn update(app: &mut AppModel, message: Message) -> Task<Message> {
             );
         }
         Message::LogicalEntitiesLoaded { generation, result } => {
-            app.logical.finish_load(generation, result);
+            if app.logical.finish_load(generation, result) {
+                app.sidebar.set_logical_loading(false);
+            }
         }
         Message::LogicalSelectionChanged(entity) => app.logical.select(entity),
         Message::LogicalDetailTabSelected(tab) => app.logical.selected_tab = tab,
@@ -875,38 +922,10 @@ pub(crate) fn update(app: &mut AppModel, message: Message) -> Task<Message> {
             return drive::format_disk(app, msg);
         }
         Message::DriveRemoved(_drive_model) => {
-            return Task::perform(
-                async {
-                    match load_all_drives().await {
-                        Ok(drives) => Some(drives),
-                        Err(e) => {
-                            tracing::error!(%e, "failed to refresh drives after drive removal");
-                            None
-                        }
-                    }
-                },
-                move |drives| match drives {
-                    None => Message::None.into(),
-                    Some(drives) => Message::UpdateNav(drives, None).into(),
-                },
-            );
+            return Task::done(cosmic::Action::App(Message::LoadDrivesIncremental));
         }
         Message::DriveAdded(_drive_model) => {
-            return Task::perform(
-                async {
-                    match load_all_drives().await {
-                        Ok(drives) => Some(drives),
-                        Err(e) => {
-                            tracing::error!(%e, "failed to refresh drives after drive add");
-                            None
-                        }
-                    }
-                },
-                move |drives| match drives {
-                    None => Message::None.into(),
-                    Some(drives) => Message::UpdateNav(drives, None).into(),
-                },
-            );
+            return Task::done(cosmic::Action::App(Message::LoadDrivesIncremental));
         }
         Message::None => {}
         Message::UpdateNav(drive_models, selected) => {
@@ -1319,9 +1338,11 @@ pub(crate) fn update(app: &mut AppModel, message: Message) -> Task<Message> {
             return network::handle_network_message(app, msg);
         }
         Message::LoadNetworkRemotes => {
+            app.sidebar.set_network_loading(true);
             return network::handle_network_message(app, NetworkMessage::LoadRemotes);
         }
         Message::NetworkRemotesLoaded(result) => {
+            app.sidebar.set_network_loading(false);
             return network::handle_network_message(app, NetworkMessage::RemotesLoaded(result));
         }
     }

@@ -9,6 +9,7 @@ use crate::models::UiDrive;
 use crate::state::app::ContextPage;
 use crate::state::dialogs::ShowDialog;
 use storage_contracts::LogicalAction;
+use storage_types::DiskInfo;
 use storage_types::{
     FilesystemToolInfo, UsageCategory, UsageDeleteResult, UsageScanParallelismPreset,
     UsageScanResult,
@@ -28,6 +29,16 @@ pub enum Message {
     FormatDisk(FormatDiskMessage),
     DriveRemoved(String),
     DriveAdded(String),
+    LoadDrivesIncremental,
+    DriveListLoaded(Result<Vec<DiskInfo>, String>),
+    DriveLoadStarted {
+        total: usize,
+    },
+    DriveLoaded {
+        result: Result<UiDrive, String>,
+        elapsed_ms: u128,
+    },
+    DriveLoadFinished,
     None,
     UpdateNav(Vec<UiDrive>, Option<String>),
     UpdateNavWithChildSelection(Vec<UiDrive>, Option<String>),

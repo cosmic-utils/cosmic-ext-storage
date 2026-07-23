@@ -111,10 +111,10 @@ impl LogicalState {
     }
 
     pub fn finish_action(&mut self, generation: u64, result: Result<(), String>) -> bool {
-        if !self
+        if self
             .pending
             .as_ref()
-            .is_some_and(|pending| pending.generation == generation)
+            .is_none_or(|pending| pending.generation != generation)
         {
             return false;
         }

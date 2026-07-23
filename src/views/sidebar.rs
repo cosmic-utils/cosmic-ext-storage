@@ -390,6 +390,13 @@ pub(crate) fn sidebar(
 
     let mut rows: Vec<Element<'static, Message>> = Vec::new();
     rows.extend(sidebar_section(logical_state, controls_enabled));
+    if sidebar.drives_loading {
+        rows.push(
+            widget::container(widget::text::caption("Loading drives…"))
+                .padding([4, 12])
+                .into(),
+        );
+    }
 
     let add_section =
         |rows: &mut Vec<Element<'static, Message>>, section: Section, drives: Vec<&UiDrive>| {
