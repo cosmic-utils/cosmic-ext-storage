@@ -2,7 +2,8 @@
 
 use storage_contracts::LogicalAction;
 use storage_types::{
-    LogicalEntity, LogicalEntityId, LogicalSourceStatus, LogicalTopology, ProgressRatio,
+    LogicalEntity, LogicalEntityId, LogicalEntityKind, LogicalSourceStatus, LogicalTopology,
+    ProgressRatio,
 };
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
@@ -23,9 +24,12 @@ pub struct PendingLogicalAction {
 
 #[derive(Debug, Default)]
 pub struct LogicalState {
-    /// The user has selected the always-available Logical sidebar node.
+    /// The user has selected a non-privileged Logical sidebar candidate.
     /// Detailed topology is intentionally loaded only after this point.
     pub view_requested: bool,
+    /// Device selected from the non-privileged sidebar tree. This anchors a
+    /// subsequent topology load to the logical entity the user opened.
+    pub selected_device: Option<String>,
     pub entities: Vec<LogicalEntity>,
     pub selected: Option<LogicalEntityId>,
     pub selected_tab: LogicalDetailTab,
@@ -40,12 +44,19 @@ pub struct LogicalState {
 }
 
 impl LogicalState {
-    pub fn request_view(&mut self) {
+    pub fn request_view(&mut self, device_path: Option<String>) {
         self.view_requested = true;
+        if let Some(device_path) = device_path {
+            if self.selected_device.as_deref() != Some(&device_path) {
+                self.selected = None;
+            }
+            self.selected_device = Some(device_path);
+        }
     }
 
     pub fn leave_view(&mut self) {
         self.view_requested = false;
+        self.selected_device = None;
         self.selected = None;
     }
 
@@ -72,6 +83,25 @@ impl LogicalState {
                 self.source_statuses = topology.sources;
                 self.selected =
                     selected.filter(|id| self.entities.iter().any(|entity| &entity.id == id));
+                if self.selected.is_none() {
+                    self.selected = self.selected_device.as_deref().and_then(|device_path| {
+                        self.entities
+                            .iter()
+                            .find(|entity| {
+                                entity.kind == LogicalEntityKind::BtrfsFilesystem
+                                    && entity.device_path.as_deref() == Some(device_path)
+                            })
+                            .or_else(|| {
+                                self.entities.iter().find(|entity| {
+                                    entity.parent_id.is_none()
+                                        && entity.members.iter().any(|member| {
+                                            member.device_path.as_deref() == Some(device_path)
+                                        })
+                                })
+                            })
+                            .map(|entity| entity.id.clone())
+                    });
+                }
                 if self.selected.is_none() {
                     self.selected = self
                         .entities

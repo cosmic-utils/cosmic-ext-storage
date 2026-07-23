@@ -143,11 +143,15 @@ pub(crate) fn update(app: &mut AppModel, message: Message) -> Task<Message> {
                 None,
             )));
         }
-        Message::LogicalViewRequested => {
+        Message::LogicalViewRequested { device_path } => {
             app.network.select(None, None);
             app.network.clear_editor();
             app.sidebar.selected_child = None;
-            app.logical.request_view();
+            if let Some(device_path) = device_path.as_ref() {
+                app.sidebar
+                    .expand(SidebarNodeKey::LogicalCandidate(device_path.clone()));
+            }
+            app.logical.request_view(device_path);
             if app.logical.loading {
                 return Task::none();
             }

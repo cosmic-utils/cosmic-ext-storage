@@ -4,12 +4,13 @@ use crate::models::{UiDrive, UiVolume};
 use crate::state::logical::LogicalState;
 use crate::state::network::NetworkState;
 use crate::state::sidebar::{SidebarNodeKey, SidebarState};
-use crate::views::logical::sidebar_section;
 use crate::views::network::network_section;
+use cosmic::cosmic_theme::palette::WithAlpha;
 use cosmic::iced::Length;
 use cosmic::widget::{self, icon};
 use cosmic::{Apply, Element};
-use storage_types::VolumeKind;
+use std::collections::HashSet;
+use storage_types::{LogicalEntity, LogicalEntityId, LogicalEntityKind, VolumeKind};
 
 /// Fixed width for expander button (icon 16px + padding 2px * 2)
 const EXPANDER_WIDTH: u16 = 20;
@@ -102,6 +103,119 @@ fn section_header(label: String) -> Element<'static, Message> {
         .into()
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum LogicalCandidateKind {
+    Btrfs,
+    LvmPhysicalVolume,
+    RaidMember,
+}
+
+impl LogicalCandidateKind {
+    fn label(self) -> &'static str {
+        match self {
+            Self::Btrfs => "Btrfs",
+            Self::LvmPhysicalVolume => "LVM physical volume",
+            Self::RaidMember => "RAID member",
+        }
+    }
+
+    fn icon_name(self) -> &'static str {
+        match self {
+            Self::Btrfs => "folder-symbolic",
+            Self::LvmPhysicalVolume | Self::RaidMember => "drive-harddisk-symbolic",
+        }
+    }
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+struct LogicalCandidate {
+    device_path: String,
+    kind: LogicalCandidateKind,
+}
+
+fn logical_candidate_kind(volume: &UiVolume) -> Option<LogicalCandidateKind> {
+    let id_type = volume.volume.id_type.trim();
+    if id_type.eq_ignore_ascii_case("btrfs") {
+        return Some(LogicalCandidateKind::Btrfs);
+    }
+    if volume.volume.kind == VolumeKind::LvmPhysicalVolume
+        || id_type.eq_ignore_ascii_case("lvm2_member")
+    {
+        return Some(LogicalCandidateKind::LvmPhysicalVolume);
+    }
+    if id_type.eq_ignore_ascii_case("linux_raid_member") {
+        return Some(LogicalCandidateKind::RaidMember);
+    }
+    None
+}
+
+fn collect_logical_candidates(volume: &UiVolume, candidates: &mut Vec<LogicalCandidate>) {
+    if let (Some(kind), Some(device_path)) = (
+        logical_candidate_kind(volume),
+        volume.volume.device_path.as_deref(),
+    ) {
+        candidates.push(LogicalCandidate {
+            device_path: device_path.to_string(),
+            kind,
+        });
+    }
+
+    for child in &volume.children {
+        collect_logical_candidates(child, candidates);
+    }
+}
+
+fn logical_candidates(drives: &[UiDrive]) -> Vec<LogicalCandidate> {
+    let mut candidates = Vec::new();
+    for drive in drives {
+        for volume in &drive.volumes {
+            collect_logical_candidates(volume, &mut candidates);
+        }
+    }
+    candidates.sort_by(|left, right| left.device_path.cmp(&right.device_path));
+    candidates.dedup_by(|left, right| left.device_path == right.device_path);
+    candidates
+}
+
+fn dimmed_text(text: impl Into<String>) -> Element<'static, Message> {
+    widget::container(widget::text::body(text.into()))
+        .style(|theme| cosmic::iced::widget::container::Style {
+            text_color: Some(
+                theme
+                    .cosmic()
+                    .background(false)
+                    .component
+                    .on
+                    .with_alpha(0.55)
+                    .into(),
+            ),
+            ..Default::default()
+        })
+        .into()
+}
+
+fn logical_candidate_title(candidate: &LogicalCandidate) -> Element<'static, Message> {
+    let (directory, file_name) = candidate
+        .device_path
+        .rsplit_once('/')
+        .map(|(directory, file_name)| (format!("{directory}/"), file_name.to_string()))
+        .unwrap_or_default();
+
+    widget::Row::with_children(vec![
+        dimmed_text(directory),
+        widget::text::body(file_name)
+            .font(cosmic::font::semibold())
+            .into(),
+        dimmed_text(" — "),
+        widget::text::body(candidate.kind.label())
+            .font(cosmic::font::semibold())
+            .into(),
+    ])
+    .spacing(0)
+    .align_y(cosmic::iced::Alignment::Center)
+    .into()
+}
+
 fn image_section_header(controls_enabled: bool) -> Element<'static, Message> {
     let mut children: Vec<Element<'static, Message>> = vec![
         widget::text::caption_heading(Section::Images.label()).into(),
@@ -138,18 +252,33 @@ fn image_section_header(controls_enabled: bool) -> Element<'static, Message> {
         .into()
 }
 
-fn drive_row(
+struct SidebarTreeNode {
+    key: SidebarNodeKey,
+    selected: bool,
+    has_children: bool,
+    icon_name: &'static str,
+    title: Element<'static, Message>,
+    depth: u16,
+    select_message: Message,
+    actions: Vec<Element<'static, Message>>,
+}
+
+fn tree_node_row(
     sidebar: &SidebarState,
-    drive: &UiDrive,
-    active_drive: Option<&str>,
+    node: SidebarTreeNode,
     controls_enabled: bool,
 ) -> Element<'static, Message> {
-    let key = SidebarNodeKey::Drive(drive.device().to_string());
-    let selected = active_drive.is_some_and(|a| a == drive.device());
-
+    let SidebarTreeNode {
+        key,
+        selected,
+        has_children,
+        icon_name,
+        title,
+        depth,
+        select_message,
+        actions,
+    } = node;
     let expanded = sidebar.is_expanded(&key);
-    let has_children = !drive.volumes.is_empty();
-
     let expander = if has_children {
         let mut button =
             widget::button::custom(icon::from_name(expander_icon(expanded)).size(16)).padding(2);
@@ -164,50 +293,18 @@ fn drive_row(
             .height(EXPANDER_WIDTH)
             .into()
     };
-
-    let drive_icon_name = if drive.disk.removable {
-        "drive-removable-media-symbolic"
-    } else {
-        "disks-symbolic"
-    };
-
-    let title = drive_title(drive);
-
     let mut select_button = widget::button::custom(
-        widget::Row::with_children(vec![
-            icon::from_name(drive_icon_name).size(16).into(),
-            widget::text::body(title)
-                .font(cosmic::font::semibold())
-                .into(),
-        ])
-        .spacing(8)
-        .align_y(cosmic::iced::Alignment::Center)
-        .width(Length::Fill),
+        widget::Row::with_children(vec![icon::from_name(icon_name).size(16).into(), title])
+            .spacing(8)
+            .align_y(cosmic::iced::Alignment::Center)
+            .width(Length::Fill),
     )
     .padding(0)
     .width(Length::Fill)
     .class(transparent_button_class(selected));
     if controls_enabled {
-        select_button = select_button.on_press(Message::SidebarSelectDrive {
-            device_path: drive.device().to_string(),
-        });
+        select_button = select_button.on_press(select_message);
     }
-
-    let mut actions: Vec<Element<'static, Message>> = Vec::new();
-
-    // Primary action: eject/remove for removable drives and loop-backed images.
-    if drive.disk.is_loop || drive.disk.removable || drive.disk.ejectable {
-        let mut eject_btn =
-            widget::button::custom(icon::from_name("media-eject-symbolic").size(16)).padding(4);
-        eject_btn = eject_btn.class(transparent_button_class(selected));
-        if controls_enabled {
-            eject_btn = eject_btn.on_press(Message::SidebarDriveEject {
-                device_path: drive.device().to_string(),
-            });
-        }
-        actions.push(eject_btn.into());
-    }
-
     let row = widget::Row::with_children(vec![
         expander,
         select_button.into(),
@@ -217,7 +314,64 @@ fn drive_row(
     .align_y(cosmic::iced::Alignment::Center)
     .width(Length::Fill);
 
-    row_container(row, selected, controls_enabled)
+    let item = row_container(row, selected, controls_enabled);
+    const ROW_SPACING: u16 = 8;
+    let indent = depth * (EXPANDER_WIDTH + ROW_SPACING);
+    if indent > 0 {
+        widget::Row::with_children(vec![widget::Space::new().width(indent).into(), item])
+            .spacing(0)
+            .align_y(cosmic::iced::Alignment::Center)
+            .width(Length::Fill)
+            .into()
+    } else {
+        item
+    }
+}
+
+fn drive_row(
+    sidebar: &SidebarState,
+    drive: &UiDrive,
+    active_drive: Option<&str>,
+    controls_enabled: bool,
+) -> Element<'static, Message> {
+    let key = SidebarNodeKey::Drive(drive.device().to_string());
+    let selected = active_drive.is_some_and(|active| active == drive.device());
+    let icon_name = if drive.disk.removable {
+        "drive-removable-media-symbolic"
+    } else {
+        "disks-symbolic"
+    };
+    let mut actions: Vec<Element<'static, Message>> = Vec::new();
+    if drive.disk.is_loop || drive.disk.removable || drive.disk.ejectable {
+        let mut eject_button =
+            widget::button::custom(icon::from_name("media-eject-symbolic").size(16)).padding(4);
+        eject_button = eject_button.class(transparent_button_class(selected));
+        if controls_enabled {
+            eject_button = eject_button.on_press(Message::SidebarDriveEject {
+                device_path: drive.device().to_string(),
+            });
+        }
+        actions.push(eject_button.into());
+    }
+
+    tree_node_row(
+        sidebar,
+        SidebarTreeNode {
+            key,
+            selected,
+            has_children: !drive.volumes.is_empty(),
+            icon_name,
+            title: widget::text::body(drive_title(drive))
+                .font(cosmic::font::semibold())
+                .into(),
+            depth: 0,
+            select_message: Message::SidebarSelectDrive {
+                device_path: drive.device().to_string(),
+            },
+            actions,
+        },
+        controls_enabled,
+    )
 }
 
 fn volume_row(
@@ -229,24 +383,6 @@ fn volume_row(
 ) -> Element<'static, Message> {
     let key = SidebarNodeKey::Volume(node.device_path().unwrap_or_default());
     let selected = sidebar.selected_child.as_ref() == Some(&key);
-
-    let expanded = sidebar.is_expanded(&key);
-    let has_children = !node.children.is_empty();
-
-    let expander = if has_children {
-        let mut button =
-            widget::button::custom(icon::from_name(expander_icon(expanded)).size(16)).padding(2);
-        button = button.class(transparent_button_class(selected));
-        if controls_enabled {
-            button = button.on_press(Message::SidebarToggleExpanded(key.clone()));
-        }
-        button.into()
-    } else {
-        widget::Space::new()
-            .width(EXPANDER_WIDTH)
-            .height(EXPANDER_WIDTH)
-            .into()
-    };
 
     let title_text = if node.volume.label.trim().is_empty() {
         match node.volume.device_path.as_deref() {
@@ -260,26 +396,6 @@ fn volume_row(
     let select_msg = Message::SidebarSelectChild {
         device_path: node.device_path().unwrap_or_default(),
     };
-
-    let mut select_button = widget::button::custom(
-        widget::Row::with_children(vec![
-            icon::from_name(volume_icon(&node.volume.kind))
-                .size(16)
-                .into(),
-            widget::text::body(title_text)
-                .font(cosmic::font::semibold())
-                .into(),
-        ])
-        .spacing(8)
-        .align_y(cosmic::iced::Alignment::Center)
-        .width(Length::Fill),
-    )
-    .padding(0)
-    .width(Length::Fill)
-    .class(transparent_button_class(selected));
-    if controls_enabled {
-        select_button = select_button.on_press(select_msg.clone());
-    }
 
     let mut actions: Vec<Element<'static, Message>> = Vec::new();
 
@@ -296,31 +412,22 @@ fn volume_row(
         actions.push(unmount_btn.into());
     }
 
-    // Indent accounts for expander width + spacing between elements
-    // Each level indents by one expander width (20px) + row spacing (8px)
-    const ROW_SPACING: u16 = 8;
-    let indent = depth * (EXPANDER_WIDTH + ROW_SPACING);
-
-    let row = widget::Row::with_children(vec![
-        expander,
-        select_button.into(),
-        widget::Row::with_children(actions).spacing(4).into(),
-    ])
-    .spacing(ROW_SPACING)
-    .align_y(cosmic::iced::Alignment::Center)
-    .width(Length::Fill);
-
-    let item = row_container(row, selected, controls_enabled);
-
-    if indent > 0 {
-        widget::Row::with_children(vec![widget::Space::new().width(indent).into(), item])
-            .spacing(0)
-            .align_y(cosmic::iced::Alignment::Center)
-            .width(Length::Fill)
-            .into()
-    } else {
-        item
-    }
+    tree_node_row(
+        sidebar,
+        SidebarTreeNode {
+            key,
+            selected,
+            has_children: !node.children.is_empty(),
+            icon_name: volume_icon(&node.volume.kind),
+            title: widget::text::body(title_text)
+                .font(cosmic::font::semibold())
+                .into(),
+            depth,
+            select_message: select_msg,
+            actions,
+        },
+        controls_enabled,
+    )
 }
 
 fn push_volume_tree(
@@ -365,6 +472,157 @@ fn push_volume_tree(
     }
 }
 
+fn logical_entity_icon(kind: LogicalEntityKind) -> &'static str {
+    match kind {
+        LogicalEntityKind::LvmVolumeGroup
+        | LogicalEntityKind::LvmPhysicalVolume
+        | LogicalEntityKind::MdRaidArray
+        | LogicalEntityKind::MdRaidMember
+        | LogicalEntityKind::BtrfsDevice => "drive-harddisk-symbolic",
+        LogicalEntityKind::LvmLogicalVolume
+        | LogicalEntityKind::BtrfsFilesystem
+        | LogicalEntityKind::BtrfsSubvolume => "folder-symbolic",
+    }
+}
+
+fn logical_entity_title(entity: &LogicalEntity) -> String {
+    if entity.name.trim().is_empty() {
+        entity.id.to_string()
+    } else {
+        entity.name.clone()
+    }
+}
+
+fn logical_entity_matches_candidate(entity: &LogicalEntity, candidate: &LogicalCandidate) -> bool {
+    match candidate.kind {
+        LogicalCandidateKind::Btrfs => {
+            entity.kind == LogicalEntityKind::BtrfsFilesystem
+                && entity.device_path.as_deref() == Some(&candidate.device_path)
+        }
+        LogicalCandidateKind::LvmPhysicalVolume => {
+            entity.kind == LogicalEntityKind::LvmVolumeGroup
+                && entity.members.iter().any(|member| {
+                    member.kind == LogicalEntityKind::LvmPhysicalVolume
+                        && member.device_path.as_deref() == Some(&candidate.device_path)
+                })
+        }
+        LogicalCandidateKind::RaidMember => {
+            entity.kind == LogicalEntityKind::MdRaidArray
+                && entity.members.iter().any(|member| {
+                    member.kind == LogicalEntityKind::MdRaidMember
+                        && member.device_path.as_deref() == Some(&candidate.device_path)
+                })
+        }
+    }
+}
+
+fn logical_roots_for_candidate<'a>(
+    entities: &'a [LogicalEntity],
+    candidate: &LogicalCandidate,
+    assigned_roots: &mut HashSet<LogicalEntityId>,
+) -> Vec<&'a LogicalEntity> {
+    let mut roots = entities
+        .iter()
+        .filter(|entity| {
+            entity.parent_id.is_none() && logical_entity_matches_candidate(entity, candidate)
+        })
+        .collect::<Vec<_>>();
+    roots.sort_by(|left, right| left.name.cmp(&right.name).then(left.id.cmp(&right.id)));
+    roots.retain(|entity| assigned_roots.insert(entity.id.clone()));
+    roots
+}
+
+fn logical_children<'a>(
+    entities: &'a [LogicalEntity],
+    parent_id: &LogicalEntityId,
+) -> Vec<&'a LogicalEntity> {
+    let mut children = entities
+        .iter()
+        .filter(|entity| entity.parent_id.as_ref() == Some(parent_id))
+        .collect::<Vec<_>>();
+    children.sort_by(|left, right| left.name.cmp(&right.name).then(left.id.cmp(&right.id)));
+    children
+}
+
+fn push_logical_entity_tree(
+    out: &mut Vec<Element<'static, Message>>,
+    sidebar: &SidebarState,
+    state: &LogicalState,
+    entity: &LogicalEntity,
+    depth: u16,
+    controls_enabled: bool,
+) {
+    let key = SidebarNodeKey::LogicalEntity(entity.id.to_string());
+    let expanded = sidebar.is_expanded(&key);
+    let children = logical_children(&state.entities, &entity.id);
+    let selected = state.selected.as_ref() == Some(&entity.id);
+
+    out.push(tree_node_row(
+        sidebar,
+        SidebarTreeNode {
+            key,
+            selected,
+            has_children: !children.is_empty(),
+            icon_name: logical_entity_icon(entity.kind),
+            title: widget::text::body(logical_entity_title(entity))
+                .font(cosmic::font::semibold())
+                .into(),
+            depth,
+            select_message: Message::LogicalSelectionChanged(Some(entity.id.clone())),
+            actions: Vec::new(),
+        },
+        controls_enabled,
+    ));
+
+    if expanded {
+        for child in children {
+            push_logical_entity_tree(out, sidebar, state, child, depth + 1, controls_enabled);
+        }
+    }
+}
+
+fn logical_section(
+    sidebar: &SidebarState,
+    state: &LogicalState,
+    controls_enabled: bool,
+) -> Vec<Element<'static, Message>> {
+    let mut rows = vec![section_header(Section::Logical.label())];
+    let mut assigned_roots = HashSet::new();
+
+    for candidate in logical_candidates(&sidebar.drives) {
+        let roots = logical_roots_for_candidate(&state.entities, &candidate, &mut assigned_roots);
+        let key = SidebarNodeKey::LogicalCandidate(candidate.device_path.clone());
+        let expanded = sidebar.is_expanded(&key);
+        let selected = state.selected.is_none()
+            && state.selected_device.as_deref() == Some(candidate.device_path.as_str());
+
+        rows.push(tree_node_row(
+            sidebar,
+            SidebarTreeNode {
+                key,
+                selected,
+                has_children: !roots.is_empty(),
+                icon_name: candidate.kind.icon_name(),
+                title: logical_candidate_title(&candidate),
+                depth: 0,
+                select_message: Message::LogicalViewRequested {
+                    device_path: Some(candidate.device_path.clone()),
+                },
+                actions: Vec::new(),
+            },
+            controls_enabled,
+        ));
+
+        if expanded {
+            for root in roots {
+                push_logical_entity_tree(&mut rows, sidebar, state, root, 1, controls_enabled);
+            }
+        }
+    }
+
+    rows
+}
+
 pub(crate) fn sidebar(
     app_nav: &cosmic::widget::nav_bar::Model,
     sidebar: &SidebarState,
@@ -374,14 +632,13 @@ pub(crate) fn sidebar(
 ) -> Element<'static, Message> {
     let active_drive = sidebar.active_drive_block_path(app_nav);
 
-    let mut logical: Vec<&UiDrive> = Vec::new();
     let mut internal: Vec<&UiDrive> = Vec::new();
     let mut external: Vec<&UiDrive> = Vec::new();
     let mut images: Vec<&UiDrive> = Vec::new();
 
     for d in &sidebar.drives {
         match section_for_drive(d) {
-            Section::Logical => logical.push(d),
+            Section::Logical => {}
             Section::Internal => internal.push(d),
             Section::External => external.push(d),
             Section::Images => images.push(d),
@@ -389,7 +646,7 @@ pub(crate) fn sidebar(
     }
 
     let mut rows: Vec<Element<'static, Message>> = Vec::new();
-    rows.extend(sidebar_section(logical_state, controls_enabled));
+    rows.extend(logical_section(sidebar, logical_state, controls_enabled));
     if sidebar.drives_loading {
         rows.push(
             widget::container(widget::text::caption("Loading drives…"))
@@ -449,7 +706,6 @@ pub(crate) fn sidebar(
             }
         };
 
-    add_section(&mut rows, Section::Logical, logical);
     add_section(&mut rows, Section::Internal, internal);
     add_section(&mut rows, Section::External, external);
 

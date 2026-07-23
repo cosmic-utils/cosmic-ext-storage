@@ -12,6 +12,8 @@ fn compare_drive_sort_keys(left: &UiDrive, right: &UiDrive) -> std::cmp::Orderin
 pub enum SidebarNodeKey {
     Drive(String),
     Volume(String),
+    LogicalCandidate(String),
+    LogicalEntity(String),
 }
 
 #[derive(Debug, Default)]
@@ -88,6 +90,10 @@ impl SidebarState {
         if !self.expanded.insert(key.clone()) {
             self.expanded.remove(&key);
         }
+    }
+
+    pub fn expand(&mut self, key: SidebarNodeKey) {
+        self.expanded.insert(key);
     }
 
     pub fn find_drive(&self, device: &str) -> Option<&UiDrive> {

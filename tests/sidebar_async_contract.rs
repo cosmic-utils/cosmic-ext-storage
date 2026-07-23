@@ -61,6 +61,7 @@ fn logical_detail_loading_is_deferred_until_the_sidebar_node_is_opened() {
 
     let mut logical = LogicalState::default();
     assert!(!logical.view_requested);
-    logical.request_view();
+    logical.request_view(Some("/dev/nvme0n1p2".into()));
     assert!(logical.view_requested);
+    assert_eq!(logical.selected_device.as_deref(), Some("/dev/nvme0n1p2"));
 }

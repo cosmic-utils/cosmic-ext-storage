@@ -53,7 +53,9 @@ pub enum Message {
     FilesystemToolsLoaded(Vec<FilesystemToolInfo>),
     /// Opens logical storage. Detailed topology is loaded only after this
     /// non-privileged sidebar node is selected.
-    LogicalViewRequested,
+    LogicalViewRequested {
+        device_path: Option<String>,
+    },
     LoadLogicalEntities,
     LogicalEntitiesLoaded {
         generation: u64,

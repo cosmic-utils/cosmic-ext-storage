@@ -6,7 +6,7 @@ use crate::{
     state::logical::{LogicalDetailTab, LogicalState},
 };
 use cosmic::iced::Length;
-use cosmic::widget::{self, icon};
+use cosmic::widget;
 use cosmic::{Apply, Element};
 use storage_contracts::{
     ConfigurationCleanupPolicy, LogicalAction, LvmWipePolicy, MdRaidSyncAction,
@@ -105,89 +105,6 @@ fn immediate_action(
     }
 }
 
-pub(crate) fn sidebar_section(
-    state: &LogicalState,
-    controls_enabled: bool,
-) -> Vec<Element<'static, Message>> {
-    let mut rows: Vec<Element<'static, Message>> = vec![
-        widget::text::caption_heading("Logical")
-            .apply(widget::container)
-            .padding([8, 12, 4, 12])
-            .into(),
-    ];
-
-    // This root node deliberately requires no logical-topology request. The
-    // detail page starts the UDisks/local discovery only once the user opens
-    // it, so a privileged or unavailable detail source cannot erase Logical
-    // from the sidebar.
-    let mut root_button = widget::button::custom(
-        widget::Row::with_children(vec![
-            icon::from_name("drive-harddisk-symbolic").size(16).into(),
-            widget::text::body("Logical storage").into(),
-        ])
-        .spacing(8)
-        .width(Length::Fill),
-    )
-    .padding([4, 12])
-    .width(Length::Fill)
-    .class(if state.view_requested {
-        cosmic::theme::Button::Suggested
-    } else {
-        cosmic::theme::Button::Link
-    });
-    if controls_enabled {
-        root_button = root_button.on_press(Message::LogicalViewRequested);
-    }
-    rows.push(root_button.into());
-
-    for entity in &state.entities {
-        let selected = state.selected.as_ref() == Some(&entity.id);
-        let title = if entity.name.is_empty() {
-            entity.id.to_string()
-        } else {
-            entity.name.clone()
-        };
-        let indent = if entity.parent_id.is_some() { 28 } else { 12 };
-        let icon_name = match entity.kind {
-            storage_types::LogicalEntityKind::LvmVolumeGroup => "drive-harddisk-symbolic",
-            storage_types::LogicalEntityKind::LvmLogicalVolume => "folder-symbolic",
-            storage_types::LogicalEntityKind::LvmPhysicalVolume => "drive-harddisk-symbolic",
-            storage_types::LogicalEntityKind::MdRaidArray => "drive-harddisk-symbolic",
-            storage_types::LogicalEntityKind::MdRaidMember => "drive-harddisk-symbolic",
-            storage_types::LogicalEntityKind::BtrfsFilesystem => "folder-symbolic",
-            storage_types::LogicalEntityKind::BtrfsDevice => "drive-harddisk-symbolic",
-            storage_types::LogicalEntityKind::BtrfsSubvolume => "folder-symbolic",
-        };
-        let mut button = widget::button::custom(
-            widget::Row::with_children(vec![
-                icon::from_name(icon_name).size(16).into(),
-                widget::text::body(title).into(),
-            ])
-            .spacing(8)
-            .width(Length::Fill),
-        )
-        .padding([4, 8])
-        .width(Length::Fill)
-        .class(if selected {
-            cosmic::theme::Button::Suggested
-        } else {
-            cosmic::theme::Button::Link
-        });
-        if controls_enabled {
-            button = button.on_press(Message::LogicalSelectionChanged(Some(entity.id.clone())));
-        }
-        rows.push(
-            widget::Row::with_children(vec![
-                widget::Space::new().width(indent).into(),
-                button.into(),
-            ])
-            .width(Length::Fill)
-            .into(),
-        );
-    }
-    rows
-}
-
 pub(crate) fn detail<'a>(state: &'a LogicalState) -> Element<'a, Message> {
     if state.loading {
         return widget::text::title1("Loading logical storage…")
@@ -205,7 +122,7 @@ pub(crate) fn detail<'a>(state: &'a LogicalState) -> Element<'a, Message> {
                 widget::text::title1("Logical storage could not be loaded").into(),
                 widget::text::body(error.clone()).into(),
                 widget::button::text("Retry")
-                    .on_press(Message::LogicalViewRequested)
+                    .on_press(Message::LogicalViewRequested { device_path: None })
                     .into(),
             ])
             .spacing(12),

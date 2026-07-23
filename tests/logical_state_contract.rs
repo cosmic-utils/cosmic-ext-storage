@@ -70,6 +70,26 @@ fn logical_refresh_preserves_selection() {
 }
 
 #[test]
+fn opening_a_passively_discovered_btrfs_device_selects_its_loaded_filesystem() {
+    let mut state = LogicalState::default();
+    let mut filesystem = entity("btrfs:one");
+    filesystem.kind = LogicalEntityKind::BtrfsFilesystem;
+    filesystem.device_path = Some("/dev/nvme0n1p2".into());
+
+    state.request_view(Some("/dev/nvme0n1p2".into()));
+    let generation = state.begin_load();
+    state.finish_load(
+        generation,
+        Ok(LogicalTopology::new(vec![filesystem], vec![]).unwrap()),
+    );
+
+    assert_eq!(
+        state.selected,
+        Some(LogicalEntityId::new("btrfs:one").unwrap())
+    );
+}
+
+#[test]
 fn leaving_logical_view_keeps_cached_topology_but_returns_to_physical_storage() {
     let mut state = LogicalState::default();
     let generation = state.begin_load();
@@ -77,10 +97,11 @@ fn leaving_logical_view_keeps_cached_topology_but_returns_to_physical_storage() 
         generation,
         Ok(LogicalTopology::new(vec![entity("lvm-vg:one")], vec![]).unwrap()),
     );
-    state.request_view();
+    state.request_view(Some("/dev/nvme0n1p2".into()));
     state.leave_view();
 
     assert!(!state.view_requested);
+    assert!(state.selected_device.is_none());
     assert!(state.selected.is_none());
     assert_eq!(state.entities.len(), 1);
 }
