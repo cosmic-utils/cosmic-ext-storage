@@ -126,7 +126,11 @@ rather than the smallest contiguous range is rejected.
 
 | Source path and lines | Target path and lines | Permitted reason | Reconciliation row | Exact code/UI/logic change | Equivalence evidence | Reviewer |
 | --- | --- | --- | --- | --- | --- | --- |
-| _Populate during implementation._ | _Populate during implementation._ | _layout / transport / API / identity / native-semantics / fixture-boundary / concurrency / main-preservation / harness-execution_ | _Required for an overlap; otherwise n/a._ | _Describe exact replacement._ | _test name and screenshot/recording if visual._ | _name_ |
+| `storage-types/src/logical.rs` source logical IDs | `crates/storage-types/src/logical.rs` | identity | n/a | Raw source device/path values become canonical opaque IDs and fingerprinted live references. | `logical_domain_contract` | Codex |
+| `storage-app/src/update/logical.rs` client calls | `src/operations/logical.rs`, `src/update/mod.rs` | transport | operations façade | Removed LogicalClient calls become typed operations façade requests with generation guards. | `logical_operations_contract`, `logical_state_contract` | Codex |
+| `storage-app/src/views/{logical.rs,dialogs/logical.rs}` | `src/views/{logical.rs,dialogs/logical.rs}` | transport / native-semantics | app/view overlap | Action buttons construct only complete typed actions; actions needing a fresh device reference remain visibly blocked rather than accepting a raw path. | `logical_ui_contract`, `cargo check -p cosmic-ext-storage --locked` | Codex |
+| `storage-testing/src/{cmd,ledger,harness/**,lab/**}` | `tools/storage-testing/src/**` | fixture-boundary / harness-execution | root workspace row | Arbitrary command execution and skip outcomes are replaced by a closed fixture executor, marker-bearing artifact directory, and Passed/Failed/Blocked report model. | `harness_execution_contract`, `just harness-nondestructive` | Codex |
+| `storage-app/src/{app.rs,models/load.rs,state/sidebar.rs}` | corresponding `src/**` files | concurrency / main-preservation | async sidebar overlap | Current in-process operation ownership is retained while source startup loading is made independent and generation-safe. | `sidebar_async_contract` | Codex |
 
 ## Mandatory comparison review
 

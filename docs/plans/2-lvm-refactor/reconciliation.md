@@ -99,7 +99,11 @@ evidence for both.
 
 | Base path/range | Current-main delta and retained behaviour | Feature delta and retained behaviour | Classification | Target path/range | Main evidence | Feature evidence | Reviewer |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| _Populate before implementation._ | _Specific behaviour, not implementation shorthand._ | _Specific behaviour, not implementation shorthand._ | _One classification above._ | _Exact target range._ | _Focused test/desktop evidence._ | _Focused test/desktop evidence._ | _name_ |
+| `Cargo.toml` workspace members | Main keeps six publishable app/library packages without a service. | Feature adds a non-published harness package. | Independent overlap | `Cargo.toml` workspace members; `Cargo.lock` storage-testing entry | `cargo metadata --no-deps --format-version=1` | `harness_execution_contract` | Codex |
+| `src/app.rs` startup task batch | Main owns in-process application composition. | Feature loads logical/physical/network sections asynchronously. | Independent overlap | `src/app.rs`, `src/update/mod.rs`, `src/state/sidebar.rs` | `sidebar_async_contract` | `sidebar_async_contract` | Codex |
+| `src/update/mod.rs` logical actions | Main has no project client/service transport. | Feature has logical action completion and refresh semantics. | Direct contradiction | `src/operations/logical.rs`, `src/update/mod.rs` | `logical_operations_contract` | `logical_state_contract` | Codex |
+| `src/views/{logical.rs,dialogs/**}` | Main dialog host and controls remain authoritative. | Feature supplies logical operation affordances and review flow. | Independent overlap | `src/views/logical.rs`, `src/views/dialogs/logical.rs`, `src/views/app.rs` | `cargo check -p cosmic-ext-storage --locked` | `logical_ui_contract` | Codex |
+| `justfile`, CI and root documentation | Main retains normal workspace checks and no service lifecycle. | Feature adds harness entry points and safe CI execution. | Independent overlap | `justfile`, `.github/workflows/ci.yml`, `README.md` | `cargo test --workspace --all-features --locked` | `just harness-nondestructive` | Codex |
 
 ## Reconciliation acceptance gate
 

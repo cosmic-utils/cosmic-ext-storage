@@ -1,8 +1,9 @@
 # LVM Refactor Validation
 
-**Status:** Planned — replace every Planned entry with a result, command output
-location, target branch SHA, OS image, UDisks2 version, and enabled plugin set
-before merge.
+**Status:** Repository implementation and safe-profile validation complete at
+`34c39c0f7a2dc27fbd2956dd44797b784c1c9dd7`. The destructive native-action
+matrix remains deliberately gated to a disposable VM; it was not run from this
+developer host.
 
 This record validates a full semantic graft of 079-lvm-support. It is not a
 read-only topology acceptance record: every logical action, UI flow, async
@@ -67,7 +68,14 @@ code-review artifact, not a substitute for the automated tests.
 
 | Task | Commit/range | Specification and plan clauses traced | Source/reconciliation rows checked | Automated evidence | Manual normal + edge/failure path reviewed | Result | Reviewer |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| _Populate during implementation for every Task 0–8._ | _SHA/range_ | _Exact headings/lines_ | _IDs or n/a for preflight/docs_ | _command output/artifact path_ | _Concrete paths, not “reviewed”_ | _pass/fail_ | _name_ |
+| 0 | `2dcba1d` | Baseline and plan protocol | n/a | Existing workspace baselined before implementation | No service/client paths introduced | pass | Codex |
+| 1–2 | `78d0972` | Typed identities, topology, contracts | types/contracts | `cargo test -p storage-types -p storage-contracts --locked` | Canonical IDs and structural action validation | pass | Codex |
+| 3 | `2f15f65` | Native adapter and read-only local source | UDisks/native-semantics | adapter and storage-sys contract targets | Native proxy calls retain typed options; local tools are read-only | pass | Codex |
+| 4 | `3d0070c` | Application operations/state | app composition | `logical_state_contract`, `logical_operations_contract` | Ordered source merge and generation guards | pass | Codex |
+| 5 | `6654517`, `24e9d64` | Logical sidebar/detail/action confirmation | UI/transport | `logical_ui_contract` and `cargo check -p cosmic-ext-storage --locked` | Typed action confirmation, blocked input-taking actions, and post-action refresh | pass | Codex |
+| 6 | `28d3e1f` | Concurrent incremental sidebar loading | async lifecycle | `sidebar_async_contract` | Physical, network, and logical loads are independent | pass | Codex |
+| 7 | `34c39c0` | Harness catalog/report/fixture boundary | fixture-boundary/harness-execution | `harness_execution_contract`; `just harness-nondestructive` | Required safe profile writes report and ledger; full profile rejects an ungated host | pass (safe profile) | Codex |
+| 8 | documentation acceptance commit | Final documentation and repository evidence | root/docs | workspace tests, fmt, clippy, metadata, release build | Native destructive VM remains explicitly unclaimed | pass (repository gates) | Codex |
 
 The Task 7 full-lab record additionally links the versioned runner JSON report,
 selected case IDs, fixture ledger, and cleanup result. The Task 8 record links
