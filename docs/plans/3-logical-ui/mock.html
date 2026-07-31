@@ -1,0 +1,239 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Logical storage — Btrfs page mock</title>
+    <style>
+      :root {
+        color-scheme: dark;
+        --canvas: #000;
+        --panel: #060606;
+        --panel-hover: #101010;
+        --line: #141414;
+        --line-strong: #2c2a2a;
+        --text: #d8d1cf;
+        --muted: #aaa3a0;
+        --faint: #77716f;
+        --selected: #e3d5d1;
+        --selected-text: #1e1b1a;
+        --green: #2dcc78;
+        --blue: #4e9cff;
+        --danger: #ef938a;
+        font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      }
+
+      * { box-sizing: border-box; }
+      body { min-width: 320px; margin: 0; background: var(--canvas); color: var(--text); font-size: 14px; line-height: 1.35; }
+      button { border: 0; color: inherit; background: transparent; font: inherit; cursor: pointer; }
+      button:focus-visible, summary:focus-visible { outline: 2px solid var(--selected); outline-offset: 3px; }
+      h1, h2, h3, p { margin-top: 0; }
+      h1 { margin-bottom: 4px; font-size: 16px; font-weight: 650; }
+      h2 { margin-bottom: 3px; font-size: 15px; font-weight: 600; }
+      h3 { margin-bottom: 3px; font-size: 13px; font-weight: 650; }
+      code { color: var(--muted); font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: .95em; }
+
+      .shell { display: grid; grid-template-columns: 290px minmax(0, 1fr); min-height: 100vh; }
+      .sidebar { display: flex; position: sticky; top: 0; flex-direction: column; height: 100vh; padding: 8px 18px 16px 27px; overflow: auto; border-right: 1px solid var(--line); background: #020202; }
+      .window-mark { display: grid; width: 14px; height: 14px; margin-bottom: 17px; place-items: center; border: 1px solid var(--muted); color: var(--muted); font-size: 8px; }
+      .section-label { padding: 9px 0 5px; color: var(--muted); font-size: 12px; font-weight: 650; }
+      .tree-item { display: flex; gap: 10px; align-items: center; width: 100%; min-height: 31px; padding: 4px 0; color: var(--muted); text-align: left; }
+      .tree-item:hover { color: var(--text); }
+      .tree-item.selected { color: var(--text); font-weight: 650; }
+      .tree-item.child { padding-left: 25px; }
+      .tree-item.grandchild { padding-left: 49px; font-size: 13px; }
+      .tree-symbol { width: 17px; flex: 0 0 17px; color: var(--text); font-size: 20px; line-height: 1; text-align: center; }
+      .tree-folder { color: var(--text); font-size: 17px; }
+      .tree-add { margin-left: auto; padding: 0 1px; color: var(--text); font-size: 24px; font-weight: 300; line-height: 1; }
+      .side-bottom { margin-top: auto; padding-top: 20px; color: var(--faint); font-size: 12px; }
+
+      .main { min-width: 0; }
+      .topbar { display: flex; position: relative; align-items: center; justify-content: center; min-height: 48px; border-bottom: 1px solid var(--line); }
+      .mode-tabs { display: flex; gap: 4px; }
+      .mode-tab { min-width: 84px; padding: 7px 14px; border-radius: 10px; color: var(--muted); }
+      .mode-tab.active { color: var(--selected-text); background: var(--selected); }
+      .top-icons { position: absolute; right: 21px; display: flex; gap: 14px; color: var(--muted); font-size: 18px; }
+      .top-icons button:hover { color: var(--text); }
+
+      .page { width: min(1160px, 100%); margin: 0 auto; padding: 20px clamp(20px, 4.2vw, 48px) 56px; }
+      .logical-header { display: grid; grid-template-columns: minmax(0, 1fr) 244px; gap: 26px; align-items: start; padding-bottom: 20px; }
+      .header-meta { display: grid; gap: 3px; color: var(--muted); font-size: 12px; }
+      .header-meta strong { color: var(--text); font-size: 16px; font-weight: 650; }
+      .action-row { display: flex; gap: 7px; margin-top: 16px; }
+      .icon-action { display: grid; width: 28px; height: 28px; place-items: center; color: var(--muted); border-radius: 4px; font-size: 18px; }
+      .icon-action:hover, .manage-toggle:hover { color: var(--text); background: var(--panel-hover); }
+      .header-usage { display: grid; grid-template-columns: 100px 1fr; gap: 13px; align-items: center; }
+      .ring { position: relative; display: grid; width: 94px; aspect-ratio: 1; place-items: center; border-radius: 50%; background: conic-gradient(var(--green) 0 24%, #282828 24% 100%); }
+      .ring::before { width: 73px; height: 73px; border-radius: 50%; background: var(--canvas); content: ""; }
+      .ring-value { position: absolute; font-size: 15px; font-weight: 650; }
+      .usage-key { display: grid; gap: 8px; font-size: 12px; }
+      .usage-row { display: flex; gap: 8px; align-items: flex-start; }
+      .usage-swatch { width: 10px; height: 10px; margin-top: 3px; border-radius: 2px; background: var(--green); }
+      .usage-swatch.free { background: #282828; }
+      .usage-row b { display: block; color: var(--text); font-weight: 650; }
+      .usage-row span { color: var(--muted); }
+
+      .flat-page { display: grid; gap: 30px; }
+      .section { padding-bottom: 22px; border-bottom: 1px solid var(--line); }
+      .section-header { display: flex; align-items: start; justify-content: space-between; gap: 12px; margin-bottom: 14px; }
+      .section-description { margin: 0; color: var(--muted); font-size: 12px; }
+      .device-list { display: grid; }
+      .device-row { display: flex; gap: 11px; align-items: center; padding: 10px 0; border-bottom: 1px solid var(--line); }
+      .device-row:first-child { padding-top: 0; }
+      .device-row:last-child { border-bottom: 0; }
+      .device-led { width: 9px; height: 9px; flex: 0 0 9px; border-radius: 50%; background: var(--green); box-shadow: 0 0 0 3px rgb(45 204 120 / 15%); }
+      .device-main { min-width: 0; flex: 1; }
+      .device-main b { display: block; font-size: 13px; }
+      .device-main span { display: block; overflow: hidden; color: var(--muted); font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }
+      .device-actions { display: flex; flex: 0 0 auto; gap: 5px; }
+      .row-icon-button { display: grid; width: 28px; height: 28px; place-items: center; border-radius: 4px; color: var(--muted); font-size: 18px; }
+      .row-icon-button:hover { color: var(--text); background: var(--panel-hover); }
+      .row-icon-button.danger:hover { color: var(--danger); }
+
+      .manage { position: relative; }
+      .manage-toggle { display: grid; width: 28px; height: 28px; place-items: center; color: var(--muted); border-radius: 4px; font-size: 19px; }
+      .menu { position: absolute; z-index: 5; top: 32px; right: 0; display: none; width: 232px; padding: 6px; border: 1px solid var(--line-strong); border-radius: 6px; background: #121212; box-shadow: 0 10px 28px rgb(0 0 0 / 60%); }
+      .manage.open .menu { display: grid; }
+      .menu-label { padding: 5px 8px 3px; color: var(--faint); font-size: 10px; font-weight: 700; letter-spacing: .07em; text-transform: uppercase; }
+      .menu button { padding: 8px; border-radius: 4px; text-align: left; font-size: 13px; }
+      .menu button:hover { background: #222; }
+      .menu .danger { color: var(--danger); }
+      .menu hr { width: 100%; height: 1px; margin: 5px 0; border: 0; background: var(--line-strong); }
+
+      .small-button { padding: 5px 7px; color: var(--muted); border-radius: 4px; font-size: 12px; }
+      .small-button:hover { color: var(--text); background: var(--panel-hover); }
+      .small-button.danger { color: var(--danger); }
+      .subvolume { display: grid; grid-template-columns: 26px minmax(160px, 1fr) 86px 110px auto; gap: 8px; align-items: center; padding: 9px 0; border-bottom: 1px solid var(--line); }
+      .subvolume.nested { padding-left: 28px; }
+      .tree { color: var(--faint); font-family: ui-monospace, monospace; }
+      .default { color: var(--green); font-size: 11px; font-weight: 650; }
+      .sub-actions { display: flex; justify-content: end; gap: 5px; }
+      .toast { position: fixed; z-index: 8; right: 22px; bottom: 22px; max-width: min(360px, calc(100vw - 40px)); padding: 10px 13px; border: 1px solid var(--line-strong); border-radius: 5px; color: var(--text); background: #151515; box-shadow: 0 9px 26px rgb(0 0 0 / 65%); opacity: 0; pointer-events: none; transform: translateY(9px); transition: .18s ease; }
+      .toast.show { opacity: 1; transform: translateY(0); }
+
+      @media (max-width: 900px) {
+        .shell { grid-template-columns: 218px minmax(0, 1fr); }
+        .sidebar { padding-inline: 12px; }
+        .logical-header { grid-template-columns: 1fr; }
+        .header-usage { max-width: 310px; }
+      }
+      @media (max-width: 640px) {
+        .shell { display: block; }
+        .sidebar { position: static; display: block; height: auto; padding: 8px 16px; border-right: 0; border-bottom: 1px solid var(--line); }
+        .window-mark, .sidebar .section-label, .sidebar .tree-item:not(.selected), .side-bottom { display: none; }
+        .sidebar .tree-item.selected { display: inline-flex; width: auto; margin-right: 18px; }
+        .page { padding: 18px 16px 42px; }
+        .topbar { margin-inline: -16px; }
+        .top-icons { right: 16px; }
+        .subvolume { grid-template-columns: 20px minmax(135px, 1fr) auto; }
+        .subvolume .sub-id, .subvolume .sub-parent { display: none; }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="shell">
+      <aside class="sidebar" aria-label="Storage navigation">
+        <div class="window-mark" aria-hidden="true">◂</div>
+        <div class="section-label">Logical</div>
+        <button class="tree-item selected" type="button"><span class="tree-symbol">⌄</span><span class="tree-folder">■</span><span>Logical storage</span></button>
+        <button class="tree-item child" type="button"><span class="tree-symbol">›</span><span class="tree-folder">■</span><span>system-vg</span></button>
+        <button class="tree-item child" type="button"><span class="tree-symbol">›</span><span class="tree-folder">■</span><span>md0 · RAID 1</span></button>
+        <button class="tree-item child selected" type="button" aria-current="page"><span class="tree-symbol">⌄</span><span class="tree-folder">■</span><span>home-data — Btrfs</span></button>
+        <button class="tree-item grandchild" type="button">› @home</button>
+        <button class="tree-item grandchild" type="button">› @snapshots</button>
+        <div class="section-label">Internal</div>
+        <button class="tree-item" type="button"><span class="tree-symbol">›</span><span class="tree-folder">▣</span><span>Samsung SSD 990 Pro</span></button>
+        <button class="tree-item" type="button"><span class="tree-symbol">›</span><span class="tree-folder">▣</span><span>Crucial P5 Plus</span></button>
+        <div class="section-label">Network <button class="tree-add" aria-label="Add network storage">+</button></div>
+        <div class="tree-item">RClone not available</div>
+        <div class="section-label">Images <button class="tree-add" aria-label="Add disk image">+</button></div>
+        <div class="side-bottom">Native topology and local enrichment available</div>
+      </aside>
+
+      <main class="main">
+        <header class="topbar">
+          <div class="mode-tabs" aria-label="Main view">
+            <button class="mode-tab active" type="button">Volume</button>
+            <button class="mode-tab" type="button" data-mock-action="Open usage view">Usage</button>
+          </div>
+          <div class="top-icons"><button type="button" aria-label="Settings" data-mock-action="Open settings">⚙</button><button type="button" aria-label="More window actions">⋮</button></div>
+        </header>
+
+        <div class="page">
+          <header class="logical-header">
+            <div>
+              <div class="header-meta"><strong>home-data</strong><span>Btrfs filesystem</span><span>UUID: 83ef9a2d-7488-4dcc-906d-66b49b70db42</span><span>Mounted at: <code>/home</code></span></div>
+              <div class="action-row" aria-label="Logical storage actions">
+                <button class="icon-action" type="button" title="Refresh" aria-label="Refresh" data-mock-action="Refresh logical topology">↻</button>
+                <button class="icon-action" type="button" title="Change label" aria-label="Change label" data-mock-action="Open Change label form">✎</button>
+                <button class="icon-action" type="button" title="Add device" aria-label="Add device" data-mock-action="Open Add device picker">＋</button>
+                <div class="manage" id="manage">
+                  <button class="manage-toggle" type="button" title="More Btrfs actions" aria-label="More Btrfs actions" aria-expanded="false" aria-controls="manage-menu" id="manage-toggle">⋮</button>
+                  <div class="menu" id="manage-menu" role="menu">
+                    <div class="menu-label">Filesystem</div>
+                    <button type="button" role="menuitem" data-mock-action="Open Resize filesystem form">Resize filesystem</button>
+                    <button type="button" role="menuitem" data-mock-action="Open Set default subvolume form">Set default subvolume</button>
+                    <hr />
+                    <div class="menu-label">Devices</div>
+                    <button type="button" role="menuitem" data-mock-action="Open Add device picker">Add device</button>
+                    <button class="danger" type="button" role="menuitem" data-mock-action="Open Remove device review">Remove device</button>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div class="header-usage" aria-label="Filesystem capacity usage">
+              <div class="ring"><span class="ring-value">24%</span></div>
+              <div class="usage-key"><div class="usage-row"><i class="usage-swatch"></i><div><b>Used</b><span>480 GB</span></div></div><div class="usage-row"><i class="usage-swatch free"></i><div><b>Available</b><span>1.52 TB</span></div></div></div>
+            </div>
+          </header>
+
+          <div class="flat-page">
+            <section class="section" aria-labelledby="devices-title">
+              <div class="section-header">
+                <div>
+                  <h2 id="devices-title">Devices</h2>
+                  <p class="section-description">Filesystem member devices. A green LED means the member is writable.</p>
+                </div>
+              </div>
+              <div class="device-list">
+                <div class="device-row">
+                  <span class="device-led" role="img" aria-label="Writable" title="Writable"></span>
+                  <div class="device-main"><b>/dev/nvme0n1p3</b><span>Samsung SSD 990 Pro · 1.0 TB</span></div>
+                  <div class="device-actions" aria-label="Actions for /dev/nvme0n1p3">
+                    <button class="row-icon-button" type="button" title="More actions" aria-label="More actions for /dev/nvme0n1p3" data-mock-action="Open device actions for /dev/nvme0n1p3">⋮</button>
+                    <button class="row-icon-button danger" type="button" title="Remove device" aria-label="Remove /dev/nvme0n1p3" data-mock-action="Open removal review for /dev/nvme0n1p3">⌫</button>
+                  </div>
+                </div>
+                <div class="device-row">
+                  <span class="device-led" role="img" aria-label="Writable" title="Writable"></span>
+                  <div class="device-main"><b>/dev/nvme1n1p2</b><span>Crucial P5 Plus · 1.0 TB</span></div>
+                  <div class="device-actions" aria-label="Actions for /dev/nvme1n1p2">
+                    <button class="row-icon-button" type="button" title="More actions" aria-label="More actions for /dev/nvme1n1p2" data-mock-action="Open device actions for /dev/nvme1n1p2">⋮</button>
+                    <button class="row-icon-button danger" type="button" title="Remove device" aria-label="Remove /dev/nvme1n1p2" data-mock-action="Open removal review for /dev/nvme1n1p2">⌫</button>
+                  </div>
+                </div>
+              </div>
+            </section>
+
+            <section class="section" aria-labelledby="subvolumes-title">
+              <div class="section-header"><div><h2 id="subvolumes-title">Subvolumes</h2><p class="section-description">The default subvolume is marked; snapshot relationships remain visible.</p></div><div><button class="icon-action" type="button" title="New snapshot" aria-label="New snapshot" data-mock-action="Open New snapshot form">▣</button><button class="icon-action" type="button" title="New subvolume" aria-label="New subvolume" data-mock-action="Open New subvolume form">＋</button></div></div>
+              <div aria-label="Btrfs subvolumes"><div class="subvolume"><span class="tree">⌄</span><strong>@ <span class="section-description">· root subvolume</span></strong><span class="sub-id section-description">ID 5</span><span class="sub-parent section-description">Filesystem root</span><span class="sub-actions"><button class="small-button" type="button" data-mock-action="Open snapshot form for @">Snapshot</button></span></div><div class="subvolume nested"><span class="tree">└</span><strong>@home <span class="default">Default</span></strong><span class="sub-id section-description">ID 256</span><span class="sub-parent section-description">Parent: @</span><span class="sub-actions"><button class="small-button" type="button" data-mock-action="Open snapshot form for @home">Snapshot</button><button class="small-button danger" type="button" data-mock-action="Open delete review for @home">Delete</button></span></div><div class="subvolume nested"><span class="tree">└</span><strong>@var</strong><span class="sub-id section-description">ID 257</span><span class="sub-parent section-description">Parent: @</span><span class="sub-actions"><button class="small-button" type="button" data-mock-action="Set @var as default">Make default</button><button class="small-button danger" type="button" data-mock-action="Open delete review for @var">Delete</button></span></div><div class="subvolume nested"><span class="tree">⌄</span><strong>@snapshots</strong><span class="sub-id section-description">ID 300</span><span class="sub-parent section-description">Parent: @</span><span class="sub-actions"><button class="small-button" type="button" data-mock-action="Open snapshot form for @snapshots">Snapshot</button><button class="small-button danger" type="button" data-mock-action="Open delete review for @snapshots">Delete</button></span></div><div class="subvolume nested"><span class="tree">└</span><strong>2026-07-24 <span class="section-description">· read-only snapshot</span></strong><span class="sub-id section-description">ID 301</span><span class="sub-parent section-description">Parent: @snapshots</span><span class="sub-actions"><button class="small-button" type="button" data-mock-action="Set snapshot as default">Make default</button><button class="small-button danger" type="button" data-mock-action="Open delete review for snapshot">Delete</button></span></div></div>
+            </section>
+          </div>
+        </div>
+      </main>
+    </div>
+
+    <div class="toast" id="toast" role="status" aria-live="polite">Mock action</div>
+    <script>
+      const manage = document.getElementById('manage');
+      const manageToggle = document.getElementById('manage-toggle');
+      const toast = document.getElementById('toast');
+      let timer;
+      const showToast = (message) => { toast.textContent = `${message} — visual mock only`; toast.classList.add('show'); clearTimeout(timer); timer = setTimeout(() => toast.classList.remove('show'), 2800); };
+      manageToggle.addEventListener('click', () => { const open = manage.classList.toggle('open'); manageToggle.setAttribute('aria-expanded', String(open)); });
+      document.addEventListener('click', (event) => { if (!manage.contains(event.target)) { manage.classList.remove('open'); manageToggle.setAttribute('aria-expanded', 'false'); } });
+      document.querySelectorAll('[data-mock-action]').forEach((button) => button.addEventListener('click', () => { manage.classList.remove('open'); manageToggle.setAttribute('aria-expanded', 'false'); showToast(button.dataset.mockAction); }));
+    </script>
+  </body>
+</html>

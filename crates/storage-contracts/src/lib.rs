@@ -8,9 +8,13 @@ pub use protocol::{
 };
 pub use traits::{
     BackendMetadata, BlockStorageBackend, BtrfsBackend, BtrfsOperations, BtrfsResizeRequest,
-    ConfigurationCleanupPolicy, DeviceEventSource, DiskDiscovery, DriveOperations,
+    ByteSizeConstraint, CandidateBlockReason, ConfigurationCleanupPolicy, ConfirmedLogicalAction,
+    DestructiveScopePolicy, DeviceEventSource, DiskDiscovery, DriveOperations,
     EncryptionOperations, FilesystemOperations, ImageDeviceOperations, LogicalAction,
-    LogicalActionOutcome, LogicalOperations, LogicalTopologySource, LvmWipePolicy,
-    MdRaidCreateProfile, MdRaidLevel, MdRaidMemberWipePolicy, MdRaidName, MdRaidSyncAction,
-    NetworkDriveBackend, PartitionOperations,
+    LogicalActionKind, LogicalActionOutcome, LogicalCandidateDisplay, LogicalDeviceCandidate,
+    LogicalInputConstraints, LogicalOperations, LogicalPreflight, LogicalPreflightAvailability,
+    LogicalPreflightKey, LogicalPreflightRequest, LogicalPreflightRequestKey,
+    LogicalPreflightTarget, LogicalReviewData, LogicalTopologySource, LvmWipePolicy,
+    MdRaidCreateProfile, MdRaidLevel, MdRaidMemberWipePolicy, MdRaidName, MdRaidProfileOption,
+    MdRaidSyncAction, MemberRemovalPolicy, NetworkDriveBackend, PartitionOperations,
 };

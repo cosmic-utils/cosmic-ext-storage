@@ -9,11 +9,12 @@
 use std::{
     collections::{BTreeMap, BTreeSet},
     fmt,
-    num::NonZeroU32,
+    num::{NonZeroU32, NonZeroU64},
     str::FromStr,
 };
 
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
+use uuid::Uuid;
 
 /// Stable logical entity identity used for hierarchy and selection.
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
@@ -55,6 +56,342 @@ impl fmt::Display for LogicalMemberId {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         self.0.fmt(formatter)
     }
+}
+
+/// A value intended for display whose absence is meaningful.  Storage
+/// discovery must never use a zero or an empty string as a stand-in for an
+/// unreadable native property.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub enum LogicalDisplay<T> {
+    Known(T),
+    Unknown { reason: String },
+}
+
+impl<T> LogicalDisplay<T> {
+    pub fn known(value: T) -> Self {
+        Self::Known(value)
+    }
+
+    pub fn unknown(reason: impl Into<String>) -> Self {
+        Self::Unknown {
+            reason: reason.into(),
+        }
+    }
+
+    pub fn as_known(&self) -> Option<&T> {
+        match self {
+            Self::Known(value) => Some(value),
+            Self::Unknown { .. } => None,
+        }
+    }
+
+    pub fn reason(&self) -> Option<&str> {
+        match self {
+            Self::Known(_) => None,
+            Self::Unknown { reason } => Some(reason),
+        }
+    }
+}
+
+/// A validated relative Btrfs path.  It is used for rendering and creation
+/// payloads; selected subvolumes use [`BtrfsSubvolumeRef`] instead.
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
+#[serde(transparent)]
+pub struct BtrfsRelativePath(String);
+
+impl BtrfsRelativePath {
+    pub fn new(value: impl Into<String>) -> Result<Self, LogicalIdentityError> {
+        let value = value.into();
+        if value.is_empty()
+            || value.starts_with('/')
+            || value.contains('\0')
+            || value
+                .split('/')
+                .any(|part| part.is_empty() || part == "." || part == "..")
+        {
+            return Err(LogicalIdentityError::InvalidBtrfsRelativePath);
+        }
+        Ok(Self(value))
+    }
+
+    pub fn as_str(&self) -> &str {
+        &self.0
+    }
+}
+
+impl fmt::Display for BtrfsRelativePath {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        self.0.fmt(formatter)
+    }
+}
+
+/// A stable render-row key.  It deliberately includes an occurrence so a
+/// malformed native result can be shown without silently choosing one row.
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
+pub struct BtrfsSubvolumeRowKey {
+    pub id: NonZeroU64,
+    pub relative_path: BtrfsRelativePath,
+    pub occurrence: NonZeroU32,
+}
+
+/// Fresh subvolume identity used by default/delete/snapshot actions.  A
+/// display path alone can never be substituted for this reference.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct BtrfsSubvolumeRef {
+    pub filesystem: LogicalEntityId,
+    pub id: NonZeroU64,
+    pub expected_relative_path: BtrfsRelativePath,
+    pub expected_parent_id: Option<NonZeroU64>,
+    pub observed_topology_epoch: u64,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum LvmActivationState {
+    Active,
+    Inactive,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum LvmPhysicalVolumeState {
+    /// The adapter found the PV.  This does not imply allocation or health.
+    Available,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum MdRaidHealth {
+    Healthy,
+    Degraded,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum MdRaidMemberRole {
+    Active,
+    Spare,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub enum MdRaidMemberState {
+    Native { labels: Vec<String> },
+}
+
+/// The native MD level token, validated as non-empty lower-case ASCII.
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
+#[serde(transparent)]
+pub struct MdRaidLevelName(String);
+
+impl MdRaidLevelName {
+    pub fn new(value: impl Into<String>) -> Result<Self, LogicalIdentityError> {
+        let value = value.into();
+        if value.is_empty()
+            || value.trim() != value
+            || !value
+                .bytes()
+                .all(|byte| byte.is_ascii_lowercase() || byte.is_ascii_digit())
+        {
+            return Err(LogicalIdentityError::InvalidMdRaidLevelName);
+        }
+        Ok(Self(value))
+    }
+
+    pub fn as_str(&self) -> &str {
+        &self.0
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct LvmLogicalVolumeSummary {
+    pub entity_id: LogicalEntityId,
+    pub name: String,
+    pub size: LogicalDisplay<u64>,
+    pub activation: LogicalDisplay<LvmActivationState>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct LvmPhysicalVolumeSummary {
+    pub entity_id: LogicalEntityId,
+    pub member: LvmPhysicalVolumeDetails,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct LvmVolumeGroupDetails {
+    pub name: String,
+    pub uuid: LogicalDisplay<String>,
+    pub size: LogicalDisplay<u64>,
+    pub used: LogicalDisplay<u64>,
+    pub free: LogicalDisplay<u64>,
+    pub logical_volumes: Vec<LvmLogicalVolumeSummary>,
+    pub physical_volumes: Vec<LvmPhysicalVolumeSummary>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct LvmLogicalVolumeDetails {
+    pub name: String,
+    pub volume_group: LogicalEntityId,
+    pub device_path: LogicalDisplay<String>,
+    pub size: LogicalDisplay<u64>,
+    pub activation: LogicalDisplay<LvmActivationState>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct LvmPhysicalVolumeDetails {
+    pub block: Option<BlockDeviceRef>,
+    pub display_path: LogicalDisplay<String>,
+    pub size: LogicalDisplay<u64>,
+    pub state: LogicalDisplay<LvmPhysicalVolumeState>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct MdRaidMemberDetails {
+    pub member_id: LogicalMemberId,
+    pub block: Option<BlockDeviceRef>,
+    pub display_path: LogicalDisplay<String>,
+    pub size: LogicalDisplay<u64>,
+    pub role: LogicalDisplay<MdRaidMemberRole>,
+    pub state: LogicalDisplay<MdRaidMemberState>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct MdRaidArrayDetails {
+    pub name: String,
+    pub uuid: LogicalDisplay<String>,
+    pub level: LogicalDisplay<MdRaidLevelName>,
+    pub size: LogicalDisplay<u64>,
+    pub running: LogicalDisplay<bool>,
+    pub health: LogicalDisplay<MdRaidHealth>,
+    pub sync_progress: LogicalDisplay<ProgressRatio>,
+    pub members: Vec<MdRaidMemberDetails>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct BtrfsAllocation {
+    pub total: u64,
+    pub used: u64,
+    pub free: u64,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct MountPointUsage {
+    pub mount_point: String,
+    pub total: u64,
+    pub used: u64,
+    pub free: u64,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub enum BtrfsMemberState {
+    Writable,
+    ReadOnly,
+    Unknown { reason: String },
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub enum BtrfsPrimaryMember {
+    Selected { member_id: LogicalMemberId },
+    Unavailable { reason: String },
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub enum BtrfsTopologyDiagnostic {
+    DuplicateSubvolumeId {
+        id: NonZeroU64,
+        rows: Vec<BtrfsSubvolumeRowKey>,
+    },
+    DuplicateRelativePath {
+        path: BtrfsRelativePath,
+        rows: Vec<BtrfsSubvolumeRowKey>,
+    },
+    SelfParent {
+        row: BtrfsSubvolumeRowKey,
+        id: NonZeroU64,
+    },
+    Cycle {
+        rows: Vec<BtrfsSubvolumeRowKey>,
+    },
+    MissingParent {
+        row: BtrfsSubvolumeRowKey,
+        parent_id: NonZeroU64,
+    },
+    PrimaryUnavailable {
+        member_id: Option<LogicalMemberId>,
+        reason: String,
+    },
+    FilesystemValueDisagreement {
+        field: BtrfsFilesystemValue,
+        member_ids: Vec<LogicalMemberId>,
+    },
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum BtrfsFilesystemValue {
+    Label,
+    Allocation,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub enum BtrfsSubvolumeHierarchy {
+    Attached,
+    Unparented {
+        diagnostics: Vec<BtrfsTopologyDiagnostic>,
+    },
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct BtrfsMember {
+    pub member_id: LogicalMemberId,
+    pub block: Option<BlockDeviceRef>,
+    pub display_path: LogicalDisplay<String>,
+    pub label: LogicalDisplay<String>,
+    pub size: LogicalDisplay<u64>,
+    pub state: BtrfsMemberState,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct BtrfsSubvolumeDetails {
+    pub row_key: BtrfsSubvolumeRowKey,
+    pub id: NonZeroU64,
+    pub relative_path: BtrfsRelativePath,
+    pub parent_id: Option<NonZeroU64>,
+    pub hierarchy: BtrfsSubvolumeHierarchy,
+    pub is_default: bool,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct BtrfsFilesystemDetails {
+    pub filesystem_uuid: Uuid,
+    pub label: LogicalDisplay<String>,
+    pub allocation: LogicalDisplay<BtrfsAllocation>,
+    pub mount_usage: Option<MountPointUsage>,
+    pub default_subvolume: LogicalDisplay<Option<NonZeroU64>>,
+    pub primary_member: BtrfsPrimaryMember,
+    pub members: Vec<BtrfsMember>,
+    pub subvolumes: Vec<BtrfsSubvolumeDetails>,
+    pub diagnostics: Vec<BtrfsTopologyDiagnostic>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct BtrfsDeviceDetails {
+    pub filesystem: LogicalEntityId,
+    pub member: BtrfsMember,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct BtrfsSubvolumeEntityDetails {
+    pub filesystem: LogicalEntityId,
+    pub subvolume: BtrfsSubvolumeDetails,
+}
+
+/// Display ownership for a logical entity.  Renderers use this discriminant
+/// instead of generic strings or the diagnostic `metadata` map.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub enum LogicalEntityDetails {
+    LvmVolumeGroup(LvmVolumeGroupDetails),
+    LvmLogicalVolume(LvmLogicalVolumeDetails),
+    LvmPhysicalVolume(LvmPhysicalVolumeDetails),
+    MdRaidArray(MdRaidArrayDetails),
+    MdRaidMember(MdRaidMemberDetails),
+    BtrfsFilesystem(BtrfsFilesystemDetails),
+    BtrfsDevice(BtrfsDeviceDetails),
+    BtrfsSubvolume(BtrfsSubvolumeEntityDetails),
 }
 
 /// A current UDisks lookup key made from a Linux major/minor device number.
@@ -138,6 +475,22 @@ impl<'de> Deserialize<'de> for BlockDeviceId {
 pub struct BlockDeviceFingerprint(String);
 
 impl BlockDeviceFingerprint {
+    /// A partition identity is strong only when bound to its containing drive.
+    pub fn partition_uuid_bound(
+        partition_uuid: impl AsRef<str>,
+        drive_wwn: impl AsRef<str>,
+        drive_serial: impl AsRef<str>,
+    ) -> Result<Self, LogicalIdentityError> {
+        Self::from_parts(
+            "partition",
+            &[
+                &normalize_identity(partition_uuid.as_ref()),
+                &normalize_identity(drive_wwn.as_ref()),
+                &normalize_identity(drive_serial.as_ref()),
+            ],
+        )
+    }
+
     pub fn loop_backing_file(device: u64, inode: u64) -> Self {
         Self::from_parts("loop", &[&device.to_string(), &inode.to_string()])
             .expect("numeric loop identity is valid")
@@ -177,6 +530,7 @@ impl BlockDeviceFingerprint {
         let expected_count = match tier {
             "loop" | "fsuuid" | "drive" => 2,
             "partuuid" => 1,
+            "partition" => 3,
             _ => return Err(LogicalIdentityError::InvalidFingerprint),
         };
         if fields.len() != expected_count
@@ -248,6 +602,39 @@ pub struct BlockDeviceRef {
     pub id: BlockDeviceId,
     pub fingerprint: BlockDeviceFingerprint,
     pub observed_generation: u64,
+}
+
+/// Logical category discovered from a physical sidebar item.  This is used
+/// only for anchored navigation and cannot authorize a mutation.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
+pub enum LogicalCandidateKind {
+    Btrfs,
+    LvmPhysicalVolume,
+    RaidMember,
+}
+
+/// Snapshot-bound logical-navigation identity.  `display_path` is retained
+/// for an unavailable-page explanation only and is never compared during
+/// resolution or converted to a device reference.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct LogicalCandidateAnchor {
+    pub kind: LogicalCandidateKind,
+    pub block_id: BlockDeviceId,
+    pub fingerprint: Option<BlockDeviceFingerprint>,
+    pub observed_epoch: u64,
+    pub display_path: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
+pub struct LogicalLoadRequest {
+    pub anchor: Option<LogicalCandidateAnchor>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub enum LogicalCandidateResolution {
+    Resolved { root_id: LogicalEntityId },
+    Missing,
+    Unavailable { source: String, reason: String },
 }
 
 impl BlockDeviceRef {
@@ -441,9 +828,20 @@ pub struct LogicalMember {
 pub struct LogicalEntity {
     pub id: LogicalEntityId,
     pub kind: LogicalEntityKind,
+    /// Typed display data.  This is the only source a logical page, form, or
+    /// review may use for user-visible topology values.
+    pub details: LogicalEntityDetails,
+    pub parent_id: Option<LogicalEntityId>,
+    pub capabilities: LogicalCapabilities,
+    /// Diagnostic data retained for logs and support reports.  It is not a UI
+    /// or mutation API.
+    pub metadata: BTreeMap<String, String>,
+
+    // Kept temporarily for source compatibility with read-only local tooling.
+    // New logical code must use `details`; these fields are removed once the
+    // local source has completed its typed migration.
     pub name: String,
     pub uuid: Option<String>,
-    pub parent_id: Option<LogicalEntityId>,
     pub device_path: Option<String>,
     pub size_bytes: u64,
     pub used_bytes: Option<u64>,
@@ -451,23 +849,119 @@ pub struct LogicalEntity {
     pub health_status: Option<String>,
     pub progress_fraction: Option<ProgressRatio>,
     pub members: Vec<LogicalMember>,
-    pub capabilities: LogicalCapabilities,
-    pub metadata: BTreeMap<String, String>,
 }
 
 impl LogicalEntity {
+    pub fn display_name(&self) -> &str {
+        match &self.details {
+            LogicalEntityDetails::LvmVolumeGroup(details) => &details.name,
+            LogicalEntityDetails::LvmLogicalVolume(details) => &details.name,
+            LogicalEntityDetails::LvmPhysicalVolume(details) => details
+                .display_path
+                .as_known()
+                .map(String::as_str)
+                .unwrap_or("Unknown physical volume"),
+            LogicalEntityDetails::MdRaidArray(details) => &details.name,
+            LogicalEntityDetails::MdRaidMember(details) => details
+                .display_path
+                .as_known()
+                .map(String::as_str)
+                .unwrap_or("Unknown MD RAID member"),
+            LogicalEntityDetails::BtrfsFilesystem(details) => details
+                .label
+                .as_known()
+                .filter(|label| !label.is_empty())
+                .map(String::as_str)
+                .unwrap_or_else(|| {
+                    self.id
+                        .0
+                        .strip_prefix("btrfs:")
+                        .unwrap_or("Btrfs filesystem")
+                }),
+            LogicalEntityDetails::BtrfsDevice(details) => details
+                .member
+                .display_path
+                .as_known()
+                .map(String::as_str)
+                .unwrap_or("Unknown Btrfs device"),
+            LogicalEntityDetails::BtrfsSubvolume(details) => {
+                details.subvolume.relative_path.as_str()
+            }
+        }
+    }
+
+    pub fn display_device_path(&self) -> Option<&str> {
+        match &self.details {
+            LogicalEntityDetails::LvmLogicalVolume(details) => {
+                details.device_path.as_known().map(String::as_str)
+            }
+            LogicalEntityDetails::LvmPhysicalVolume(details) => {
+                details.display_path.as_known().map(String::as_str)
+            }
+            LogicalEntityDetails::MdRaidMember(details) => {
+                details.display_path.as_known().map(String::as_str)
+            }
+            LogicalEntityDetails::BtrfsFilesystem(details) => details
+                .members
+                .first()
+                .and_then(|member| member.display_path.as_known().map(String::as_str)),
+            LogicalEntityDetails::BtrfsDevice(details) => {
+                details.member.display_path.as_known().map(String::as_str)
+            }
+            _ => None,
+        }
+    }
+
     pub fn inferred_used_bytes(&self) -> Option<u64> {
-        self.used_bytes.or_else(|| {
-            self.free_bytes
-                .map(|free| self.size_bytes.saturating_sub(free))
-        })
+        match &self.details {
+            LogicalEntityDetails::LvmVolumeGroup(details) => {
+                details.used.as_known().copied().or_else(|| {
+                    match (details.size.as_known(), details.free.as_known()) {
+                        (Some(size), Some(free)) => Some(size.saturating_sub(*free)),
+                        _ => None,
+                    }
+                })
+            }
+            LogicalEntityDetails::BtrfsFilesystem(details) => details
+                .allocation
+                .as_known()
+                .map(|allocation| allocation.used),
+            _ => None,
+        }
     }
 
     pub fn inferred_free_bytes(&self) -> Option<u64> {
-        self.free_bytes.or_else(|| {
-            self.used_bytes
-                .map(|used| self.size_bytes.saturating_sub(used))
-        })
+        match &self.details {
+            LogicalEntityDetails::LvmVolumeGroup(details) => {
+                details.free.as_known().copied().or_else(|| {
+                    match (details.size.as_known(), details.used.as_known()) {
+                        (Some(size), Some(used)) => Some(size.saturating_sub(*used)),
+                        _ => None,
+                    }
+                })
+            }
+            LogicalEntityDetails::BtrfsFilesystem(details) => details
+                .allocation
+                .as_known()
+                .map(|allocation| allocation.free),
+            _ => None,
+        }
+    }
+
+    pub fn display_size_bytes(&self) -> Option<u64> {
+        match &self.details {
+            LogicalEntityDetails::LvmVolumeGroup(details) => details.size.as_known().copied(),
+            LogicalEntityDetails::LvmLogicalVolume(details) => details.size.as_known().copied(),
+            LogicalEntityDetails::LvmPhysicalVolume(details) => details.size.as_known().copied(),
+            LogicalEntityDetails::MdRaidArray(details) => details.size.as_known().copied(),
+            LogicalEntityDetails::MdRaidMember(details) => details.size.as_known().copied(),
+            LogicalEntityDetails::BtrfsFilesystem(details) => details
+                .allocation
+                .as_known()
+                .map(|allocation| allocation.total),
+            LogicalEntityDetails::BtrfsDevice(details) => details.member.size.as_known().copied(),
+            LogicalEntityDetails::BtrfsSubvolume(_) => None,
+        }
     }
 }
 
@@ -509,6 +1003,12 @@ pub struct LogicalTopology {
     pub sources: Vec<LogicalSourceStatus>,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct LogicalLoadResult {
+    pub topology: LogicalTopology,
+    pub candidate_resolution: LogicalCandidateResolution,
+}
+
 impl LogicalTopology {
     pub fn new(
         mut entities: Vec<LogicalEntity>,
@@ -522,7 +1022,11 @@ impl LogicalTopology {
         if source_ids.len() != sources.len() {
             return Err(LogicalTopologyError::DuplicateSource);
         }
-        entities.sort_by(|left, right| left.name.cmp(&right.name).then(left.id.cmp(&right.id)));
+        entities.sort_by(|left, right| {
+            left.display_name()
+                .cmp(right.display_name())
+                .then(left.id.cmp(&right.id))
+        });
         sources.sort_by_key(|status| status.source);
         Ok(Self { entities, sources })
     }
@@ -544,18 +1048,22 @@ pub fn summarize_entities(entities: &[LogicalEntity]) -> LogicalAggregateSummary
         ..Default::default()
     };
     for entity in entities {
-        summary.total_size_bytes = summary.total_size_bytes.saturating_add(entity.size_bytes);
+        summary.total_size_bytes = summary
+            .total_size_bytes
+            .saturating_add(entity.display_size_bytes().unwrap_or_default());
         if let Some(used) = entity.inferred_used_bytes() {
             summary.total_used_bytes = summary.total_used_bytes.saturating_add(used);
         }
         if let Some(free) = entity.inferred_free_bytes() {
             summary.total_free_bytes = summary.total_free_bytes.saturating_add(free);
         }
-        if entity
-            .health_status
-            .as_deref()
-            .is_some_and(|status| status.eq_ignore_ascii_case("degraded"))
-        {
+        if matches!(
+            &entity.details,
+            LogicalEntityDetails::MdRaidArray(MdRaidArrayDetails {
+                health: LogicalDisplay::Known(MdRaidHealth::Degraded),
+                ..
+            })
+        ) {
             summary.degraded_count += 1;
         }
     }
@@ -576,6 +1084,8 @@ pub enum LogicalIdentityError {
     InvalidFingerprint,
     UncanonicalDestructiveScope,
     BtrfsDefaultIdOutOfRange,
+    InvalidBtrfsRelativePath,
+    InvalidMdRaidLevelName,
 }
 
 impl fmt::Display for LogicalIdentityError {
@@ -594,6 +1104,12 @@ impl fmt::Display for LogicalIdentityError {
             }
             Self::BtrfsDefaultIdOutOfRange => {
                 "Btrfs default subvolume ID must be within 1..=u32::MAX"
+            }
+            Self::InvalidBtrfsRelativePath => {
+                "Btrfs relative path must be non-empty and contain no absolute or traversal component"
+            }
+            Self::InvalidMdRaidLevelName => {
+                "MD RAID level name must be a non-empty lower-case native token"
             }
         })
     }

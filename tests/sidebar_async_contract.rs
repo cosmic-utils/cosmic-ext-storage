@@ -6,16 +6,28 @@ use std::collections::BTreeMap;
 
 use logical_state::LogicalState;
 use storage_types::{
-    LogicalCapabilities, LogicalEntity, LogicalEntityId, LogicalEntityKind, LogicalTopology,
+    LogicalCapabilities, LogicalDisplay, LogicalEntity, LogicalEntityDetails, LogicalEntityId,
+    LogicalEntityKind, LogicalTopology, LvmVolumeGroupDetails,
 };
 
 fn entity(id: &str) -> LogicalEntity {
     LogicalEntity {
         id: LogicalEntityId::new(id).unwrap(),
         kind: LogicalEntityKind::BtrfsFilesystem,
+        details: LogicalEntityDetails::LvmVolumeGroup(LvmVolumeGroupDetails {
+            name: id.into(),
+            uuid: LogicalDisplay::unknown("fixture"),
+            size: LogicalDisplay::known(0),
+            used: LogicalDisplay::unknown("fixture"),
+            free: LogicalDisplay::unknown("fixture"),
+            logical_volumes: Vec::new(),
+            physical_volumes: Vec::new(),
+        }),
+        parent_id: None,
+        capabilities: LogicalCapabilities::default(),
+        metadata: BTreeMap::new(),
         name: id.into(),
         uuid: None,
-        parent_id: None,
         device_path: None,
         size_bytes: 0,
         used_bytes: None,
@@ -23,8 +35,6 @@ fn entity(id: &str) -> LogicalEntity {
         health_status: None,
         progress_fraction: None,
         members: Vec::new(),
-        capabilities: LogicalCapabilities::default(),
-        metadata: BTreeMap::new(),
     }
 }
 

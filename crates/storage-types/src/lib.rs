@@ -52,12 +52,20 @@ pub use filesystem::{
     MountOptions, MountOptionsSettings, ProcessInfo, UnmountResult,
 };
 pub use logical::{
-    BlockDeviceFingerprint, BlockDeviceId, BlockDeviceRef, ConfirmedDestructiveScope,
-    LogicalAggregateSummary, LogicalBlockedReason, LogicalCapabilities, LogicalEntity,
-    LogicalEntityId, LogicalEntityKind, LogicalIdentityError, LogicalMember, LogicalMemberId,
+    BlockDeviceFingerprint, BlockDeviceId, BlockDeviceRef, BtrfsAllocation, BtrfsDeviceDetails,
+    BtrfsFilesystemDetails, BtrfsFilesystemValue, BtrfsMember, BtrfsMemberState,
+    BtrfsPrimaryMember, BtrfsRelativePath, BtrfsSubvolumeDetails, BtrfsSubvolumeEntityDetails,
+    BtrfsSubvolumeHierarchy, BtrfsSubvolumeRef, BtrfsSubvolumeRowKey, BtrfsTopologyDiagnostic,
+    ConfirmedDestructiveScope, LogicalAggregateSummary, LogicalBlockedReason,
+    LogicalCandidateAnchor, LogicalCandidateKind, LogicalCandidateResolution, LogicalCapabilities,
+    LogicalDisplay, LogicalEntity, LogicalEntityDetails, LogicalEntityId, LogicalEntityKind,
+    LogicalIdentityError, LogicalLoadRequest, LogicalLoadResult, LogicalMember, LogicalMemberId,
     LogicalOperation, LogicalSource, LogicalSourceAvailability, LogicalSourceStatus,
-    LogicalTopology, LogicalTopologyError, ProgressRatio, all_logical_operations,
-    btrfs_default_subvolume_id, summarize_entities,
+    LogicalTopology, LogicalTopologyError, LvmActivationState, LvmLogicalVolumeDetails,
+    LvmLogicalVolumeSummary, LvmPhysicalVolumeDetails, LvmPhysicalVolumeState,
+    LvmPhysicalVolumeSummary, LvmVolumeGroupDetails, MdRaidArrayDetails, MdRaidHealth,
+    MdRaidLevelName, MdRaidMemberDetails, MdRaidMemberRole, MdRaidMemberState, MountPointUsage,
+    ProgressRatio, all_logical_operations, btrfs_default_subvolume_id, summarize_entities,
 };
 pub use lvm::{LogicalVolumeInfo, PhysicalVolumeInfo, VolumeGroupInfo};
 pub use network::{

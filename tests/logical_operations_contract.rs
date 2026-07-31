@@ -1,17 +1,31 @@
 use std::collections::BTreeMap;
 
 use storage_types::{
-    LogicalCapabilities, LogicalEntity, LogicalEntityId, LogicalEntityKind, LogicalSource,
-    LogicalSourceAvailability, LogicalSourceStatus, LogicalTopology,
+    LogicalCapabilities, LogicalDisplay, LogicalEntity, LogicalEntityDetails, LogicalEntityId,
+    LogicalEntityKind, LogicalSource, LogicalSourceAvailability, LogicalSourceStatus,
+    LogicalTopology, LvmVolumeGroupDetails,
 };
 
 fn entity(id: &str, name: &str, used: Option<u64>) -> LogicalEntity {
     LogicalEntity {
         id: LogicalEntityId::new(id).unwrap(),
         kind: LogicalEntityKind::LvmVolumeGroup,
+        details: LogicalEntityDetails::LvmVolumeGroup(LvmVolumeGroupDetails {
+            name: name.into(),
+            uuid: LogicalDisplay::unknown("fixture"),
+            size: LogicalDisplay::known(10),
+            used: used
+                .map(LogicalDisplay::known)
+                .unwrap_or_else(|| LogicalDisplay::unknown("fixture")),
+            free: LogicalDisplay::unknown("fixture"),
+            logical_volumes: Vec::new(),
+            physical_volumes: Vec::new(),
+        }),
+        parent_id: None,
+        capabilities: LogicalCapabilities::default(),
+        metadata: BTreeMap::new(),
         name: name.into(),
         uuid: None,
-        parent_id: None,
         device_path: None,
         size_bytes: 10,
         used_bytes: used,
@@ -19,8 +33,6 @@ fn entity(id: &str, name: &str, used: Option<u64>) -> LogicalEntity {
         health_status: None,
         progress_fraction: None,
         members: Vec::new(),
-        capabilities: LogicalCapabilities::default(),
-        metadata: BTreeMap::new(),
     }
 }
 

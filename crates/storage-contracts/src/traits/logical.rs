@@ -1,12 +1,16 @@
 //! Object-safe contracts for logical topology discovery and native actions.
 
-use std::{collections::BTreeSet, num::NonZeroU32};
+use std::{
+    collections::BTreeSet,
+    num::{NonZeroU8, NonZeroU64},
+};
 
 use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
 use storage_types::{
-    BlockDeviceRef, ConfirmedDestructiveScope, LogicalEntity, LogicalEntityId, LogicalOperation,
-    LogicalSource, LogicalSourceAvailability,
+    BlockDeviceRef, BtrfsSubvolumeRef, ConfirmedDestructiveScope, LogicalCandidateAnchor,
+    LogicalDisplay, LogicalEntity, LogicalEntityId, LogicalOperation, LogicalSource,
+    LogicalSourceAvailability,
 };
 
 use crate::{StorageError, StorageErrorKind};
@@ -111,7 +115,7 @@ pub enum LogicalAction {
     },
     SetBtrfsDefaultSubvolume {
         filesystem: LogicalEntityId,
-        subvolume_id: NonZeroU32,
+        subvolume: BtrfsSubvolumeRef,
     },
     CreateBtrfsSubvolume {
         filesystem: LogicalEntityId,
@@ -119,11 +123,11 @@ pub enum LogicalAction {
     },
     DeleteBtrfsSubvolume {
         filesystem: LogicalEntityId,
-        path: String,
+        subvolume: BtrfsSubvolumeRef,
     },
     CreateBtrfsSnapshot {
         filesystem: LogicalEntityId,
-        source: String,
+        source: BtrfsSubvolumeRef,
         destination: String,
         readonly: bool,
     },
@@ -233,20 +237,21 @@ impl LogicalAction {
             }
             Self::SetBtrfsDefaultSubvolume {
                 filesystem,
-                subvolume_id,
+                subvolume,
             } => {
                 validate_target(filesystem, "btrfs:")?;
-                if subvolume_id.get() == 0 {
-                    return invalid("Btrfs default subvolume ID must be non-zero");
-                }
+                validate_btrfs_subvolume_ref(filesystem, subvolume)?;
             }
             Self::CreateBtrfsSubvolume { filesystem, name } => {
                 validate_target(filesystem, "btrfs:")?;
                 validate_btrfs_subvolume_path(name, "Btrfs subvolume name")?;
             }
-            Self::DeleteBtrfsSubvolume { filesystem, path } => {
+            Self::DeleteBtrfsSubvolume {
+                filesystem,
+                subvolume,
+            } => {
                 validate_target(filesystem, "btrfs:")?;
-                validate_btrfs_subvolume_path(path, "Btrfs subvolume path")?;
+                validate_btrfs_subvolume_ref(filesystem, subvolume)?;
             }
             Self::CreateBtrfsSnapshot {
                 filesystem,
@@ -255,7 +260,7 @@ impl LogicalAction {
                 ..
             } => {
                 validate_target(filesystem, "btrfs:")?;
-                validate_btrfs_subvolume_path(source, "Btrfs snapshot source")?;
+                validate_btrfs_subvolume_ref(filesystem, source)?;
                 validate_btrfs_subvolume_path(destination, "Btrfs snapshot destination")?;
             }
         }
@@ -402,6 +407,229 @@ pub enum BtrfsResizeRequest {
     ShrinkBy(u64),
 }
 
+/// Payload-free operation identity used to bind a form draft to the exact
+/// adapter preflight that reviewed it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
+pub enum LogicalActionKind {
+    CreateLvmVolumeGroup,
+    AddLvmPhysicalVolume,
+    RemoveLvmPhysicalVolume,
+    CreateLvmLogicalVolume,
+    DeleteLvmVolumeGroup,
+    ResizeLvmLogicalVolume,
+    ActivateLvmLogicalVolume,
+    DeactivateLvmLogicalVolume,
+    DeleteLvmLogicalVolume,
+    CreateMdRaidArray,
+    AddMdRaidMember,
+    RemoveMdRaidMember,
+    StartMdRaidArray,
+    StopMdRaidArray,
+    CheckMdRaidArray,
+    RepairMdRaidArray,
+    DeleteMdRaidArray,
+    AddBtrfsDevice,
+    RemoveBtrfsDevice,
+    ResizeBtrfsFilesystem,
+    SetBtrfsLabel,
+    SetBtrfsDefaultSubvolume,
+    CreateBtrfsSubvolume,
+    DeleteBtrfsSubvolume,
+    CreateBtrfsSnapshot,
+}
+
+impl LogicalAction {
+    pub const fn kind(&self) -> LogicalActionKind {
+        match self {
+            Self::CreateLvmVolumeGroup { .. } => LogicalActionKind::CreateLvmVolumeGroup,
+            Self::DeleteLvmVolumeGroup { .. } => LogicalActionKind::DeleteLvmVolumeGroup,
+            Self::AddLvmPhysicalVolume { .. } => LogicalActionKind::AddLvmPhysicalVolume,
+            Self::RemoveLvmPhysicalVolume { .. } => LogicalActionKind::RemoveLvmPhysicalVolume,
+            Self::CreateLvmLogicalVolume { .. } => LogicalActionKind::CreateLvmLogicalVolume,
+            Self::DeleteLvmLogicalVolume { .. } => LogicalActionKind::DeleteLvmLogicalVolume,
+            Self::ResizeLvmLogicalVolume { .. } => LogicalActionKind::ResizeLvmLogicalVolume,
+            Self::ActivateLvmLogicalVolume { .. } => LogicalActionKind::ActivateLvmLogicalVolume,
+            Self::DeactivateLvmLogicalVolume { .. } => {
+                LogicalActionKind::DeactivateLvmLogicalVolume
+            }
+            Self::CreateMdRaidArray { .. } => LogicalActionKind::CreateMdRaidArray,
+            Self::DeleteMdRaidArray { .. } => LogicalActionKind::DeleteMdRaidArray,
+            Self::StartMdRaidArray { .. } => LogicalActionKind::StartMdRaidArray,
+            Self::StopMdRaidArray { .. } => LogicalActionKind::StopMdRaidArray,
+            Self::AddMdRaidMember { .. } => LogicalActionKind::AddMdRaidMember,
+            Self::RemoveMdRaidMember { .. } => LogicalActionKind::RemoveMdRaidMember,
+            Self::RequestMdRaidSync {
+                action: MdRaidSyncAction::Check,
+                ..
+            } => LogicalActionKind::CheckMdRaidArray,
+            Self::RequestMdRaidSync {
+                action: MdRaidSyncAction::Repair,
+                ..
+            } => LogicalActionKind::RepairMdRaidArray,
+            Self::AddBtrfsDevice { .. } => LogicalActionKind::AddBtrfsDevice,
+            Self::RemoveBtrfsDevice { .. } => LogicalActionKind::RemoveBtrfsDevice,
+            Self::ResizeBtrfsFilesystem { .. } => LogicalActionKind::ResizeBtrfsFilesystem,
+            Self::SetBtrfsLabel { .. } => LogicalActionKind::SetBtrfsLabel,
+            Self::SetBtrfsDefaultSubvolume { .. } => LogicalActionKind::SetBtrfsDefaultSubvolume,
+            Self::CreateBtrfsSubvolume { .. } => LogicalActionKind::CreateBtrfsSubvolume,
+            Self::DeleteBtrfsSubvolume { .. } => LogicalActionKind::DeleteBtrfsSubvolume,
+            Self::CreateBtrfsSnapshot { .. } => LogicalActionKind::CreateBtrfsSnapshot,
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub enum LogicalPreflightTarget {
+    Landing,
+    Root(LogicalEntityId),
+    Candidate(LogicalCandidateAnchor),
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct LogicalPreflightRequestKey {
+    pub target: LogicalPreflightTarget,
+    pub action_kind: LogicalActionKind,
+    pub logical_load_generation: u64,
+    pub draft_revision: u64,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct LogicalPreflightRequest {
+    pub request_key: LogicalPreflightRequestKey,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct LogicalPreflightKey {
+    pub request_key: LogicalPreflightRequestKey,
+    pub udisks_epoch: u64,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub enum LogicalPreflightAvailability {
+    Ready,
+    Blocked { reason: String },
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct LogicalCandidateDisplay {
+    pub label: LogicalDisplay<String>,
+    pub path: LogicalDisplay<String>,
+    pub size: LogicalDisplay<u64>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub enum CandidateBlockReason {
+    NoStrongIdentity,
+    AlreadyTargetMember,
+    StructuredDataSignature { signature: String },
+    SourceUnavailable { source: String, reason: String },
+    Ineligible { reason: String },
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub enum LogicalDeviceCandidate {
+    Ready {
+        device: BlockDeviceRef,
+        display: LogicalCandidateDisplay,
+    },
+    Blocked {
+        display: LogicalCandidateDisplay,
+        reason: CandidateBlockReason,
+    },
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ByteSizeConstraint {
+    pub minimum: NonZeroU64,
+    pub maximum: Option<NonZeroU64>,
+    pub alignment: NonZeroU64,
+}
+
+impl ByteSizeConstraint {
+    pub fn accepts(&self, value: u64) -> bool {
+        value >= self.minimum.get()
+            && self.maximum.is_none_or(|maximum| value <= maximum.get())
+            && value.is_multiple_of(self.alignment.get())
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct MdRaidProfileOption {
+    pub profile: MdRaidCreateProfile,
+    pub label: String,
+    pub member_minimum: NonZeroU8,
+    pub chunk_bytes: u64,
+    pub metadata_version: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
+pub struct LogicalInputConstraints {
+    pub byte_size: Option<ByteSizeConstraint>,
+    pub md_profiles: Vec<MdRaidProfileOption>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub enum DestructiveScopePolicy {
+    DeleteLvmVolumeGroup {
+        pv_label_policy: LvmWipePolicy,
+        configuration_policy: ConfigurationCleanupPolicy,
+    },
+    DeleteLvmLogicalVolume {
+        configuration_policy: ConfigurationCleanupPolicy,
+    },
+    DeleteMdRaidArray {
+        configuration_policy: ConfigurationCleanupPolicy,
+    },
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub enum MemberRemovalPolicy {
+    RemoveLvmPhysicalVolume {
+        pv_label_policy: LvmWipePolicy,
+    },
+    RemoveMdRaidMember {
+        member_signature_policy: MdRaidMemberWipePolicy,
+    },
+    RemoveBtrfsDevice,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub enum LogicalReviewData {
+    None,
+    DeviceInputs {
+        devices: Vec<BlockDeviceRef>,
+    },
+    DestructiveScope {
+        primary: LogicalEntityId,
+        scope: ConfirmedDestructiveScope,
+        policy: DestructiveScopePolicy,
+    },
+    MemberRemoval {
+        primary: LogicalEntityId,
+        member: BlockDeviceRef,
+        policy: MemberRemovalPolicy,
+    },
+    BtrfsSubvolumeDeletion {
+        filesystem: LogicalEntityId,
+        subvolume: BtrfsSubvolumeRef,
+    },
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct LogicalPreflight {
+    pub key: LogicalPreflightKey,
+    pub availability: LogicalPreflightAvailability,
+    pub device_candidates: Vec<LogicalDeviceCandidate>,
+    pub constraints: LogicalInputConstraints,
+    pub review: LogicalReviewData,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ConfirmedLogicalAction {
+    pub action: LogicalAction,
+    pub preflight_key: LogicalPreflightKey,
+}
+
 /// Opaque native result metadata, deliberately excluding an object path.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct LogicalActionOutcome {
@@ -415,9 +643,23 @@ pub struct LogicalActionOutcome {
 /// application registry, while sources may be many and read-only.
 #[async_trait]
 pub trait LogicalOperations: Send + Sync {
+    /// Captures a physical sidebar candidate as a snapshot-bound logical
+    /// navigation anchor. Its display path is never reused as identity.
+    async fn capture_logical_candidate(
+        &self,
+        display_path: String,
+    ) -> Result<storage_types::LogicalCandidateAnchor, StorageError>;
+
+    /// Captures current native eligibility and attaches the UDisks epoch to a
+    /// UI-owned request key.  The UI never manufactures that epoch.
+    async fn preflight_logical_action(
+        &self,
+        request: LogicalPreflightRequest,
+    ) -> Result<LogicalPreflight, StorageError>;
+
     async fn execute_logical_action(
         &self,
-        action: LogicalAction,
+        confirmed: ConfirmedLogicalAction,
     ) -> Result<LogicalActionOutcome, StorageError>;
 }
 
@@ -447,6 +689,19 @@ fn validate_btrfs_subvolume_path(value: &str, noun: &str) -> Result<(), StorageE
         ));
     }
     Ok(())
+}
+
+fn validate_btrfs_subvolume_ref(
+    filesystem: &LogicalEntityId,
+    subvolume: &BtrfsSubvolumeRef,
+) -> Result<(), StorageError> {
+    if &subvolume.filesystem != filesystem {
+        return invalid("The selected Btrfs subvolume belongs to a different filesystem");
+    }
+    validate_btrfs_subvolume_path(
+        subvolume.expected_relative_path.as_str(),
+        "Btrfs subvolume path",
+    )
 }
 
 fn validate_target(target: &LogicalEntityId, prefix: &str) -> Result<(), StorageError> {

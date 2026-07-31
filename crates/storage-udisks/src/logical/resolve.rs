@@ -4,7 +4,10 @@ use std::collections::HashMap;
 
 use storage_contracts::{StorageError, StorageErrorKind};
 use storage_types::{BlockDeviceFingerprint, BlockDeviceId, BlockDeviceRef};
-use udisks2::block::BlockProxy;
+use udisks2::{
+    block::BlockProxy, drive::DriveProxy, nvme::namespace::NamespaceProxy,
+    partition::PartitionProxy,
+};
 use zbus::{fdo::ObjectManagerProxy, zvariant::OwnedObjectPath};
 
 use crate::{DiskManager, dbus::bytestring::decode_c_string_bytes};
@@ -22,7 +25,11 @@ pub(crate) struct ResolvedBlock {
     pub id: BlockDeviceId,
     pub fingerprint: Option<BlockDeviceFingerprint>,
     pub device_path: String,
+    pub id_type: String,
     pub id_uuid: String,
+    pub id_label: String,
+    pub size: Option<u64>,
+    pub read_only: Option<bool>,
 }
 
 pub(crate) async fn managed_paths(
@@ -81,20 +88,155 @@ pub(crate) async fn blocks(manager: &DiskManager) -> Result<Vec<ResolvedBlock>, 
         } else {
             preferred
         };
-        let fingerprint = if id_uuid.trim().is_empty() || id_type.trim().is_empty() {
-            None
-        } else {
-            BlockDeviceFingerprint::filesystem_uuid(&id_uuid, &id_type).ok()
-        };
+        let fingerprint = strong_fingerprint(manager, &path, &proxy, &id).await;
         blocks.push(ResolvedBlock {
-            path,
+            path: path.clone(),
             id,
             fingerprint,
             device_path,
+            id_type,
             id_uuid,
+            id_label: proxy.id_label().await.unwrap_or_default(),
+            size: proxy.size().await.ok(),
+            read_only: proxy.read_only().await.ok(),
         });
     }
     Ok(blocks)
+}
+
+/// Derive the only identities that may authorize a logical mutation.  In
+/// particular `Block.IdUUID` and a bare partition UUID are intentionally not
+/// considered fingerprints: both can be cloned across devices.
+async fn strong_fingerprint(
+    manager: &DiskManager,
+    path: &OwnedObjectPath,
+    block: &BlockProxy<'_>,
+    block_id: &BlockDeviceId,
+) -> Option<BlockDeviceFingerprint> {
+    if let Some(fingerprint) = drive_fingerprint(manager, path, block).await {
+        return Some(fingerprint);
+    }
+
+    // A cleartext `/dev/mapper/*` device has no Drive of its own.  UDisks
+    // exposes its LUKS backing block explicitly, however, so bind navigation
+    // to that backing partition/drive identity instead of treating a normal
+    // encrypted-root mapping as an unidentifiable transient device.  The
+    // major/minor in BlockDeviceRef still identifies this mapper node; this
+    // fingerprint prevents it being silently reused for another backing disk.
+    if let Some(backing_path) = block
+        .crypto_backing_device()
+        .await
+        .ok()
+        .filter(|path| path.as_str() != "/")
+        && let Ok(backing) = BlockProxy::builder(manager.connection())
+            .path(&backing_path)
+            .ok()?
+            .build()
+            .await
+        && let Some(fingerprint) = drive_fingerprint(manager, &backing_path, &backing).await
+    {
+        return Some(fingerprint);
+    }
+
+    loop_fingerprint(manager, path, block_id).await
+}
+
+async fn drive_fingerprint(
+    manager: &DiskManager,
+    path: &OwnedObjectPath,
+    block: &BlockProxy<'_>,
+) -> Option<BlockDeviceFingerprint> {
+    let drive = block
+        .drive()
+        .await
+        .ok()
+        .filter(|drive| drive.as_str() != "/");
+    if let Some(drive_path) = drive {
+        let drive = DriveProxy::builder(manager.connection())
+            .path(drive_path)
+            .ok()?
+            .build()
+            .await
+            .ok()?;
+        let wwn = drive.wwn().await.ok()?;
+        let serial = drive.serial().await.ok()?;
+        let wwn = if wwn.trim().is_empty() {
+            nvme_namespace_wwn(manager, path).await?
+        } else {
+            wwn
+        };
+        if !wwn.trim().is_empty() && !serial.trim().is_empty() {
+            if let Ok(partition) = PartitionProxy::builder(manager.connection())
+                .path(path)
+                .ok()?
+                .build()
+                .await
+                && let Ok(partition_uuid) = partition.uuid().await
+                && !partition_uuid.trim().is_empty()
+            {
+                return BlockDeviceFingerprint::partition_uuid_bound(partition_uuid, wwn, serial)
+                    .ok();
+            }
+            return BlockDeviceFingerprint::drive_wwn_serial(wwn, serial).ok();
+        }
+    }
+    None
+}
+
+/// UDisks exposes a blank `Drive.WWN` for NVMe controllers. Its own Drive
+/// interface directs callers to the namespace-level WWN instead. A partition
+/// reaches that namespace through `Partition.Table`; a whole namespace already
+/// lives at the correct object path.
+async fn nvme_namespace_wwn(manager: &DiskManager, path: &OwnedObjectPath) -> Option<String> {
+    let mut namespace_path = path.clone();
+    if let Ok(builder) = PartitionProxy::builder(manager.connection()).path(path)
+        && let Ok(partition) = builder.build().await
+        && let Ok(table) = partition.table().await
+    {
+        namespace_path = table;
+    }
+    let namespace = NamespaceProxy::builder(manager.connection())
+        .path(&namespace_path)
+        .ok()?
+        .build()
+        .await
+        .ok()?;
+    let wwn = namespace.wwn().await.ok()?;
+    (!wwn.trim().is_empty()).then_some(wwn)
+}
+
+async fn loop_fingerprint(
+    manager: &DiskManager,
+    path: &OwnedObjectPath,
+    block_id: &BlockDeviceId,
+) -> Option<BlockDeviceFingerprint> {
+    let proxy = zbus::Proxy::new(
+        manager.connection(),
+        "org.freedesktop.UDisks2",
+        path.as_str(),
+        "org.freedesktop.UDisks2.Loop",
+    )
+    .await
+    .ok()?;
+    let bytes = proxy.get_property::<Vec<u8>>("BackingFile").await.ok()?;
+    let bytes = bytes.split(|byte| *byte == 0).next().unwrap_or_default();
+    let backing_file = std::str::from_utf8(bytes).ok()?.trim();
+    let metadata = std::fs::metadata(backing_file).ok()?;
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::MetadataExt;
+        let (major, minor) = block_id.major_minor();
+        let device = (major << 32) | minor;
+        Some(BlockDeviceFingerprint::loop_backing_file(
+            device,
+            metadata.ino(),
+        ))
+    }
+    #[cfg(not(unix))]
+    {
+        let _ = metadata;
+        None
+    }
 }
 
 pub(crate) async fn resolve_block(

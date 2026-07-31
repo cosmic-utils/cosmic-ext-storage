@@ -92,10 +92,6 @@ impl SidebarState {
         }
     }
 
-    pub fn expand(&mut self, key: SidebarNodeKey) {
-        self.expanded.insert(key);
-    }
-
     pub fn find_drive(&self, device: &str) -> Option<&UiDrive> {
         self.drives.iter().find(|d| d.device() == device)
     }

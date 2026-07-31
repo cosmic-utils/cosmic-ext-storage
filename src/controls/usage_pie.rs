@@ -274,3 +274,31 @@ pub fn disk_usage_pie<'a>(
             .into()
     }
 }
+
+/// Renders the compact green capacity ring used by a mounted logical Btrfs
+/// filesystem. Unlike the multi-segment disk chart, this has one semantic
+/// value: the used portion of the mounted view.
+pub fn filesystem_usage_pie<'a>(total: u64, used: u64) -> Element<'a, Message> {
+    use std::f32::consts::PI;
+
+    let pie_size = 96.0_f32;
+    let percent = if total > 0 {
+        ((used as f64 / total as f64) * 100.0) as u32
+    } else {
+        0
+    };
+    let program = DiskPieProgram {
+        arcs: vec![(
+            -PI / 2.0,
+            (used as f64 / total.max(1) as f64 * 2.0 * PI as f64) as f32,
+            SEGMENT_COLORS[1],
+        )],
+        ring_radius: (pie_size / 2.0) - 6.0,
+        ring_width: 10.0,
+        percent_text: format!("{percent}%"),
+    };
+    iced_widget::canvas::Canvas::new(program)
+        .width(Length::Fixed(pie_size))
+        .height(Length::Fixed(pie_size))
+        .into()
+}

@@ -198,8 +198,26 @@ pub(crate) fn selectable_tile<'a, Message: Clone + 'static>(
     width: Length,
     height: Length,
 ) -> Element<'a, Message> {
+    // Suggested buttons provide the selected surface, but their foreground
+    // does not propagate reliably through a custom container. Set both text
+    // and icon colors explicitly so selected tiles stay readable on every
+    // accent palette.
+    let content = widget::container(content).style(move |theme| {
+        let cosmic = theme.cosmic();
+        let foreground = if selected {
+            cosmic.on_accent_color()
+        } else {
+            cosmic.background(false).component.on
+        };
+
+        cosmic::iced::widget::container::Style {
+            text_color: Some(foreground.into()),
+            icon_color: Some(foreground.into()),
+            ..Default::default()
+        }
+    });
     let mut tile = button::custom(
-        widget::container(content)
+        content
             .padding(16)
             .width(width)
             .height(height)

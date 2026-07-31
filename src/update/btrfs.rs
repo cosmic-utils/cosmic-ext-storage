@@ -1,10 +1,8 @@
 use crate::errors::ui::{UiErrorContext, log_error_and_show_dialog};
 use crate::fl;
 use crate::message::app::Message;
-use crate::models::load_all_drives;
 use crate::operations::BtrfsClient;
 use crate::state::app::AppModel;
-use crate::state::dialogs::{ConfirmActionDialog, FilesystemTarget, ShowDialog};
 use crate::state::volumes::VolumesControl;
 use cosmic::app::Task;
 
@@ -61,75 +59,16 @@ pub(super) fn handle_btrfs_message(app: &mut AppModel, message: Message) -> Task
 
         Message::BtrfsDeleteSubvolume {
             block_path,
-            mount_point,
-            path,
-        } => {
-            // Show confirmation dialog
-            let subvol_name = path.rsplit('/').next().unwrap_or(&path).to_string();
-
-            // Get a dummy FilesystemTarget (required by ConfirmActionDialog but not used for BTRFS)
-            let target = if let Some(volumes_control) = app.nav.active_data::<VolumesControl>()
-                && let Some(segment) = volumes_control
-                    .segments
-                    .get(volumes_control.selected_segment)
-                && let Some(volume) = &segment.volume
-            {
-                FilesystemTarget::Volume(volume.clone())
-            } else {
-                return Task::none();
-            };
-
-            app.dialog = Some(ShowDialog::ConfirmAction(ConfirmActionDialog {
-                title: fl!("btrfs-delete-subvolume"),
-                body: fl!("btrfs-delete-confirm", name = subvol_name.as_str()),
-                target,
-                ok_message: Message::BtrfsDeleteSubvolumeConfirm {
-                    block_path,
-                    mount_point,
-                    path,
-                },
-                running: false,
-            }));
-
-            Task::none()
+            mount_point: _,
+            path: _,
         }
-
-        Message::BtrfsDeleteSubvolumeConfirm {
+        | Message::BtrfsDeleteSubvolumeConfirm {
             block_path,
             mount_point: _,
-            path,
-        } => {
-            // Set dialog to running state
-            if let Some(ShowDialog::ConfirmAction(state)) = &mut app.dialog {
-                state.running = true;
-            }
-
-            // Perform the actual delete
-            Task::perform(
-                async move {
-                    let btrfs_client = BtrfsClient::new().await?;
-                    btrfs_client
-                        .delete_subvolume(&block_path, &path, false)
-                        .await?;
-                    load_all_drives().await
-                },
-                |result| match result {
-                    Ok(drives) => {
-                        // Close dialog and refresh drives (subvolume list will reload)
-                        Message::UpdateNav(drives, None).into()
-                    }
-                    Err(e) => {
-                        let ctx = UiErrorContext::new("delete_subvolume");
-                        log_error_and_show_dialog(
-                            fl!("btrfs-delete-subvolume-failed"),
-                            e.into(),
-                            ctx,
-                        )
-                        .into()
-                    }
-                },
-            )
-        }
+            path: _,
+        } => Task::done(cosmic::Action::App(Message::LogicalViewRequested {
+            device_path: Some(block_path),
+        })),
 
         Message::BtrfsLoadUsage {
             block_path: _,
@@ -256,8 +195,8 @@ pub(super) fn handle_btrfs_message(app: &mut AppModel, message: Message) -> Task
         }
 
         Message::BtrfsSetDefaultSubvolume {
-            mount_point,
-            subvolume_id,
+            mount_point: _,
+            subvolume_id: _,
         } => {
             let block_path = app
                 .nav
@@ -265,37 +204,11 @@ pub(super) fn handle_btrfs_message(app: &mut AppModel, message: Message) -> Task
                 .and_then(|control| control.btrfs_state.as_ref())
                 .and_then(|state| state.block_path.clone());
 
-            if let Some(block_path) = block_path {
-                let mount_point_for_closure = mount_point.clone();
-                let block_path_for_task = block_path.clone();
-                Task::perform(
-                    async move {
-                        let btrfs_client = BtrfsClient::new().await?;
-                        btrfs_client
-                            .set_default(&block_path_for_task, subvolume_id)
-                            .await?;
-                        Ok(())
-                    },
-                    move |result: anyhow::Result<()>| {
-                        match result {
-                            Ok(()) => {
-                                // Reload subvolumes to update default flag
-                                Message::BtrfsLoadSubvolumes {
-                                    block_path: block_path.clone(),
-                                    mount_point: mount_point_for_closure.clone(),
-                                }
-                            }
-                            Err(e) => {
-                                let ctx = UiErrorContext::new("set_default_subvolume");
-                                log_error_and_show_dialog(fl!("btrfs-set-default-failed"), e, ctx)
-                            }
-                        }
-                        .into()
-                    },
-                )
-            } else {
-                Task::none()
-            }
+            block_path.map_or_else(Task::none, |device_path| {
+                Task::done(cosmic::Action::App(Message::LogicalViewRequested {
+                    device_path: Some(device_path),
+                }))
+            })
         }
 
         Message::BtrfsToggleReadonly {

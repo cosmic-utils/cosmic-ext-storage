@@ -2,15 +2,29 @@
 
 use std::collections::BTreeMap;
 
-use storage_contracts::{LogicalAction, LogicalActionOutcome};
+use storage_contracts::{
+    ConfirmedLogicalAction, LogicalActionOutcome, LogicalPreflight, LogicalPreflightRequest,
+};
 use storage_types::{
-    LogicalCapabilities, LogicalEntity, LogicalEntityId, LogicalSource, LogicalSourceAvailability,
-    LogicalSourceStatus, LogicalTopology,
+    BlockDeviceRef, LogicalCandidateAnchor, LogicalCandidateResolution, LogicalCapabilities,
+    LogicalEntity, LogicalEntityDetails, LogicalEntityId, LogicalLoadRequest, LogicalLoadResult,
+    LogicalSource, LogicalSourceAvailability, LogicalSourceStatus, LogicalTopology,
 };
 
 use super::{OperationError, StorageOperations};
 
 impl StorageOperations {
+    pub async fn capture_logical_candidate(
+        &self,
+        display_path: String,
+    ) -> Result<LogicalCandidateAnchor, OperationError> {
+        self.registry
+            .logical_operations
+            .capture_logical_candidate(display_path)
+            .await
+            .map_err(Into::into)
+    }
+
     /// Loads all registered sources in declared authority order and merges them
     /// without granting a local-tools entity mutation authority.
     pub async fn load_logical_topology(&self) -> Result<LogicalTopology, OperationError> {
@@ -57,16 +71,102 @@ impl StorageOperations {
         }
     }
 
+    /// Loads the shared topology and resolves an optional sidebar anchor from
+    /// the same typed result.  The path stored for messaging is never used to
+    /// select a root.
+    pub async fn load_logical_topology_for(
+        &self,
+        request: LogicalLoadRequest,
+    ) -> Result<LogicalLoadResult, OperationError> {
+        let topology = self.load_logical_topology().await?;
+        let candidate_resolution = request
+            .anchor
+            .as_ref()
+            .map(|anchor| resolve_candidate(&topology, anchor))
+            .unwrap_or(LogicalCandidateResolution::Missing);
+        Ok(LogicalLoadResult {
+            topology,
+            candidate_resolution,
+        })
+    }
+
     pub async fn execute_logical_action(
         &self,
-        action: LogicalAction,
+        confirmed: ConfirmedLogicalAction,
     ) -> Result<LogicalActionOutcome, OperationError> {
         self.registry
             .logical_operations
-            .execute_logical_action(action)
+            .execute_logical_action(confirmed)
             .await
             .map_err(Into::into)
     }
+
+    pub async fn preflight_logical_action(
+        &self,
+        request: LogicalPreflightRequest,
+    ) -> Result<LogicalPreflight, OperationError> {
+        self.registry
+            .logical_operations
+            .preflight_logical_action(request)
+            .await
+            .map_err(Into::into)
+    }
+}
+
+fn resolve_candidate(
+    topology: &LogicalTopology,
+    anchor: &LogicalCandidateAnchor,
+) -> LogicalCandidateResolution {
+    let resolved = topology.entities.iter().find_map(|entity| {
+        let matches = match &entity.details {
+            LogicalEntityDetails::BtrfsFilesystem(details) => details
+                .members
+                .iter()
+                .any(|member| anchor_matches(member.block.as_ref(), anchor)),
+            LogicalEntityDetails::LvmVolumeGroup(details) => details
+                .physical_volumes
+                .iter()
+                .any(|member| anchor_matches(member.member.block.as_ref(), anchor)),
+            LogicalEntityDetails::MdRaidArray(details) => details
+                .members
+                .iter()
+                .any(|member| anchor_matches(member.block.as_ref(), anchor)),
+            _ => false,
+        };
+        matches.then(|| entity.id.clone())
+    });
+    if let Some(root_id) = resolved {
+        return LogicalCandidateResolution::Resolved { root_id };
+    }
+    if anchor.fingerprint.is_none() {
+        return LogicalCandidateResolution::Unavailable {
+            source: "UDisks".into(),
+            reason: "The selected device has no strong identity after topology refresh.".into(),
+        };
+    }
+    if let Some(reason) = topology
+        .sources
+        .iter()
+        .find(|status| status.source == LogicalSource::Udisks)
+        .and_then(|status| status.availability.reason())
+    {
+        return LogicalCandidateResolution::Unavailable {
+            source: "UDisks".into(),
+            reason: reason.into(),
+        };
+    }
+    LogicalCandidateResolution::Missing
+}
+
+fn anchor_matches(reference: Option<&BlockDeviceRef>, anchor: &LogicalCandidateAnchor) -> bool {
+    let Some(reference) = reference else {
+        return false;
+    };
+    reference.id == anchor.block_id
+        && anchor
+            .fingerprint
+            .as_ref()
+            .is_some_and(|fingerprint| fingerprint == &reference.fingerprint)
 }
 
 pub(crate) fn merge_logical_sources(
@@ -122,36 +222,45 @@ pub(crate) fn merge_logical_sources(
             entity
         })
         .collect();
-    entities.sort_by(|left, right| left.name.cmp(&right.name).then(left.id.cmp(&right.id)));
+    entities.sort_by(|left, right| {
+        left.display_name()
+            .cmp(right.display_name())
+            .then(left.id.cmp(&right.id))
+    });
     LogicalTopology::new(entities, sources)
         .map_err(|error| OperationError::Failed(error.to_string()))
 }
 
 fn merge_local_display_fields(udisks: &mut LogicalEntity, local: LogicalEntity) {
-    if udisks.uuid.is_none() {
-        udisks.uuid = local.uuid;
-    }
-    if udisks.device_path.is_none() {
-        udisks.device_path = local.device_path;
-    }
-    if udisks.used_bytes.is_none() {
-        udisks.used_bytes = local.used_bytes;
-    }
-    if udisks.free_bytes.is_none() {
-        udisks.free_bytes = local.free_bytes;
-    }
-    if udisks.health_status.is_none() {
-        udisks.health_status = local.health_status;
-    }
-    if udisks.progress_fraction.is_none() {
-        udisks.progress_fraction = local.progress_fraction;
-    }
-    for (key, value) in local.metadata {
-        udisks.metadata.entry(key).or_insert(value);
-    }
-    for member in local.members {
-        if !udisks.members.iter().any(|current| current.id == member.id) {
-            udisks.members.push(member);
+    match (&mut udisks.details, local.details) {
+        (
+            storage_types::LogicalEntityDetails::LvmVolumeGroup(udisks),
+            storage_types::LogicalEntityDetails::LvmVolumeGroup(local),
+        ) => {
+            merge_display(&mut udisks.uuid, local.uuid);
+            merge_display(&mut udisks.size, local.size);
+            merge_display(&mut udisks.used, local.used);
+            merge_display(&mut udisks.free, local.free);
         }
+        (
+            storage_types::LogicalEntityDetails::LvmLogicalVolume(udisks),
+            storage_types::LogicalEntityDetails::LvmLogicalVolume(local),
+        ) => {
+            merge_display(&mut udisks.device_path, local.device_path);
+            merge_display(&mut udisks.size, local.size);
+            merge_display(&mut udisks.activation, local.activation);
+        }
+        _ => {}
+    }
+}
+
+fn merge_display<T>(
+    target: &mut storage_types::LogicalDisplay<T>,
+    fallback: storage_types::LogicalDisplay<T>,
+) {
+    if matches!(target, storage_types::LogicalDisplay::Unknown { .. })
+        && matches!(fallback, storage_types::LogicalDisplay::Known(_))
+    {
+        *target = fallback;
     }
 }

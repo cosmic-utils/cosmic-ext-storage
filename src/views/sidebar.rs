@@ -10,7 +10,9 @@ use cosmic::iced::Length;
 use cosmic::widget::{self, icon};
 use cosmic::{Apply, Element};
 use std::collections::HashSet;
-use storage_types::{LogicalEntity, LogicalEntityId, LogicalEntityKind, VolumeKind};
+use storage_types::{
+    LogicalEntity, LogicalEntityDetails, LogicalEntityId, LogicalEntityKind, VolumeKind,
+};
 
 /// Fixed width for expander button (icon 16px + padding 2px * 2)
 const EXPANDER_WIDTH: u16 = 20;
@@ -252,23 +254,30 @@ fn image_section_header(controls_enabled: bool) -> Element<'static, Message> {
         .into()
 }
 
-struct SidebarTreeNode {
-    key: SidebarNodeKey,
-    selected: bool,
-    has_children: bool,
-    icon_name: &'static str,
-    title: Element<'static, Message>,
-    depth: u16,
-    select_message: Message,
-    actions: Vec<Element<'static, Message>>,
+/// A single row in the app's shared expandable tree control.
+///
+/// Logical detail views use this directly as well, so hierarchy has the same
+/// indentation, expander affordance, selection treatment, and action layout
+/// everywhere in the application.
+pub(crate) struct TreeNode {
+    pub(crate) key: SidebarNodeKey,
+    pub(crate) selected: bool,
+    pub(crate) has_children: bool,
+    pub(crate) icon_name: &'static str,
+    pub(crate) title: Element<'static, Message>,
+    pub(crate) depth: u16,
+    /// A tree row may be structural: its expander and trailing actions still
+    /// work, while clicking its label has no separate destination.
+    pub(crate) select_message: Option<Message>,
+    pub(crate) actions: Vec<Element<'static, Message>>,
 }
 
-fn tree_node_row(
+pub(crate) fn tree_node_row(
     sidebar: &SidebarState,
-    node: SidebarTreeNode,
+    node: TreeNode,
     controls_enabled: bool,
 ) -> Element<'static, Message> {
-    let SidebarTreeNode {
+    let TreeNode {
         key,
         selected,
         has_children,
@@ -293,21 +302,29 @@ fn tree_node_row(
             .height(EXPANDER_WIDTH)
             .into()
     };
-    let mut select_button = widget::button::custom(
+    let select_content =
         widget::Row::with_children(vec![icon::from_name(icon_name).size(16).into(), title])
             .spacing(8)
             .align_y(cosmic::iced::Alignment::Center)
-            .width(Length::Fill),
-    )
-    .padding(0)
-    .width(Length::Fill)
-    .class(transparent_button_class(selected));
-    if controls_enabled {
-        select_button = select_button.on_press(select_message);
-    }
+            .width(Length::Fill);
+    let select: Element<'static, Message> = if let Some(select_message) = select_message {
+        let mut select_button = widget::button::custom(select_content)
+            .padding(0)
+            .width(Length::Fill)
+            .class(transparent_button_class(selected));
+        if controls_enabled {
+            select_button = select_button.on_press(select_message);
+        }
+        select_button.into()
+    } else {
+        // Structural rows must not be represented by a disabled button: COSMIC
+        // correctly dims disabled content, but a Btrfs subvolume is readable
+        // even when selecting it has no separate detail page.
+        widget::container(select_content).width(Length::Fill).into()
+    };
     let row = widget::Row::with_children(vec![
         expander,
-        select_button.into(),
+        select,
         widget::Row::with_children(actions).spacing(4).into(),
     ])
     .spacing(8)
@@ -356,7 +373,7 @@ fn drive_row(
 
     tree_node_row(
         sidebar,
-        SidebarTreeNode {
+        TreeNode {
             key,
             selected,
             has_children: !drive.volumes.is_empty(),
@@ -365,9 +382,9 @@ fn drive_row(
                 .font(cosmic::font::semibold())
                 .into(),
             depth: 0,
-            select_message: Message::SidebarSelectDrive {
+            select_message: Some(Message::SidebarSelectDrive {
                 device_path: drive.device().to_string(),
-            },
+            }),
             actions,
         },
         controls_enabled,
@@ -414,7 +431,7 @@ fn volume_row(
 
     tree_node_row(
         sidebar,
-        SidebarTreeNode {
+        TreeNode {
             key,
             selected,
             has_children: !node.children.is_empty(),
@@ -423,7 +440,7 @@ fn volume_row(
                 .font(cosmic::font::semibold())
                 .into(),
             depth,
-            select_message: select_msg,
+            select_message: Some(select_msg),
             actions,
         },
         controls_enabled,
@@ -486,32 +503,48 @@ fn logical_entity_icon(kind: LogicalEntityKind) -> &'static str {
 }
 
 fn logical_entity_title(entity: &LogicalEntity) -> String {
-    if entity.name.trim().is_empty() {
-        entity.id.to_string()
-    } else {
-        entity.name.clone()
+    if let LogicalEntityDetails::BtrfsFilesystem(details) = &entity.details
+        && let Some(path) = details
+            .members
+            .iter()
+            .find_map(|member| member.display_path.as_known())
+    {
+        return format!("{path} — Btrfs");
     }
+    entity.display_name().to_string()
 }
 
 fn logical_entity_matches_candidate(entity: &LogicalEntity, candidate: &LogicalCandidate) -> bool {
     match candidate.kind {
         LogicalCandidateKind::Btrfs => {
             entity.kind == LogicalEntityKind::BtrfsFilesystem
-                && entity.device_path.as_deref() == Some(&candidate.device_path)
+                && matches!(
+                    &entity.details,
+                    storage_types::LogicalEntityDetails::BtrfsFilesystem(details)
+                        if details.members.iter().any(|member| {
+                            member.display_path.as_known() == Some(&candidate.device_path)
+                        })
+                )
         }
         LogicalCandidateKind::LvmPhysicalVolume => {
             entity.kind == LogicalEntityKind::LvmVolumeGroup
-                && entity.members.iter().any(|member| {
-                    member.kind == LogicalEntityKind::LvmPhysicalVolume
-                        && member.device_path.as_deref() == Some(&candidate.device_path)
-                })
+                && matches!(
+                    &entity.details,
+                    storage_types::LogicalEntityDetails::LvmVolumeGroup(details)
+                        if details.physical_volumes.iter().any(|member| {
+                            member.member.display_path.as_known() == Some(&candidate.device_path)
+                        })
+                )
         }
         LogicalCandidateKind::RaidMember => {
             entity.kind == LogicalEntityKind::MdRaidArray
-                && entity.members.iter().any(|member| {
-                    member.kind == LogicalEntityKind::MdRaidMember
-                        && member.device_path.as_deref() == Some(&candidate.device_path)
-                })
+                && matches!(
+                    &entity.details,
+                    storage_types::LogicalEntityDetails::MdRaidArray(details)
+                        if details.members.iter().any(|member| {
+                            member.display_path.as_known() == Some(&candidate.device_path)
+                        })
+                )
         }
     }
 }
@@ -527,58 +560,40 @@ fn logical_roots_for_candidate<'a>(
             entity.parent_id.is_none() && logical_entity_matches_candidate(entity, candidate)
         })
         .collect::<Vec<_>>();
-    roots.sort_by(|left, right| left.name.cmp(&right.name).then(left.id.cmp(&right.id)));
+    roots.sort_by(|left, right| {
+        left.display_name()
+            .cmp(right.display_name())
+            .then(left.id.cmp(&right.id))
+    });
     roots.retain(|entity| assigned_roots.insert(entity.id.clone()));
     roots
 }
 
-fn logical_children<'a>(
-    entities: &'a [LogicalEntity],
-    parent_id: &LogicalEntityId,
-) -> Vec<&'a LogicalEntity> {
-    let mut children = entities
-        .iter()
-        .filter(|entity| entity.parent_id.as_ref() == Some(parent_id))
-        .collect::<Vec<_>>();
-    children.sort_by(|left, right| left.name.cmp(&right.name).then(left.id.cmp(&right.id)));
-    children
-}
-
-fn push_logical_entity_tree(
-    out: &mut Vec<Element<'static, Message>>,
+fn logical_filesystem_row(
     sidebar: &SidebarState,
     state: &LogicalState,
     entity: &LogicalEntity,
-    depth: u16,
     controls_enabled: bool,
-) {
+) -> Element<'static, Message> {
     let key = SidebarNodeKey::LogicalEntity(entity.id.to_string());
-    let expanded = sidebar.is_expanded(&key);
-    let children = logical_children(&state.entities, &entity.id);
     let selected = state.selected.as_ref() == Some(&entity.id);
 
-    out.push(tree_node_row(
+    tree_node_row(
         sidebar,
-        SidebarTreeNode {
+        TreeNode {
             key,
             selected,
-            has_children: !children.is_empty(),
+            has_children: false,
             icon_name: logical_entity_icon(entity.kind),
             title: widget::text::body(logical_entity_title(entity))
                 .font(cosmic::font::semibold())
                 .into(),
-            depth,
-            select_message: Message::LogicalSelectionChanged(Some(entity.id.clone())),
+            depth: 0,
+            select_message: Some(Message::LogicalSelectionChanged(Some(entity.id.clone()))),
             actions: Vec::new(),
         },
         controls_enabled,
-    ));
-
-    if expanded {
-        for child in children {
-            push_logical_entity_tree(out, sidebar, state, child, depth + 1, controls_enabled);
-        }
-    }
+    )
 }
 
 fn logical_section(
@@ -591,32 +606,44 @@ fn logical_section(
 
     for candidate in logical_candidates(&sidebar.drives) {
         let roots = logical_roots_for_candidate(&state.entities, &candidate, &mut assigned_roots);
-        let key = SidebarNodeKey::LogicalCandidate(candidate.device_path.clone());
-        let expanded = sidebar.is_expanded(&key);
-        let selected = state.selected.is_none()
-            && state.selected_device.as_deref() == Some(candidate.device_path.as_str());
-
-        rows.push(tree_node_row(
-            sidebar,
-            SidebarTreeNode {
-                key,
-                selected,
-                has_children: !roots.is_empty(),
-                icon_name: candidate.kind.icon_name(),
-                title: logical_candidate_title(&candidate),
-                depth: 0,
-                select_message: Message::LogicalViewRequested {
-                    device_path: Some(candidate.device_path.clone()),
-                },
-                actions: Vec::new(),
-            },
-            controls_enabled,
-        ));
-
-        if expanded {
+        if !roots.is_empty() {
             for root in roots {
-                push_logical_entity_tree(&mut rows, sidebar, state, root, 1, controls_enabled);
+                rows.push(logical_filesystem_row(
+                    sidebar,
+                    state,
+                    root,
+                    controls_enabled,
+                ));
             }
+            continue;
+        }
+
+        // A second physical member can resolve to a filesystem already shown
+        // above. Do not duplicate it, but retain candidates with no loaded
+        // logical root so another filesystem can still be opened.
+        let resolves_to_shown_root = state.entities.iter().any(|entity| {
+            entity.parent_id.is_none() && logical_entity_matches_candidate(entity, &candidate)
+        });
+        if !resolves_to_shown_root {
+            let key = SidebarNodeKey::LogicalCandidate(candidate.device_path.clone());
+            let selected = state.selected.is_none()
+                && state.selected_device.as_deref() == Some(candidate.device_path.as_str());
+            rows.push(tree_node_row(
+                sidebar,
+                TreeNode {
+                    key,
+                    selected,
+                    has_children: false,
+                    icon_name: candidate.kind.icon_name(),
+                    title: logical_candidate_title(&candidate),
+                    depth: 0,
+                    select_message: Some(Message::LogicalViewRequested {
+                        device_path: Some(candidate.device_path.clone()),
+                    }),
+                    actions: Vec::new(),
+                },
+                controls_enabled,
+            ));
         }
     }
 
@@ -719,5 +746,6 @@ pub(crate) fn sidebar(
         widget::scrollable(widget::Column::with_children(rows).spacing(2)).height(Length::Fill),
     )
     .class(cosmic::style::Container::Card)
+    .height(Length::Fill)
     .into()
 }

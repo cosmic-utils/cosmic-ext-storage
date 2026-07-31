@@ -28,10 +28,42 @@ use cosmic::app::Task;
 use cosmic::cosmic_config::CosmicConfigEntry;
 use cosmic::dialog::file_chooser;
 use cosmic::widget::nav_bar;
+use storage_contracts::ConfirmedLogicalAction;
 use storage_types::{UsageCategory, UsageScanParallelismPreset};
 
 const USAGE_TOP_FILES_MIN: u32 = 1;
 const USAGE_TOP_FILES_MAX: u32 = 1000;
+
+fn execute_confirmed_logical_action(
+    app: &mut AppModel,
+    confirmed: ConfirmedLogicalAction,
+) -> Task<Message> {
+    if app.logical.confirmation.as_ref() != Some(&confirmed) {
+        return Task::none();
+    }
+    let entity = logical::action_entity(&confirmed.action);
+    let generation = match app.logical.begin_action(confirmed.action.clone(), entity) {
+        Ok(generation) => generation,
+        Err(error) => {
+            app.logical.action_status = Some(error);
+            return Task::none();
+        }
+    };
+    Task::perform(
+        async move {
+            let result = match shared().await {
+                Ok(operations) => operations
+                    .execute_logical_action(confirmed)
+                    .await
+                    .map(|_| ())
+                    .map_err(|error| error.to_string()),
+                Err(error) => Err(error.to_string()),
+            };
+            Message::LogicalActionFinished { generation, result }
+        },
+        |message| message.into(),
+    )
+}
 
 fn visible_usage_categories(result: &storage_types::UsageScanResult) -> Vec<UsageCategory> {
     result
@@ -147,23 +179,57 @@ pub(crate) fn update(app: &mut AppModel, message: Message) -> Task<Message> {
             app.network.select(None, None);
             app.network.clear_editor();
             app.sidebar.selected_child = None;
-            if let Some(device_path) = device_path.as_ref() {
-                app.sidebar
-                    .expand(SidebarNodeKey::LogicalCandidate(device_path.clone()));
-            }
-            app.logical.request_view(device_path);
+            app.logical.request_view(device_path.clone());
             if app.logical.loading {
                 return Task::none();
             }
+            if let Some(device_path) = device_path {
+                return Task::perform(
+                    async move {
+                        let result = match shared().await {
+                            Ok(operations) => operations
+                                .capture_logical_candidate(device_path.clone())
+                                .await
+                                .map_err(|error| error.to_string()),
+                            Err(error) => Err(error.to_string()),
+                        };
+                        Message::LogicalCandidateCaptured {
+                            device_path,
+                            result,
+                        }
+                    },
+                    |message| message.into(),
+                );
+            }
             return Task::done(cosmic::Action::App(Message::LoadLogicalEntities));
         }
+        Message::LogicalCandidateCaptured {
+            device_path,
+            result,
+        } => match result {
+            Ok(anchor) => {
+                app.logical.request_candidate(Some(anchor));
+                return Task::done(cosmic::Action::App(Message::LoadLogicalEntities));
+            }
+            Err(error) => {
+                app.logical.selected_device = Some(device_path);
+                app.logical.candidate_resolution =
+                    Some(storage_types::LogicalCandidateResolution::Unavailable {
+                        source: "UDisks".into(),
+                        reason: error,
+                    });
+            }
+        },
         Message::LoadLogicalEntities => {
             let generation = app.logical.begin_load();
+            let request = storage_types::LogicalLoadRequest {
+                anchor: app.logical.selected_candidate.clone(),
+            };
             return Task::perform(
                 async move {
                     let result = match shared().await {
                         Ok(operations) => operations
-                            .load_logical_topology()
+                            .load_logical_topology_for(request)
                             .await
                             .map_err(|error| error.to_string()),
                         Err(error) => Err(error.to_string()),
@@ -174,61 +240,226 @@ pub(crate) fn update(app: &mut AppModel, message: Message) -> Task<Message> {
             );
         }
         Message::LogicalEntitiesLoaded { generation, result } => {
-            app.logical.finish_load(generation, result);
+            app.logical.finish_load_result(generation, result);
         }
         Message::LogicalSelectionChanged(entity) => app.logical.select(entity),
-        Message::LogicalDetailTabSelected(tab) => app.logical.selected_tab = tab,
-        Message::LogicalActionPrompted(action) => {
-            app.logical.action_status =
-                Some(format!("Ready to {}", logical::action_label(&action)));
-            if app.dialog.is_none() {
-                app.dialog = Some(ShowDialog::LogicalActionConfirmation(
-                    crate::state::dialogs::LogicalActionConfirmationDialog {
-                        title: format!("Confirm {}", logical::action_label(&action)),
-                        body: logical::action_confirmation_body(&action),
-                        action,
-                        running: false,
-                    },
+        Message::LogicalActionFormRequested(form) => {
+            if app.dialog.is_none() && app.logical.pending.is_none() {
+                app.dialog = Some(ShowDialog::LogicalActionForm(
+                    crate::state::dialogs::LogicalActionFormDialog { form, error: None },
                 ));
             }
         }
+        Message::LogicalActionForm(message) => {
+            let Some(ShowDialog::LogicalActionForm(dialog)) = app.dialog.as_mut() else {
+                return Task::none();
+            };
+            match message {
+                crate::message::dialogs::LogicalActionFormMessage::PrimaryTextUpdate(value) => {
+                    dialog.form.set_primary_text(value);
+                    dialog.error = None;
+                }
+                crate::message::dialogs::LogicalActionFormMessage::SizeUpdate(value) => {
+                    dialog.form.set_size_text(value);
+                    dialog.error = None;
+                }
+                crate::message::dialogs::LogicalActionFormMessage::ReadOnlyUpdate(value) => {
+                    dialog.form.set_readonly(value);
+                }
+                crate::message::dialogs::LogicalActionFormMessage::Cancel => {
+                    app.dialog = None;
+                }
+                crate::message::dialogs::LogicalActionFormMessage::Submit => {
+                    match dialog.form.action() {
+                        Ok(action) => {
+                            app.dialog = None;
+                            return Task::done(cosmic::Action::App(
+                                Message::LogicalActionPrompted(action),
+                            ));
+                        }
+                        Err(error) => dialog.error = Some(error),
+                    }
+                }
+            }
+        }
+        Message::LogicalDevicePickerRequested(picker) => {
+            if app.dialog.is_some() || app.logical.pending.is_some() {
+                return Task::none();
+            }
+            let request_key = app.logical.begin_device_picker(picker);
+            app.logical.action_status = Some("Loading current eligible devices…".into());
+            return Task::perform(
+                async move {
+                    let result = match shared().await {
+                        Ok(operations) => operations
+                            .preflight_logical_action(storage_contracts::LogicalPreflightRequest {
+                                request_key: request_key.clone(),
+                            })
+                            .await
+                            .map_err(|error| error.to_string()),
+                        Err(error) => Err(error.to_string()),
+                    };
+                    Message::LogicalPreflightLoaded {
+                        request_key,
+                        result,
+                    }
+                },
+                |message| message.into(),
+            );
+        }
+        Message::LogicalDevicePickerSelected(device) => {
+            let Some(ShowDialog::LogicalDevicePicker(dialog)) = app.dialog.as_ref() else {
+                return Task::none();
+            };
+            let selected = dialog.candidates.iter().any(|candidate| {
+                matches!(candidate, storage_contracts::LogicalDeviceCandidate::Ready { device: ready, .. } if ready == &device)
+            });
+            if !selected {
+                app.logical.action_status =
+                    Some("That device is no longer an eligible candidate.".into());
+                return Task::none();
+            }
+            let Some(ShowDialog::LogicalDevicePicker(dialog)) = app.dialog.take() else {
+                unreachable!("the checked device picker dialog remains active")
+            };
+            app.logical.invalidate_draft();
+            return Task::done(cosmic::Action::App(Message::LogicalActionPrompted(
+                dialog.picker.action(device),
+            )));
+        }
+        Message::LogicalDevicePickerCancelled => {
+            if matches!(app.dialog, Some(ShowDialog::LogicalDevicePicker(_))) {
+                app.dialog = None;
+                app.logical.invalidate_draft();
+                app.logical.action_status = None;
+            }
+        }
+        Message::LogicalActionPrompted(action) => {
+            if app.dialog.is_some() || app.logical.pending.is_some() {
+                return Task::none();
+            }
+            let target = logical::action_entity(&action);
+            let request_key = app.logical.begin_draft(action, target);
+            app.logical.action_status = Some("Reviewing current logical storage…".into());
+            return Task::perform(
+                async move {
+                    let result = match shared().await {
+                        Ok(operations) => operations
+                            .preflight_logical_action(storage_contracts::LogicalPreflightRequest {
+                                request_key: request_key.clone(),
+                            })
+                            .await
+                            .map_err(|error| error.to_string()),
+                        Err(error) => Err(error.to_string()),
+                    };
+                    Message::LogicalPreflightLoaded {
+                        request_key,
+                        result,
+                    }
+                },
+                |message| message.into(),
+            );
+        }
+        Message::LogicalPreflightLoaded {
+            request_key,
+            result,
+        } => match result {
+            Ok(preflight) => {
+                if preflight.key.request_key != request_key
+                    || !app.logical.accept_preflight(preflight.clone())
+                {
+                    return Task::none();
+                }
+                if let Some(picker) = app.logical.device_picker.take() {
+                    match &preflight.availability {
+                        storage_contracts::LogicalPreflightAvailability::Ready => {
+                            app.logical.action_status = None;
+                            app.dialog = Some(ShowDialog::LogicalDevicePicker(
+                                crate::state::dialogs::LogicalDevicePickerDialog {
+                                    picker,
+                                    candidates: preflight.device_candidates.clone(),
+                                },
+                            ));
+                        }
+                        storage_contracts::LogicalPreflightAvailability::Blocked { reason } => {
+                            app.logical.action_status = Some(reason.clone());
+                        }
+                    }
+                    return Task::none();
+                }
+                match &preflight.availability {
+                    storage_contracts::LogicalPreflightAvailability::Ready => {
+                        let confirmed = match app.logical.confirm_draft() {
+                            Ok(confirmed) => confirmed,
+                            Err(error) => {
+                                app.logical.action_status = Some(error);
+                                return Task::none();
+                            }
+                        };
+                        if app.logical.draft.as_ref().is_some_and(|draft| {
+                            logical::executes_from_single_step_form(&draft.action)
+                        }) {
+                            app.logical.action_status = Some(
+                                match &confirmed.action {
+                                    storage_contracts::LogicalAction::CreateBtrfsSnapshot {
+                                        ..
+                                    } => "Creating snapshot…",
+                                    _ => "Creating subvolume…",
+                                }
+                                .into(),
+                            );
+                            return Task::done(cosmic::Action::App(Message::LogicalActionExecute(
+                                confirmed,
+                            )));
+                        }
+                        app.logical.action_status = Some("Ready for confirmation".into());
+                        if let Some(draft) = &app.logical.draft {
+                            app.dialog = Some(ShowDialog::LogicalActionConfirmation(
+                                crate::state::dialogs::LogicalActionConfirmationDialog {
+                                    title: format!(
+                                        "Confirm {}",
+                                        logical::action_label(&draft.action)
+                                    ),
+                                    body: logical::action_confirmation_body(&draft.action),
+                                    confirmed,
+                                    running: false,
+                                },
+                            ));
+                        }
+                    }
+                    storage_contracts::LogicalPreflightAvailability::Blocked { reason } => {
+                        app.logical.action_status = Some(reason.clone());
+                    }
+                }
+            }
+            Err(error) => {
+                if app.logical.preflight_request.as_ref() == Some(&request_key) {
+                    app.logical.action_status = Some(error);
+                }
+            }
+        },
         Message::LogicalActionCancelled => {
             if app.logical.pending.is_none() {
                 app.logical.action_status = None;
+                app.logical.invalidate_draft();
                 if matches!(app.dialog, Some(ShowDialog::LogicalActionConfirmation(_))) {
                     app.dialog = None;
                 }
             }
         }
-        Message::LogicalActionConfirmed(action) => {
+        Message::LogicalActionConfirmed(confirmed) => {
             if let Some(ShowDialog::LogicalActionConfirmation(dialog)) = app.dialog.as_mut() {
-                if dialog.action != action || dialog.running {
+                if dialog.confirmed != confirmed || dialog.running {
                     return Task::none();
                 }
                 dialog.running = true;
+            } else {
+                return Task::none();
             }
-            let entity = logical::action_entity(&action);
-            let generation = match app.logical.begin_action(action.clone(), entity) {
-                Ok(generation) => generation,
-                Err(error) => {
-                    app.logical.action_status = Some(error);
-                    return Task::none();
-                }
-            };
-            return Task::perform(
-                async move {
-                    let result = match shared().await {
-                        Ok(operations) => operations
-                            .execute_logical_action(action)
-                            .await
-                            .map(|_| ())
-                            .map_err(|error| error.to_string()),
-                        Err(error) => Err(error.to_string()),
-                    };
-                    Message::LogicalActionFinished { generation, result }
-                },
-                |message| message.into(),
-            );
+            return execute_confirmed_logical_action(app, confirmed);
+        }
+        Message::LogicalActionExecute(confirmed) => {
+            return execute_confirmed_logical_action(app, confirmed);
         }
         Message::LogicalActionProgressed {
             generation,
@@ -238,15 +469,28 @@ pub(crate) fn update(app: &mut AppModel, message: Message) -> Task<Message> {
         }
         Message::LogicalActionFinished { generation, result } => {
             let succeeded = result.is_ok();
+            let failure = result.as_ref().err().cloned();
             if app.logical.finish_action(generation, result) {
                 if matches!(app.dialog, Some(ShowDialog::LogicalActionConfirmation(_))) {
                     app.dialog = None;
                 }
                 if succeeded {
+                    app.logical.invalidate_draft();
                     return Task::batch([
                         Task::done(cosmic::Action::App(Message::LoadLogicalEntities)),
                         Task::done(cosmic::Action::App(Message::LoadDrivesIncremental)),
                     ]);
+                }
+                if let (Some(draft), Some(error)) = (&app.logical.draft, failure)
+                    && let Some(form) =
+                        crate::state::dialogs::LogicalActionForm::from_action(&draft.action)
+                {
+                    app.dialog = Some(ShowDialog::LogicalActionForm(
+                        crate::state::dialogs::LogicalActionFormDialog {
+                            form,
+                            error: Some(error),
+                        },
+                    ));
                 }
             }
         }

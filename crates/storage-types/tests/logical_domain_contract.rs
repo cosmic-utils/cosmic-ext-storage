@@ -1,19 +1,31 @@
 use std::collections::BTreeMap;
 
 use storage_types::{
-    BlockDeviceFingerprint, BlockDeviceId, BlockDeviceRef, ConfirmedDestructiveScope,
-    LogicalBlockedReason, LogicalCapabilities, LogicalEntity, LogicalEntityId, LogicalEntityKind,
-    LogicalOperation, LogicalSource, LogicalSourceAvailability, LogicalSourceStatus,
-    LogicalTopology, ProgressRatio, btrfs_default_subvolume_id,
+    BlockDeviceFingerprint, BlockDeviceId, BlockDeviceRef, BtrfsRelativePath, BtrfsSubvolumeRef,
+    ConfirmedDestructiveScope, LogicalBlockedReason, LogicalCapabilities, LogicalDisplay,
+    LogicalEntity, LogicalEntityDetails, LogicalEntityId, LogicalEntityKind, LogicalOperation,
+    LogicalSource, LogicalSourceAvailability, LogicalSourceStatus, LogicalTopology,
+    LvmVolumeGroupDetails, ProgressRatio, btrfs_default_subvolume_id,
 };
 
 fn entity(id: &str, name: &str) -> LogicalEntity {
     LogicalEntity {
         id: LogicalEntityId::new(id).unwrap(),
         kind: LogicalEntityKind::LvmVolumeGroup,
+        details: LogicalEntityDetails::LvmVolumeGroup(LvmVolumeGroupDetails {
+            name: name.to_string(),
+            uuid: LogicalDisplay::unknown("fixture"),
+            size: LogicalDisplay::known(100),
+            used: LogicalDisplay::known(75),
+            free: LogicalDisplay::known(25),
+            logical_volumes: Vec::new(),
+            physical_volumes: Vec::new(),
+        }),
+        parent_id: None,
+        capabilities: LogicalCapabilities::default(),
+        metadata: BTreeMap::new(),
         name: name.to_string(),
         uuid: None,
-        parent_id: None,
         device_path: None,
         size_bytes: 100,
         used_bytes: None,
@@ -21,8 +33,6 @@ fn entity(id: &str, name: &str) -> LogicalEntity {
         health_status: None,
         progress_fraction: Some(ProgressRatio::from_fraction(0.5)),
         members: Vec::new(),
-        capabilities: LogicalCapabilities::default(),
-        metadata: BTreeMap::new(),
     }
 }
 
@@ -102,4 +112,19 @@ fn btrfs_default_id_range_is_u32() {
     assert_eq!(btrfs_default_subvolume_id(1).unwrap().get(), 1);
     assert!(btrfs_default_subvolume_id(0).is_err());
     assert!(btrfs_default_subvolume_id(u64::from(u32::MAX) + 1).is_err());
+}
+
+#[test]
+fn btrfs_reference_keeps_path_as_an_expectation_not_a_raw_action_value() {
+    assert!(BtrfsRelativePath::new("/host/path").is_err());
+    assert!(BtrfsRelativePath::new("nested/../unsafe").is_err());
+    let reference = BtrfsSubvolumeRef {
+        filesystem: LogicalEntityId::new("btrfs:fixture").unwrap(),
+        id: std::num::NonZeroU64::new(42).unwrap(),
+        expected_relative_path: BtrfsRelativePath::new("home/snapshot").unwrap(),
+        expected_parent_id: None,
+        observed_topology_epoch: 9,
+    };
+    assert_eq!(reference.expected_relative_path.as_str(), "home/snapshot");
+    assert_eq!(reference.observed_topology_epoch, 9);
 }

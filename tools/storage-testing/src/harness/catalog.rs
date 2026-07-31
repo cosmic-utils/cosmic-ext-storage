@@ -118,6 +118,18 @@ pub const CASES: &[CaseDefinition] = &[
         safety: SafetyClass::Destructive,
     },
     CaseDefinition {
+        id: "logical.btrfs.primary_ordering",
+        suite: "logical",
+        fixture_requirements: &["3disk"],
+        safety: SafetyClass::Destructive,
+    },
+    CaseDefinition {
+        id: "logical.btrfs.subvolume_ref_conflict",
+        suite: "logical",
+        fixture_requirements: &["3disk"],
+        safety: SafetyClass::Destructive,
+    },
+    CaseDefinition {
         id: "logical.list_entities.schema_integrity",
         suite: "logical",
         fixture_requirements: &["3disk"],
@@ -243,5 +255,13 @@ mod tests {
                 .iter()
                 .all(|case| case.safety == SafetyClass::NonDestructive)
         );
+    }
+
+    #[test]
+    fn full_logical_suite_contains_btrfs_identity_regressions() {
+        let selected = select_cases(Profile::FullLab, Some("logical"), &[]).unwrap();
+        let ids: Vec<_> = selected.iter().map(|case| case.id).collect();
+        assert!(ids.contains(&"logical.btrfs.primary_ordering"));
+        assert!(ids.contains(&"logical.btrfs.subvolume_ref_conflict"));
     }
 }

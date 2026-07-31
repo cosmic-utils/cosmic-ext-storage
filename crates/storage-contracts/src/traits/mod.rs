@@ -18,9 +18,13 @@ pub use disk::DriveOperations;
 pub use filesystem::FilesystemOperations;
 pub use image::ImageDeviceOperations;
 pub use logical::{
-    BtrfsResizeRequest, ConfigurationCleanupPolicy, LogicalAction, LogicalActionOutcome,
-    LogicalOperations, LogicalTopologySource, LvmWipePolicy, MdRaidCreateProfile, MdRaidLevel,
-    MdRaidMemberWipePolicy, MdRaidName, MdRaidSyncAction,
+    BtrfsResizeRequest, ByteSizeConstraint, CandidateBlockReason, ConfigurationCleanupPolicy,
+    ConfirmedLogicalAction, DestructiveScopePolicy, LogicalAction, LogicalActionKind,
+    LogicalActionOutcome, LogicalCandidateDisplay, LogicalDeviceCandidate, LogicalInputConstraints,
+    LogicalOperations, LogicalPreflight, LogicalPreflightAvailability, LogicalPreflightKey,
+    LogicalPreflightRequest, LogicalPreflightRequestKey, LogicalPreflightTarget, LogicalReviewData,
+    LogicalTopologySource, LvmWipePolicy, MdRaidCreateProfile, MdRaidLevel, MdRaidMemberWipePolicy,
+    MdRaidName, MdRaidProfileOption, MdRaidSyncAction, MemberRemovalPolicy,
 };
 pub use luks::EncryptionOperations;
 pub use network::NetworkDriveBackend;

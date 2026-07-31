@@ -9,8 +9,10 @@ use std::{collections::BTreeMap, process::Command, sync::Arc};
 use async_trait::async_trait;
 use storage_contracts::{LogicalTopologySource, StorageError, StorageErrorKind};
 use storage_types::{
-    LogicalCapabilities, LogicalEntity, LogicalEntityId, LogicalEntityKind, LogicalMember,
-    LogicalMemberId, LogicalSource, LogicalSourceAvailability,
+    LogicalCapabilities, LogicalDisplay, LogicalEntity, LogicalEntityDetails, LogicalEntityId,
+    LogicalEntityKind, LogicalMember, LogicalMemberId, LogicalSource, LogicalSourceAvailability,
+    LvmActivationState, LvmLogicalVolumeDetails, LvmLogicalVolumeSummary, LvmPhysicalVolumeDetails,
+    LvmPhysicalVolumeState, LvmPhysicalVolumeSummary, LvmVolumeGroupDetails,
 };
 
 const VGS_ARGS: &[&str] = &[
@@ -291,6 +293,8 @@ fn entities_from_lvm(vgs: Vec<VgRow>, lvs: Vec<LvRow>, pvs: Vec<PvRow>) -> Vec<L
     for vg in vgs {
         let id = LogicalEntityId(format!("lvm-vg:{}", vg.uuid));
         let mut members = Vec::new();
+        let mut logical_volumes = Vec::new();
+        let mut physical_volumes = Vec::new();
         for lv in lvs.iter().filter(|lv| lv.vg_uuid == vg.uuid) {
             members.push(LogicalMember {
                 id: LogicalMemberId(format!("member:lvm-lv:{}:{}", vg.uuid, lv.name)),
@@ -305,9 +309,24 @@ fn entities_from_lvm(vgs: Vec<VgRow>, lvs: Vec<LvRow>, pvs: Vec<PvRow>) -> Vec<L
             entities.push(LogicalEntity {
                 id: LogicalEntityId(format!("lvm-lv:{}:{}", vg.uuid, lv.name)),
                 kind: LogicalEntityKind::LvmLogicalVolume,
+                details: LogicalEntityDetails::LvmLogicalVolume(LvmLogicalVolumeDetails {
+                    name: lv.name.clone(),
+                    volume_group: id.clone(),
+                    device_path: LogicalDisplay::unknown(
+                        "Local tools do not report the LV device path",
+                    ),
+                    size: LogicalDisplay::known(lv.size),
+                    activation: LogicalDisplay::known(if lv.active {
+                        LvmActivationState::Active
+                    } else {
+                        LvmActivationState::Inactive
+                    }),
+                }),
+                parent_id: Some(id.clone()),
+                capabilities: LogicalCapabilities::block_all("Not discovered by UDisks"),
+                metadata: BTreeMap::new(),
                 name: lv.name.clone(),
                 uuid: None,
-                parent_id: Some(id.clone()),
                 device_path: None,
                 size_bytes: lv.size,
                 used_bytes: None,
@@ -315,8 +334,16 @@ fn entities_from_lvm(vgs: Vec<VgRow>, lvs: Vec<LvRow>, pvs: Vec<PvRow>) -> Vec<L
                 health_status: Some(if lv.active { "active" } else { "inactive" }.into()),
                 progress_fraction: None,
                 members: Vec::new(),
-                capabilities: LogicalCapabilities::block_all("Not discovered by UDisks"),
-                metadata: BTreeMap::new(),
+            });
+            logical_volumes.push(LvmLogicalVolumeSummary {
+                entity_id: LogicalEntityId(format!("lvm-lv:{}:{}", vg.uuid, lv.name)),
+                name: lv.name.clone(),
+                size: LogicalDisplay::known(lv.size),
+                activation: LogicalDisplay::known(if lv.active {
+                    LvmActivationState::Active
+                } else {
+                    LvmActivationState::Inactive
+                }),
             });
         }
         for pv in pvs
@@ -333,13 +360,36 @@ fn entities_from_lvm(vgs: Vec<VgRow>, lvs: Vec<LvRow>, pvs: Vec<PvRow>) -> Vec<L
                 state: None,
                 size_bytes: Some(pv.size),
             });
+            physical_volumes.push(LvmPhysicalVolumeSummary {
+                entity_id: LogicalEntityId(format!("lvm-pv:local:{}", pv.path)),
+                member: LvmPhysicalVolumeDetails {
+                    block: None,
+                    display_path: LogicalDisplay::known(pv.path.clone()),
+                    size: LogicalDisplay::known(pv.size),
+                    state: LogicalDisplay::known(LvmPhysicalVolumeState::Available),
+                },
+            });
         }
         entities.push(LogicalEntity {
             id,
             kind: LogicalEntityKind::LvmVolumeGroup,
+            details: LogicalEntityDetails::LvmVolumeGroup(LvmVolumeGroupDetails {
+                name: vg.name.clone(),
+                uuid: LogicalDisplay::known(vg.uuid.clone()),
+                size: LogicalDisplay::known(vg.size),
+                used: LogicalDisplay::known(vg.size.saturating_sub(vg.free)),
+                free: LogicalDisplay::known(vg.free),
+                logical_volumes,
+                physical_volumes,
+            }),
+            parent_id: None,
+            capabilities: LogicalCapabilities::block_all("Not discovered by UDisks"),
+            metadata: BTreeMap::from([
+                ("pv_count".into(), vg.pv_count.to_string()),
+                ("lv_count".into(), vg.lv_count.to_string()),
+            ]),
             name: vg.name,
             uuid: Some(vg.uuid),
-            parent_id: None,
             device_path: None,
             size_bytes: vg.size,
             used_bytes: Some(vg.size.saturating_sub(vg.free)),
@@ -347,14 +397,13 @@ fn entities_from_lvm(vgs: Vec<VgRow>, lvs: Vec<LvRow>, pvs: Vec<PvRow>) -> Vec<L
             health_status: None,
             progress_fraction: None,
             members,
-            capabilities: LogicalCapabilities::block_all("Not discovered by UDisks"),
-            metadata: BTreeMap::from([
-                ("pv_count".into(), vg.pv_count.to_string()),
-                ("lv_count".into(), vg.lv_count.to_string()),
-            ]),
         });
     }
-    entities.sort_by(|left, right| left.name.cmp(&right.name).then(left.id.cmp(&right.id)));
+    entities.sort_by(|left, right| {
+        left.display_name()
+            .cmp(right.display_name())
+            .then(left.id.cmp(&right.id))
+    });
     entities
 }
 

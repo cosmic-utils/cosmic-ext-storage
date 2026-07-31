@@ -159,9 +159,15 @@ pub(crate) fn dialog(app: &AppModel) -> Option<Element<'_, Message>> {
             | crate::state::dialogs::ShowDialog::FormatDisk(_)
             | crate::state::dialogs::ShowDialog::NewDiskImage(_)
             | crate::state::dialogs::ShowDialog::AttachDiskImage(_)
-            | crate::state::dialogs::ShowDialog::ImageOperation(_)
-            | crate::state::dialogs::ShowDialog::BtrfsCreateSubvolume(_)
-            | crate::state::dialogs::ShowDialog::BtrfsCreateSnapshot(_) => None,
+            | crate::state::dialogs::ShowDialog::ImageOperation(_) => None,
+
+            crate::state::dialogs::ShowDialog::LogicalActionForm(state) => {
+                Some(dialogs::logical_action_form(state.clone()))
+            }
+
+            crate::state::dialogs::ShowDialog::LogicalDevicePicker(state) => {
+                Some(dialogs::logical_device_picker(state.clone()))
+            }
 
             crate::state::dialogs::ShowDialog::LogicalActionConfirmation(state) => {
                 Some(dialogs::logical_confirmation(state.clone()))
@@ -247,8 +253,6 @@ fn full_page_wizard_view(dialog: &ShowDialog) -> Option<Element<'_, Message>> {
             Some(dialogs::attach_disk_image(state.as_ref().clone()))
         }
         ShowDialog::ImageOperation(state) => Some(dialogs::image_operation(state.as_ref().clone())),
-        ShowDialog::BtrfsCreateSubvolume(state) => Some(dialogs::create_subvolume(state.clone())),
-        ShowDialog::BtrfsCreateSnapshot(state) => Some(dialogs::create_snapshot(state.clone())),
         _ => None,
     }
 }
@@ -272,9 +276,11 @@ pub(crate) fn nav_bar(app: &AppModel) -> Option<Element<'_, cosmic::Action<Messa
     .apply(widget::container)
     .padding(8)
     .class(cosmic::style::Container::Background)
-    // Both width and height must be Shrink for flex layout to respect the max_width constraint
+    // Keep the card constrained horizontally while it fills the navigation
+    // column. A shrink-wrapped height leaves the glass surface stranded above
+    // the bottom of the window.
     .width(cosmic::iced::Length::Shrink)
-    .height(cosmic::iced::Length::Shrink);
+    .height(cosmic::iced::Length::Fill);
 
     if !app.core.is_condensed() {
         nav = nav.max_width(280);
@@ -327,7 +333,16 @@ pub(crate) fn view(app: &AppModel) -> Element<'_, Message> {
     }
 
     if app.logical.view_requested {
-        return crate::views::logical::detail(&app.logical);
+        if let Some(volumes_control) = app.nav.active_data::<VolumesControl>()
+            && volumes_control.detail_tab == DetailTab::Usage
+        {
+            return widget::container(usage_tab_view(volumes_control))
+                .padding(20)
+                .width(Length::Fill)
+                .height(Length::Fill)
+                .into();
+        }
+        return crate::views::logical::detail(&app.logical, &app.sidebar, app.dialog.is_none());
     }
 
     match app.nav.active_data::<UiDrive>() {
@@ -564,7 +579,7 @@ fn usage_category_label(category: UsageCategory) -> String {
     }
 }
 
-fn usage_tab_view<'a>(volumes_control: &'a VolumesControl) -> Element<'a, Message> {
+pub(crate) fn usage_tab_view<'a>(volumes_control: &'a VolumesControl) -> Element<'a, Message> {
     let usage_state = &volumes_control.usage_state;
 
     if usage_state.loading {
