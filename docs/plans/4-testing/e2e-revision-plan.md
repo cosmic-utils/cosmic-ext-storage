@@ -2,8 +2,9 @@
 
 **Status:** R0–R3 are implemented. R3's application semantic-accessibility
 gate was resolved on 2026-08-01 with a reviewed, temporary maintained
-`libcosmic`/`iced` fork pinned in this workspace. The capability run now proves
-real AT-SPI widget descendants and interactive controls. R4's v2 case executor,
+`libcosmic`/`iced` fork pinned on the dedicated `4-ui-testing` branch. The
+capability run there proves real AT-SPI widget descendants and interactive
+controls. R4's v2 case executor,
 application automation IDs/editable-field support, reviewed accessibility/PNG
 goldens, and R5 CI migration remain pending; they must not be represented as
 implemented merely because the transport gate now passes. This document
@@ -816,7 +817,7 @@ tree.
 preceding determination records the failure at the original pinned upstream
 revision. It is superseded by the following repeatable result.
 
-The workspace now pins `stoorps/libcosmic` commit
+The dedicated `4-ui-testing` branch pins `stoorps/libcosmic` commit
 `3d5fdb087534fb4944e64da2346f3bb673cc0215`, based on the requested upstream
 base `ef162b8e16ba4493e05c169cd56c7b9f77f0fda5`. Its `iced` submodule points to
 `stoorps/iced` commit `25c211d8b1c0f456fd327b65be5261311b1d7692`. The branch is
