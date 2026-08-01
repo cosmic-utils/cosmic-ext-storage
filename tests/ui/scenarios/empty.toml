@@ -1,0 +1,10 @@
+schema_version = 2
+id = "blank-state"
+description = "An intentionally blank scenario used only for unsupported-operation tests."
+
+[backend]
+id = "ui-scenario"
+capabilities = []
+
+[world]
+revision = 0

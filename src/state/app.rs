@@ -3,6 +3,7 @@
 use crate::config::Config;
 use crate::fl;
 use crate::message::app::Message;
+use crate::runtime::AppRuntime;
 use crate::state::dialogs::ShowDialog;
 use crate::state::logical::LogicalState;
 use crate::state::network::NetworkState;
@@ -22,6 +23,9 @@ pub enum ContextPage {
 /// The application model stores app-specific state used to describe its interface and
 /// drive its logic.
 pub struct AppModel {
+    /// The explicitly selected storage composition for this application run.
+    #[allow(dead_code)]
+    pub(crate) runtime: AppRuntime,
     /// Application state which is managed by the COSMIC runtime.
     pub(crate) core: Core,
     /// Display a context drawer with the designated page if defined.

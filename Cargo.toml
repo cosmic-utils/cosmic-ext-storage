@@ -6,6 +6,9 @@ license = "GPL-3.0-only"
 description = "A Storage utility for the COSMIC™ desktop"
 repository = "https://github.com/cosmic-utils/cosmic-ext-storage"
 
+[lib]
+doctest = false
+
 [features]
 default = [
     "btrfs-tools",
@@ -27,12 +30,14 @@ fs-btrfs = []
 fs-vfat = []
 fs-ntfs = []
 fs-exfat = []
+test-backend = ["dep:test-backend"]
 
 [build-dependencies]
 vergen = { workspace = true }
 
 [dependencies]
 anyhow.workspace = true
+async-trait.workspace = true
 futures-util.workspace = true
 i18n-embed.workspace = true
 i18n-embed-fl.workspace = true
@@ -54,6 +59,7 @@ tracing-appender.workspace = true
 tracing-subscriber.workspace = true
 uuid.workspace = true
 which.workspace = true
+test-backend = { path = "crates/test-backend", optional = true }
 
 [workspace]
 members = [
@@ -62,6 +68,7 @@ members = [
     "crates/storage-btrfs",
     "crates/storage-types",
     "crates/storage-contracts",
+    "crates/test-backend",
     "crates/storage-sys",
     "tools/storage-testing",
 ]
@@ -98,6 +105,8 @@ uuid = { version = "1.21.0", features = ["serde", "v4"] }
 chrono = { version = "0.4.44", features = ["serde"] }
 clap = { version = "4.5.60", features = ["derive"] }
 async-trait = "0.1.89"
+base64 = "0.22.1"
+sha2 = "0.10.9"
 
 # workspace dependencies
 storage-udisks = { package = "storage-udisks", path = "crates/storage-udisks", version = "0.1.0" }

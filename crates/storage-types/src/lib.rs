@@ -37,6 +37,7 @@ pub mod rclone;
 pub mod smart;
 pub mod usage_scan;
 pub mod volume;
+pub mod workflow;
 
 pub use btrfs::{BtrfsSubvolume, DeletedSubvolume, FilesystemUsage, SubvolumeList};
 pub use common::{
@@ -94,3 +95,8 @@ pub use usage_scan::{
     UsageTopFileEntry,
 };
 pub use volume::{VolumeInfo, VolumeKind, VolumeType};
+pub use workflow::{
+    DesktopImageSelection, ImageAssetRef, ImageAttachment, ImageAttachmentRequest, ImageCopyKind,
+    ImageCopyRequest, ImageWorkflowStatus, UsageDeleteRequest, UsageDeleteResponse,
+    UsageWorkflowRequest, UsageWorkflowStatus, WorkflowState,
+};

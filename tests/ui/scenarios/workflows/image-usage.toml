@@ -1,0 +1,39 @@
+schema_version = 2
+id = "workflow-image-usage"
+description = "Virtual-time image copy and usage scan progress with an in-memory deletion result."
+
+[backend]
+id = "ui-scenario"
+capabilities = ["image", "usage"]
+
+[world]
+revision = 0
+
+[[world.workflows.images]]
+id = "image"
+size_bytes = 1000
+
+[world.workflows.image_copy]
+total_bytes = 1000
+terminal = "completed"
+effects = [
+  { at_ms = 0, completed_bytes = 0 },
+  { at_ms = 250, completed_bytes = 250 },
+  { at_ms = 500, completed_bytes = 500 },
+  { at_ms = 750, completed_bytes = 750 },
+  { at_ms = 1000, completed_bytes = 1000 },
+]
+
+[world.workflows.usage_scan]
+total_bytes = 1000
+terminal = "completed"
+effects = [
+  { at_ms = 0, completed_bytes = 0 },
+  { at_ms = 500, completed_bytes = 500 },
+  { at_ms = 1000, completed_bytes = 1000 },
+]
+
+[[world.workflows.usage_files]]
+id = "cache-file"
+mount = "/mnt/ui-data"
+bytes = 1000

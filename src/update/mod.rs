@@ -110,10 +110,17 @@ fn usage_filtered_file_paths(state: &UsageTabState) -> Vec<String> {
 pub(crate) fn update(app: &mut AppModel, message: Message) -> Task<Message> {
     match message {
         Message::OpenRepositoryUrl => {
-            _ = open::that_detached(REPOSITORY);
+            let desktop = app.runtime.desktop();
+            let repository = REPOSITORY.to_string();
+            return Task::perform(async move { desktop.open_url(&repository).await }, |_| {
+                Message::None.into()
+            });
         }
         Message::OpenPath(path) => {
-            _ = open::that_detached(path);
+            let desktop = app.runtime.desktop();
+            return Task::perform(async move { desktop.reveal(&path).await }, |_| {
+                Message::None.into()
+            });
         }
         Message::ToggleContextPage(context_page) => {
             if app.context_page == context_page {

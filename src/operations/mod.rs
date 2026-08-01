@@ -9,8 +9,9 @@
 use std::{collections::BTreeMap, sync::Arc};
 
 use storage_contracts::{
-    BlockStorageBackend, BtrfsBackend, LogicalOperations, LogicalTopologySource,
-    NetworkDriveBackend,
+    BlockStorageBackend, BtrfsBackend, FilesystemToolDiscovery, ImageWorkflowOperations,
+    LogicalOperations, LogicalTopologySource, NetworkDriveBackend, RuntimeAdapters,
+    UsageOperations,
 };
 use storage_types::{NetworkBackendAvailability, NetworkBackendId};
 use tokio::sync::OnceCell;
@@ -66,6 +67,9 @@ impl BackendRegistry {
 pub struct StorageOperations {
     pub registry: BackendRegistry,
     pub filesystem_tools: Vec<storage_types::FilesystemToolInfo>,
+    pub filesystem_tool_discovery: Arc<dyn FilesystemToolDiscovery>,
+    pub usage_operations: Arc<dyn UsageOperations>,
+    pub image_workflows: Arc<dyn ImageWorkflowOperations>,
     pub image_manager: image::ImageOperationManager,
 }
 
@@ -124,19 +128,66 @@ impl StorageOperations {
                 logical_operations,
             },
             filesystem_tools: filesystems::detect_filesystem_tools(),
+            filesystem_tool_discovery: Arc::new(StaticFilesystemTools(
+                filesystems::detect_filesystem_tools(),
+            )),
+            usage_operations: Arc::new(filesystems::ProductionUsageOperations::default()),
+            image_workflows: Arc::new(crate::runtime::UnavailableWorkflowAdapter),
+            image_manager: image::ImageOperationManager::default(),
+        }))
+    }
+
+    pub fn from_adapters(adapters: RuntimeAdapters) -> Result<Arc<Self>, OperationError> {
+        adapters.validate()?;
+        let mut network = BTreeMap::new();
+        for backend in adapters.network {
+            network.insert(backend.id(), backend);
+        }
+        let network_availability = adapters.network_availability.into_iter().collect();
+        Ok(Arc::new(Self {
+            registry: BackendRegistry {
+                block: adapters.block,
+                btrfs: adapters.btrfs,
+                network,
+                network_availability,
+                logical_topology_sources: adapters.logical_topology_sources,
+                logical_operations: adapters.logical_operations,
+            },
+            filesystem_tools: Vec::new(),
+            filesystem_tool_discovery: adapters.filesystem_tools,
+            usage_operations: adapters.usage,
+            image_workflows: adapters.image,
             image_manager: image::ImageOperationManager::default(),
         }))
     }
 }
 
+struct StaticFilesystemTools(Vec<storage_types::FilesystemToolInfo>);
+
+#[async_trait::async_trait]
+impl FilesystemToolDiscovery for StaticFilesystemTools {
+    async fn list_filesystem_tools(
+        &self,
+    ) -> Result<Vec<storage_types::FilesystemToolInfo>, storage_contracts::StorageError> {
+        Ok(self.0.clone())
+    }
+}
+
 static SHARED_OPERATIONS: OnceCell<Arc<StorageOperations>> = OnceCell::const_new();
 
-/// Compatibility access for existing task code while the task graph is being
-/// converted to carry `Arc<StorageOperations>`.  The cell still guarantees one
-/// UDisks adapter/connection for the process.
+pub fn install_selected(operations: Arc<StorageOperations>) -> Result<(), OperationError> {
+    SHARED_OPERATIONS.set(operations).map_err(|_| {
+        OperationError::Failed("a storage runtime is already installed for this process".into())
+    })
+}
+
+/// Compatibility access for task code that has not yet been converted to carry
+/// `Arc<StorageOperations>`. It intentionally never constructs adapters: the
+/// composition root must install either the production or scenario graph
+/// before any task runs. This prevents a scenario task from falling back to
+/// host-backed operations.
 pub async fn shared() -> Result<Arc<StorageOperations>, OperationError> {
-    SHARED_OPERATIONS
-        .get_or_try_init(StorageOperations::new)
-        .await
-        .cloned()
+    SHARED_OPERATIONS.get().cloned().ok_or_else(|| {
+        OperationError::Failed("storage runtime was not installed by the composition root".into())
+    })
 }

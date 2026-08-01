@@ -2,11 +2,12 @@
 
 pub const REPOSITORY: &str = env!("CARGO_PKG_REPOSITORY");
 
-pub(crate) use crate::message::app::Message;
-pub(crate) use crate::state::app::{AppModel, ContextPage};
+pub use crate::message::app::Message;
+pub use crate::state::app::{AppModel, ContextPage};
 
 use crate::config::Config;
 use crate::operations::FilesystemsClient;
+use crate::runtime::AppRuntime;
 use crate::state::logical::LogicalState;
 use crate::state::network::NetworkState;
 use crate::state::sidebar::SidebarState;
@@ -14,11 +15,11 @@ use cosmic::app::{Core, Task};
 use cosmic::widget::nav_bar;
 use cosmic::{Application, Element};
 
-pub(crate) const APP_ID: &str = "com.cosmic.ext.Storage";
+pub const APP_ID: &str = "com.cosmic.ext.Storage";
 
 impl Application for AppModel {
     type Executor = cosmic::executor::Default;
-    type Flags = ();
+    type Flags = AppRuntime;
     type Message = Message;
     const APP_ID: &'static str = APP_ID;
 
@@ -30,7 +31,10 @@ impl Application for AppModel {
         &mut self.core
     }
 
-    fn init(core: Core, _flags: Self::Flags) -> (Self, Task<Self::Message>) {
+    fn init(core: Core, flags: Self::Flags) -> (Self, Task<Self::Message>) {
+        if let Err(error) = flags.install() {
+            tracing::error!(%error, "failed to install selected storage runtime");
+        }
         let mut app = AppModel {
             core,
             context_page: ContextPage::default(),
@@ -42,6 +46,7 @@ impl Application for AppModel {
             network: NetworkState::new(),
             logical: LogicalState::default(),
             config: Config::load(Self::APP_ID),
+            runtime: flags,
         };
 
         app.sidebar.set_network_loading(true);
@@ -50,18 +55,14 @@ impl Application for AppModel {
 
         let nav_command = Task::done(cosmic::Action::App(Message::LoadDrivesIncremental));
 
+        let selected_operations = app.runtime.operations();
         let tools_command = Task::perform(
             async {
-                match FilesystemsClient::new().await {
-                    Ok(client) => match client.get_filesystem_tools().await {
-                        Ok(tools) => Some(tools),
-                        Err(e) => {
-                            tracing::error!(%e, "failed to load filesystem tools");
-                            None
-                        }
-                    },
+                let client = FilesystemsClient::with_operations(selected_operations);
+                match client.get_filesystem_tools().await {
+                    Ok(tools) => Some(tools),
                     Err(e) => {
-                        tracing::error!(%e, "failed to create filesystems client");
+                        tracing::error!(%e, "failed to load filesystem tools");
                         None
                     }
                 }

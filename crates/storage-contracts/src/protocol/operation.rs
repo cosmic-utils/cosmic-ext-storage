@@ -51,7 +51,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn operation_id_roundtrips_as_uuid_string() {
+    fn operation_id_roundtrips_as_validated_string() {
         let id = OperationId::new();
         let json = serde_json::to_string(&id).expect("serialize operation id");
         let parsed: OperationId = serde_json::from_str(&json).expect("deserialize operation id");

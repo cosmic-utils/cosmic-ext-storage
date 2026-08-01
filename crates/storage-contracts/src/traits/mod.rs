@@ -10,6 +10,7 @@ pub mod logical;
 pub mod luks;
 pub mod network;
 pub mod partition;
+pub mod workflow;
 
 pub use backend::{BackendMetadata, BlockStorageBackend, BtrfsBackend};
 pub use btrfs::BtrfsOperations;
@@ -29,3 +30,7 @@ pub use logical::{
 pub use luks::EncryptionOperations;
 pub use network::NetworkDriveBackend;
 pub use partition::PartitionOperations;
+pub use workflow::{
+    DesktopServices, FilesystemToolDiscovery, ImageWorkflowOperations, RuntimeAdapters,
+    ScenarioControl, ScenarioDiagnostics, ScenarioReceipt, ScenarioReload, UsageOperations,
+};
