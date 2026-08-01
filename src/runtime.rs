@@ -22,6 +22,7 @@ pub struct AppRuntime {
     operations: Arc<StorageOperations>,
     desktop: Arc<dyn DesktopServices>,
     scenario_control: Option<Arc<dyn ScenarioControl>>,
+    scenario_marker: Option<String>,
     #[cfg(feature = "test-backend")]
     scenario_control_server: Option<Arc<test_backend::ScenarioControlServer>>,
     /// Production's bootstrap runtime stays owned by the launch runtime so
@@ -35,6 +36,7 @@ impl std::fmt::Debug for AppRuntime {
         formatter
             .debug_struct("AppRuntime")
             .field("scenario", &self.scenario_control.is_some())
+            .field("scenario_marker", &self.scenario_marker)
             .finish_non_exhaustive()
     }
 }
@@ -53,6 +55,7 @@ impl AppRuntime {
             operations,
             desktop,
             scenario_control: None,
+            scenario_marker: None,
             #[cfg(feature = "test-backend")]
             scenario_control_server: None,
             bootstrap: Some(bootstrap),
@@ -67,6 +70,7 @@ impl AppRuntime {
             operations,
             desktop,
             scenario_control,
+            scenario_marker: None,
             #[cfg(feature = "test-backend")]
             scenario_control_server: None,
             bootstrap: None,
@@ -85,6 +89,10 @@ impl AppRuntime {
     pub fn is_scenario(&self) -> bool {
         self.scenario_control.is_some()
     }
+    pub fn scenario_marker(&self) -> Option<&str> {
+        self.scenario_marker.as_deref()
+    }
+
     pub(crate) fn install(&self) -> Result<(), OperationError> {
         crate::operations::install_selected(Arc::clone(&self.operations))
     }
@@ -107,6 +115,7 @@ impl AppRuntime {
     ) -> Result<Self, OperationError> {
         let scenario = test_backend::ScenarioRuntime::load(fixture, overlay, trace)
             .map_err(OperationError::from)?;
+        let marker = scenario.marker();
         let server = match control {
             Some(control) => {
                 let token = std::fs::read_to_string(control.token_file).map_err(|error| {
@@ -121,6 +130,7 @@ impl AppRuntime {
             None => None,
         };
         let mut runtime = Self::from_adapters(scenario.adapters())?;
+        runtime.scenario_marker = Some(marker);
         runtime.scenario_control_server = server;
         Ok(runtime)
     }

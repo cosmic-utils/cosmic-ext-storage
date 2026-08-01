@@ -4,6 +4,7 @@ debug/
 target/
 vendor/
 vendor.tar
+ui-artifacts/
 debian/*
 !debian/changelog
 !debian/control

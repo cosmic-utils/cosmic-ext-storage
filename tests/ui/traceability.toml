@@ -1,0 +1,102 @@
+# Machine-readable traceability source. ui-plan-check expands one row per method
+# from contract-surface-v1.toml; this file intentionally never repeats method IDs.
+schema_version = 1
+contract_inventory = "docs/plans/4-testing/contract-surface-v1.toml"
+
+[[generated_contract_rows]]
+families = [
+  "BackendMetadata", "DiskDiscovery", "DeviceEventSource", "DriveOperations",
+  "PartitionOperations", "FilesystemOperations", "EncryptionOperations",
+  "ImageDeviceOperations (temporary native-only bridge)", "BtrfsOperations",
+  "LogicalTopologySource", "LogicalOperations", "NetworkDriveBackend",
+  "FilesystemToolDiscovery", "UsageOperations", "ImageWorkflowOperations",
+  "DesktopServices"
+]
+ui_entry_point = "none unless a flow below names it"
+state_dto = "derived from inventory state column"
+configured_error = "StorageError selected by behaviour rule"
+transition = "inventory default or typed StateTransition"
+fixture = "tests/ui/scenarios/empty.toml"
+in_process_test = "generated_cases_cover_success_error_trace_and_transition_for_every_modelled_operation"
+e2e_case = "none"
+runtime_field = "AppRuntime.operations or AppRuntime.desktop"
+
+[[flow]]
+id = "physical_partition_format"
+ui_entry_point = "LoadDrivesIncremental; partition create/format dialog"
+operations = ["discovery.list_disks", "discovery.list_volumes", "partition.create_partition", "filesystem.format"]
+fixture = "tests/ui/scenarios/physical/partition-format.toml"
+branches = ["open", "validation", "cancel", "success", "configured_error", "refresh"]
+in_process_test = "physical_scenario_drives_dialog_and_refresh"
+e2e_case = "physical_partition_format"
+runtime_field = "AppRuntime.operations"
+
+[[flow]]
+id = "busy_unmount"
+ui_entry_point = "volume unmount and blocking-process dialog"
+operations = ["filesystem.unmount", "filesystem.get_mount_point", "filesystem.blocking_processes", "filesystem.kill_processes"]
+fixture = "tests/ui/scenarios/physical/busy-unmount.toml"
+branches = ["open", "busy_error", "cancel", "retry", "refresh"]
+in_process_test = "configured_backend_error_remains_actionable"
+e2e_case = "busy_unmount"
+runtime_field = "AppRuntime.operations"
+
+[[flow]]
+id = "luks_unlock"
+ui_entry_point = "encryption unlock dialog"
+operations = ["encryption.list_luks_devices", "encryption.unlock_luks"]
+fixture = "tests/ui/scenarios/physical/luks.toml"
+branches = ["open", "validation", "configured_error", "success", "refresh"]
+in_process_test = "configured_backend_error_remains_actionable"
+e2e_case = "luks_unlock"
+runtime_field = "AppRuntime.operations"
+
+[[flow]]
+id = "logical_preflight_confirmation"
+ui_entry_point = "logical picker, preflight, confirmation, refresh"
+operations = ["logical.list_entities", "logical.capture_candidate", "logical.preflight", "logical.execute", "discovery.device_events"]
+fixture = "tests/ui/scenarios/logical/preflight.toml"
+branches = ["open", "blocked", "stale", "cancel", "success", "refresh"]
+in_process_test = "physical_scenario_drives_dialog_and_refresh"
+e2e_case = "logical_preflight_confirmation"
+runtime_field = "AppRuntime.operations"
+
+[[flow]]
+id = "network_mount"
+ui_entry_point = "network remote create/test/mount form"
+operations = ["network.configuration_schema", "network.create_config", "network.test_config", "network.mount", "network.mount_status"]
+fixture = "tests/ui/scenarios/network/mount.toml"
+branches = ["open", "validation", "configured_error", "success", "refresh"]
+in_process_test = "network_scenario_exercises_crud_and_mount_state"
+e2e_case = "network_mount"
+runtime_field = "AppRuntime.operations"
+
+[[flow]]
+id = "image_usage_progress"
+ui_entry_point = "image and usage progress dialogs"
+operations = ["desktop.select_image", "image.start_copy", "image.copy_status", "image.cancel_copy", "usage.start_scan", "usage.scan_status", "usage.delete_files"]
+fixture = "tests/ui/scenarios/workflows/image-usage.toml"
+branches = ["open", "pending", "advance_clock", "progress", "cancel", "completion", "configured_error"]
+in_process_test = "usage_and_image_progress_render_from_contract_events"
+e2e_case = "image_usage_progress"
+runtime_field = "AppRuntime.operations,AppRuntime.desktop"
+
+[[flow]]
+id = "keyboard_accessibility"
+ui_entry_point = "all test-case dialogs using keyboard navigation"
+operations = []
+fixture = "tests/ui/scenarios/accessibility/keyboard.toml"
+branches = ["focus", "disabled_reason", "cancel", "submit"]
+in_process_test = "keyboard_dialog_flow_has_named_controls"
+e2e_case = "keyboard_accessibility"
+runtime_field = "AppRuntime"
+
+[[flow]]
+id = "live_scenario_reload"
+ui_entry_point = "scenario diagnostic state and subscribed pages"
+operations = ["discovery.device_events"]
+fixture = "tests/ui/scenarios/reload/live.toml"
+branches = ["atomic_replace", "semantic_reload", "valid_reload", "invalid_reload", "in_flight_cancel", "refresh_once"]
+in_process_test = "scenario_reload_is_atomic_and_refreshes_once"
+e2e_case = "live_scenario_reload"
+runtime_field = "AppRuntime.scenario_control,AppRuntime.operations"

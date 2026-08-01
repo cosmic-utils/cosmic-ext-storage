@@ -1,0 +1,19 @@
+schema_version = 1
+id = "logical_preflight_confirmation"
+scenario = "tests/ui/scenarios/logical/preflight.toml"
+
+[semantic_ready]
+role = "application"
+name = "COSMIC Storage"
+
+[[step]]
+action = "activate"
+[step.selector]
+role = "button"
+name = "Review changes"
+
+[[checkpoint]]
+golden = "tests/ui/goldens/logical_preflight_confirmation.json"
+[checkpoint.selector]
+role = "dialog"
+name = "Confirm"

@@ -1,0 +1,16 @@
+schema_version = 1
+id = "image_usage_progress"
+scenario = "tests/ui/scenarios/workflows/image-usage.toml"
+
+[semantic_ready]
+role = "application"
+name = "COSMIC Storage"
+
+[[step]]
+action = "advance_clock"
+
+[[checkpoint]]
+golden = "tests/ui/goldens/image_usage_progress.json"
+[checkpoint.selector]
+role = "progress bar"
+name = "Operation progress"

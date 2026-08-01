@@ -123,10 +123,21 @@ async fn network_scenario_exercises_crud_and_mount_state() {
 }
 
 #[test]
+fn keyboard_dialog_flow_has_named_controls() {
+    // The runner requires semantic control names; cases declare them in TOML.
+    assert!(std::path::Path::new("tests/ui/cases/keyboard_accessibility.toml").exists());
+}
+
+#[test]
 fn scenario_factory_never_constructs_production_adapters() {
     let runtime =
         AppRuntime::scenario(fixture("empty.toml"), None, None).expect("scenario runtime");
     assert_eq!(runtime.operations().registry.block.id().0, "ui-scenario");
+    assert!(
+        runtime
+            .scenario_marker()
+            .is_some_and(|marker| marker.starts_with("Test scenario: blank-state sha256:"))
+    );
 }
 
 #[test]

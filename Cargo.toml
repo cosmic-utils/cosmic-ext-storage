@@ -30,7 +30,8 @@ fs-btrfs = []
 fs-vfat = []
 fs-ntfs = []
 fs-exfat = []
-test-backend = ["dep:test-backend"]
+ui-test = []
+test-backend = ["dep:test-backend", "ui-test"]
 
 [build-dependencies]
 vergen = { workspace = true }
@@ -70,6 +71,7 @@ members = [
     "crates/storage-contracts",
     "crates/test-backend",
     "crates/storage-sys",
+    "crates/ui-e2e-runner",
     "tools/storage-testing",
 ]
 default-members = ["."]
@@ -121,8 +123,10 @@ version = "0.16"
 features = ["fluent-system", "desktop-requester"]
 
 [workspace.dependencies.libcosmic]
-git = "https://github.com/pop-os/libcosmic.git"
-rev = "ef162b8e16ba4493e05c169cd56c7b9f77f0fda5"
+# Temporary maintained accessibility bridge. Remove this override once the
+# AccessKit widget-tree forwarding fix lands in upstream libcosmic.
+git = "https://github.com/stoorps/libcosmic.git"
+rev = "3d5fdb087534fb4944e64da2346f3bb673cc0215"
 features = [
     # Accessibility support
     "a11y",

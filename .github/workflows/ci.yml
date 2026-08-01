@@ -5,9 +5,6 @@ on:
   pull_request:
     types: [opened, synchronize, reopened, ready_for_review]
 
-    paths-ignore:
-      - "**/*.md"
-
 concurrency:
   group: ${{ github.ref }}-${{ github.workflow }}
   cancel-in-progress: true
@@ -79,3 +76,34 @@ jobs:
 
       - name: Run rustfmt
         run: cargo fmt --all --check --verbose
+
+  ui-scenario-contract:
+    name: UI scenario contract
+    if: github.event.pull_request.draft == false
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: rustup toolchain install stable --profile minimal
+      - run: rustup component add rustfmt
+      - uses: Swatinem/rust-cache@v2
+      - run: sudo apt-get update && sudo apt-get install -y just libxkbcommon-dev libbtrfsutil-dev
+      - run: python3 tools/ui-testing/assert_tests.py --phase all
+      - run: just ui-scenario-check
+      - run: cargo test -p cosmic-ext-storage --locked --test scenario_feature_disabled_contract
+      - run: cargo test -p cosmic-ext-storage --features test-backend --locked --test ui_scenario_contract
+
+  ui-e2e:
+    name: UI E2E capability
+    if: github.event.pull_request.draft == false
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: sudo apt-get update && sudo apt-get install -y just
+      - run: just ui-e2e
+      - name: Upload UI evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ui-artifacts
+          path: ui-artifacts
+          if-no-files-found: warn

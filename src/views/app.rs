@@ -66,8 +66,11 @@ fn tab_button_style(active: bool, theme: &cosmic::theme::Theme) -> cosmic::widge
 }
 
 /// Elements to pack at the start of the header bar.
-pub(crate) fn header_start(_app: &AppModel) -> Vec<Element<'_, Message>> {
-    vec![]
+pub(crate) fn header_start(app: &AppModel) -> Vec<Element<'_, Message>> {
+    app.runtime
+        .scenario_marker()
+        .map(|marker| vec![widget::text::caption(marker).id("test.scenario").into()])
+        .unwrap_or_default()
 }
 
 /// Elements to pack at the end of the header bar.

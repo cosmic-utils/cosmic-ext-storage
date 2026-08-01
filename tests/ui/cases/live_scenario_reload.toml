@@ -1,0 +1,16 @@
+schema_version = 1
+id = "live_scenario_reload"
+scenario = "tests/ui/scenarios/reload/live.toml"
+
+[semantic_ready]
+role = "application"
+name = "COSMIC Storage"
+
+[[step]]
+action = "reload_scenario"
+
+[[checkpoint]]
+golden = "tests/ui/goldens/live_scenario_reload.json"
+[checkpoint.selector]
+role = "application"
+name = "COSMIC Storage"

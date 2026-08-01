@@ -1,0 +1,23 @@
+[package]
+name = "ui-e2e-runner"
+version = "0.1.0"
+edition = "2024"
+publish = false
+
+[[bin]]
+name = "ui-e2e-runner"
+path = "src/main.rs"
+
+[dependencies]
+anyhow.workspace = true
+clap.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+sha2.workspace = true
+tokio.workspace = true
+toml.workspace = true
+zbus.workspace = true
+atspi = { version = "=0.29.0", default-features = false, features = ["connection", "proxies", "tokio"] }
+
+[dev-dependencies]
+tempfile = "=3.27.0"

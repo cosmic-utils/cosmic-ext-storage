@@ -34,6 +34,7 @@ async fn scenario_control_starts_only_for_selected_scenario_runtime() {
     .expect("request");
     let runtime = AppRuntime::from_request(request).expect("scenario runtime");
     assert!(runtime.is_scenario());
+    assert!(runtime.scenario_marker().is_some());
     for _ in 0..100 {
         if socket.exists() {
             break;
