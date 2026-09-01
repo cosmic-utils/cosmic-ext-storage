@@ -1,0 +1,38 @@
+schema_version = 1
+platform = "linux/amd64"
+base_image = "docker.io/library/rust@sha256:300ec56abce8cc9448ddea2172747d048ed902a3090e6b57babb2bf19f754081"
+containerfile_sha256 = "4e6e9fdc2a5b822b449474dc6d86f4b9f893e556051da036e7c30586024c42b5"
+apt_snapshot = "https://snapshot.debian.org/archive/debian/20250701T000000Z/"
+packages = [
+  { name = "at-spi2-core", version = "2.46.0-5" },
+  { name = "dbus", version = "1.14.10-1~deb12u1" },
+  { name = "fonts-dejavu-core", version = "2.37-6" },
+  { name = "foot", version = "1.13.1-2+deb12u1" },
+  { name = "grim", version = "1.4.0+ds-2" },
+  { name = "libbtrfsutil-dev", version = "6.2-1+deb12u1" },
+  { name = "libclang-dev", version = "1:14.0-55.7~deb12u1" },
+  { name = "libxkbcommon-dev", version = "1.5.0-1" },
+  { name = "libvulkan1", version = "1.3.239.0-1" },
+  { name = "mesa-vulkan-drivers", version = "22.3.6-1+deb12u1" },
+  { name = "pkg-config", version = "1.8.1-1" },
+  { name = "sway", version = "1.7-6" },
+  { name = "wtype", version = "0.4-3" },
+]
+fonts = [{ path = "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf", sha256 = "abdc775b21b1bc470d50c97e790d276f2054b7504e56e5bd3e64f48d68582322" }]
+sway_command = ["sway", "--unsupported-gpu", "--config", "/workspace/tools/ui-testing/sway.conf"]
+dbus_command = ["dbus-run-session", "--"]
+renderer_env = { EGL_PLATFORM = "wayland", LIBGL_ALWAYS_SOFTWARE = "1", WGPU_BACKEND = "vulkan", WLR_BACKENDS = "headless", WLR_LIBINPUT_NO_DEVICES = "1", WLR_RENDERER = "pixman", LIBSEAT_BACKEND = "noop" }
+home = "<artifact-root>/home"
+xdg_config_home = "<artifact-root>/config"
+xdg_cache_home = "<artifact-root>/cache"
+locale = "C.UTF-8"
+locale_env = { LANG = "C.UTF-8", LC_ALL = "C.UTF-8", TZ = "UTC" }
+fontconfig_file = "/etc/fonts/fonts.conf"
+cosmic_theme_fixture = "/opt/ui-test/cosmic-theme.toml"
+theme = "light"
+viewport = { width = 1280, height = 800, scale = 1 }
+atspi_coordinate_space = "logical_output_origin_0_0"
+image_comparison = { colorspace = "sRGB RGBA", channel_delta = 2, max_changed_pixel_fraction = "0.0005", masks = false, edge_rounding = "floor_start_ceil_end" }
+capture_helper = { name = "grim", version = "1.4.0+ds-2", protocol = "zwlr_screencopy_manager_v1" }
+input_helper = { name = "wtype", version = "0.4-3", protocol = "zwp_virtual_keyboard_manager_v1" }
+toolchain = { rust = "1.95.0", app_built_in_image = true }

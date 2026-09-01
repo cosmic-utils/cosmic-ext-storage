@@ -2,24 +2,26 @@
 
 pub const REPOSITORY: &str = env!("CARGO_PKG_REPOSITORY");
 
-pub(crate) use crate::message::app::Message;
-pub(crate) use crate::state::app::{AppModel, ContextPage};
+pub use crate::message::app::Message;
+pub use crate::state::app::{AppModel, ContextPage};
 
 use crate::config::Config;
-use crate::models::load_all_drives;
 use crate::operations::FilesystemsClient;
-use crate::operations::RcloneClient;
+use crate::runtime::AppRuntime;
+use crate::state::logical::LogicalState;
 use crate::state::network::NetworkState;
 use crate::state::sidebar::SidebarState;
+#[cfg(feature = "test-backend")]
+use crate::workflows::ApplicationWorkflowState;
 use cosmic::app::{Core, Task};
 use cosmic::widget::nav_bar;
 use cosmic::{Application, Element};
 
-pub(crate) const APP_ID: &str = "com.cosmic.ext.Storage";
+pub const APP_ID: &str = "com.cosmic.ext.Storage";
 
 impl Application for AppModel {
     type Executor = cosmic::executor::Default;
-    type Flags = ();
+    type Flags = AppRuntime;
     type Message = Message;
     const APP_ID: &'static str = APP_ID;
 
@@ -31,7 +33,10 @@ impl Application for AppModel {
         &mut self.core
     }
 
-    fn init(core: Core, _flags: Self::Flags) -> (Self, Task<Self::Message>) {
+    fn init(core: Core, flags: Self::Flags) -> (Self, Task<Self::Message>) {
+        if let Err(error) = flags.install() {
+            tracing::error!(%error, "failed to install selected storage runtime");
+        }
         let mut app = AppModel {
             core,
             context_page: ContextPage::default(),
@@ -41,39 +46,27 @@ impl Application for AppModel {
             image_op_operation_id: None,
             filesystem_tools: vec![],
             network: NetworkState::new(),
+            logical: LogicalState::default(),
+            #[cfg(feature = "test-backend")]
+            workflows: ApplicationWorkflowState::default(),
             config: Config::load(Self::APP_ID),
+            runtime: flags,
         };
+
+        app.sidebar.set_network_loading(true);
 
         let command = app.update_title();
 
-        let nav_command = Task::perform(
-            async {
-                match load_all_drives().await {
-                    Ok(drives) => Some(drives),
-                    Err(e) => {
-                        tracing::error!(%e, "failed to load drives");
-                        None
-                    }
-                }
-            },
-            |drives| match drives {
-                None => Message::None.into(),
-                Some(drives) => Message::UpdateNav(drives, None).into(),
-            },
-        );
+        let nav_command = Task::done(cosmic::Action::App(Message::LoadDrivesIncremental));
 
+        let selected_operations = app.runtime.operations();
         let tools_command = Task::perform(
             async {
-                match FilesystemsClient::new().await {
-                    Ok(client) => match client.get_filesystem_tools().await {
-                        Ok(tools) => Some(tools),
-                        Err(e) => {
-                            tracing::error!(%e, "failed to load filesystem tools");
-                            None
-                        }
-                    },
+                let client = FilesystemsClient::with_operations(selected_operations);
+                match client.get_filesystem_tools().await {
+                    Ok(tools) => Some(tools),
                     Err(e) => {
-                        tracing::error!(%e, "failed to create filesystems client");
+                        tracing::error!(%e, "failed to load filesystem tools");
                         None
                     }
                 }
@@ -84,36 +77,11 @@ impl Application for AppModel {
             },
         );
 
-        let network_command = Task::perform(
-            async {
-                match RcloneClient::new().await {
-                    Ok(client) => match client.list_remotes().await {
-                        Ok(list) => Some(list.remotes),
-                        Err(e) => {
-                            tracing::warn!(%e, "failed to load network remotes");
-                            None
-                        }
-                    },
-                    Err(e) => {
-                        tracing::info!(%e, "RClone client not available, network features disabled");
-                        None
-                    }
-                }
-            },
-            |remotes| {
-                Message::NetworkRemotesLoaded(
-                    remotes.ok_or_else(|| "RClone not available".to_string()),
-                )
-                .into()
-            },
-        );
+        let network_command = Task::done(cosmic::Action::App(Message::LoadNetworkRemotes));
 
         (
             app,
-            command
-                .chain(nav_command)
-                .chain(tools_command)
-                .chain(network_command),
+            Task::batch(vec![command, nav_command, tools_command, network_command]),
         )
     }
 

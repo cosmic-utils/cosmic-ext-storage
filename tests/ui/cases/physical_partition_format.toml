@@ -1,0 +1,19 @@
+schema_version = 1
+id = "physical_partition_format"
+scenario = "tests/ui/scenarios/physical/partition-format.toml"
+
+[semantic_ready]
+role = "application"
+name = "COSMIC Storage"
+
+[[step]]
+action = "activate"
+[step.selector]
+role = "button"
+name = "Create partition"
+
+[[checkpoint]]
+golden = "tests/ui/goldens/physical_partition_format.json"
+[checkpoint.selector]
+role = "application"
+name = "COSMIC Storage"

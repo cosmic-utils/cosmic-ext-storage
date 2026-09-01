@@ -1,0 +1,24 @@
+[package]
+name = "storage-testing"
+version = "0.1.0"
+edition = "2024"
+license = "GPL-3.0-only"
+publish = false
+autotests = false
+description = "Disposable-fixture integration harness for cosmic-ext-storage"
+
+[[test]]
+name = "harness_execution_contract"
+path = "tests/harness_execution_contract.rs"
+
+[dependencies]
+clap.workspace = true
+libc.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+storage-contracts.workspace = true
+storage-types.workspace = true
+storage-udisks.workspace = true
+thiserror.workspace = true
+tokio.workspace = true
+toml.workspace = true

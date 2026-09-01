@@ -171,17 +171,10 @@ pub enum UnmountBusyMessage {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub enum BtrfsCreateSubvolumeMessage {
-    NameUpdate(String),
-    Create,
-    Cancel,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum BtrfsCreateSnapshotMessage {
-    SourceIndexUpdate(usize),
-    NameUpdate(String),
+pub enum LogicalActionFormMessage {
+    PrimaryTextUpdate(String),
+    SizeUpdate(String),
     ReadOnlyUpdate(bool),
-    Create,
+    Submit,
     Cancel,
 }

@@ -14,9 +14,11 @@
 
 pub mod error;
 pub mod image;
+pub mod logical;
 pub mod rclone;
 pub mod usage;
 
 pub use error::{Result, SysError};
 pub use image::{copy_file_to_image, copy_image_to_file, open_for_backup, open_for_restore};
+pub use logical::{LocalLogicalTopologySource, LogicalCommandRunner, SystemLogicalCommandRunner};
 pub use rclone::{RCloneCli, RcloneNetworkBackend, is_mount_on_login_enabled, set_mount_on_login};

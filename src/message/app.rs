@@ -1,13 +1,20 @@
 use crate::config::Config;
 use crate::message::dialogs::{
     AttachDiskImageDialogMessage, FormatDiskMessage, ImageOperationDialogMessage,
-    NewDiskImageDialogMessage, SmartDialogMessage, UnmountBusyMessage,
+    LogicalActionFormMessage, NewDiskImageDialogMessage, SmartDialogMessage, UnmountBusyMessage,
 };
 use crate::message::network::NetworkMessage;
 use crate::message::volumes::VolumesControlMessage;
 use crate::models::UiDrive;
 use crate::state::app::ContextPage;
 use crate::state::dialogs::ShowDialog;
+use storage_contracts::{
+    ConfirmedLogicalAction, LogicalAction, LogicalPreflight, LogicalPreflightRequestKey,
+};
+use storage_types::DiskInfo;
+use storage_types::{
+    BlockDeviceRef, LogicalCandidateAnchor, LogicalEntityId, LogicalLoadResult, ProgressRatio,
+};
 use storage_types::{
     FilesystemToolInfo, UsageCategory, UsageDeleteResult, UsageScanParallelismPreset,
     UsageScanResult,
@@ -26,6 +33,16 @@ pub enum Message {
     FormatDisk(FormatDiskMessage),
     DriveRemoved(String),
     DriveAdded(String),
+    LoadDrivesIncremental,
+    DriveListLoaded(Result<Vec<DiskInfo>, String>),
+    DriveLoadStarted {
+        total: usize,
+    },
+    DriveLoaded {
+        result: Result<UiDrive, String>,
+        elapsed_ms: u128,
+    },
+    DriveLoadFinished,
     None,
     UpdateNav(Vec<UiDrive>, Option<String>),
     UpdateNavWithChildSelection(Vec<UiDrive>, Option<String>),
@@ -38,6 +55,44 @@ pub enum Message {
     StandbyNow,
     Wakeup,
     FilesystemToolsLoaded(Vec<FilesystemToolInfo>),
+    /// Opens logical storage. Detailed topology is loaded only after this
+    /// non-privileged sidebar node is selected.
+    LogicalViewRequested {
+        device_path: Option<String>,
+    },
+    LogicalCandidateCaptured {
+        device_path: String,
+        result: Result<LogicalCandidateAnchor, String>,
+    },
+    LoadLogicalEntities,
+    LogicalEntitiesLoaded {
+        generation: u64,
+        result: Result<LogicalLoadResult, String>,
+    },
+    LogicalSelectionChanged(Option<LogicalEntityId>),
+    LogicalActionFormRequested(crate::state::dialogs::LogicalActionForm),
+    LogicalActionForm(LogicalActionFormMessage),
+    LogicalDevicePickerRequested(crate::state::logical::LogicalDevicePickerAction),
+    LogicalDevicePickerSelected(BlockDeviceRef),
+    LogicalDevicePickerCancelled,
+    LogicalActionPrompted(LogicalAction),
+    LogicalPreflightLoaded {
+        request_key: LogicalPreflightRequestKey,
+        result: Result<LogicalPreflight, String>,
+    },
+    /// Internal hand-off for a preflighted non-destructive logical action that
+    /// was submitted from its single-step form.
+    LogicalActionExecute(ConfirmedLogicalAction),
+    LogicalActionConfirmed(ConfirmedLogicalAction),
+    LogicalActionCancelled,
+    LogicalActionFinished {
+        generation: u64,
+        result: Result<(), String>,
+    },
+    LogicalActionProgressed {
+        generation: u64,
+        progress: ProgressRatio,
+    },
     UsageScanLoad {
         scan_id: String,
         top_files_per_category: u32,
@@ -249,6 +304,12 @@ impl From<ImageOperationDialogMessage> for Message {
 impl From<UnmountBusyMessage> for Message {
     fn from(val: UnmountBusyMessage) -> Self {
         Message::UnmountBusy(val)
+    }
+}
+
+impl From<LogicalActionFormMessage> for Message {
+    fn from(val: LogicalActionFormMessage) -> Self {
+        Message::LogicalActionForm(val)
     }
 }
 

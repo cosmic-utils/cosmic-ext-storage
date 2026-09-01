@@ -1,0 +1,19 @@
+schema_version = 1
+id = "keyboard_accessibility"
+scenario = "tests/ui/scenarios/accessibility/keyboard.toml"
+
+[semantic_ready]
+role = "application"
+name = "COSMIC Storage"
+
+[[step]]
+action = "focus"
+[step.selector]
+role = "button"
+name = "Cancel"
+
+[[checkpoint]]
+golden = "tests/ui/goldens/keyboard_accessibility.json"
+[checkpoint.selector]
+role = "application"
+name = "COSMIC Storage"

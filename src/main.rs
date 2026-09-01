@@ -1,30 +1,29 @@
 // SPDX-License-Identifier: GPL-3.0-only
 
-mod app;
-mod config;
-mod controls;
-mod errors;
-mod i18n;
-mod logging;
-mod message;
-mod models;
-mod operations;
-mod state;
-mod subscriptions;
-mod update;
-mod utils;
-mod views;
-
-//#[tokio::main]
 fn main() -> cosmic::iced::Result {
-    let config = config::Config::load(app::APP_ID);
-    logging::init(&config);
+    let request = match cosmic_ext_storage::RuntimeRequest::parse(std::env::args().skip(1)) {
+        Ok(request) => request,
+        Err(error) => {
+            eprintln!("{error}");
+            std::process::exit(2);
+        }
+    };
+    let runtime = match cosmic_ext_storage::AppRuntime::from_request(request) {
+        Ok(runtime) => runtime,
+        Err(error) => {
+            eprintln!("{error}");
+            std::process::exit(2);
+        }
+    };
+
+    let config = cosmic_ext_storage::config::Config::load(cosmic_ext_storage::app::APP_ID);
+    cosmic_ext_storage::logging::init(&config);
 
     // Get the system's preferred languages.
     let requested_languages = i18n_embed::DesktopLanguageRequester::requested_languages();
 
     // Enable localizations to be applied.
-    i18n::init(&requested_languages);
+    cosmic_ext_storage::i18n::init(&requested_languages);
 
     // Settings for configuring the application window and iced runtime.
     let settings = cosmic::app::Settings::default().size_limits(
@@ -34,5 +33,5 @@ fn main() -> cosmic::iced::Result {
     );
 
     // Starts the application's event loop with `()` as the application's flags.
-    cosmic::app::run::<app::AppModel>(settings, ())
+    cosmic::app::run::<cosmic_ext_storage::AppModel>(settings, runtime)
 }

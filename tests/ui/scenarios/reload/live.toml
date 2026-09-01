@@ -1,0 +1,17 @@
+schema_version = 2
+id = "reload-live"
+description = "A scenario whose valid overlay changes the visible disk model from Before to After."
+
+[backend]
+id = "ui-scenario"
+capabilities = ["partition"]
+
+[world]
+revision = 0
+
+[[world.disks]]
+id = "disk0"
+device = "/dev/ui-disk0"
+model = "Before"
+size_bytes = 1073741824
+partition_table = "gpt"

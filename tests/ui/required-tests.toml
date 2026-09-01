@@ -1,0 +1,171 @@
+# Phase-0a frozen named-test manifest. assert_tests.py must reject a missing,
+# duplicate, ignored, renamed, or wrong-target entry before invoking a target.
+schema_version = 1
+
+[[target]]
+phase = "1"
+package = "storage-contracts"
+kind = "rust-integration"
+name = "ui_workflow_contract"
+tests = [
+  "workflow_contracts_are_object_safe",
+  "workflow_values_are_serde_stable",
+  "desktop_services_are_not_storage_backend_methods",
+  "operation_id_has_deterministic_scenario_constructor",
+  "runtime_adapters_reject_invalid_registration_order"
+]
+
+[[target]]
+phase = "2"
+package = "test-backend"
+kind = "rust-integration"
+name = "contract_surface"
+tests = [
+  "scenario_operation_inventory_matches_contract_surface",
+  "bootstrap_inventory_matches_generated_contract_surface",
+  "scenario_crate_has_no_production_adapter_dependencies",
+  "scenario_store_is_the_only_host_io_boundary",
+  "unsupported_methods_never_succeed_or_touch_host",
+  "native_only_legacy_image_methods_return_unsupported"
+]
+
+[[target]]
+phase = "3"
+package = "cosmic-ext-storage"
+kind = "rust-integration"
+name = "ui_runtime_contract"
+features = ["ui-test"]
+tests = [
+  "app_runtime_uses_injected_operations_for_startup_and_updates",
+  "device_subscription_uses_selected_runtime",
+  "background_tasks_do_not_reconstruct_operations",
+  "production_runtime_constructs_real_registry_once",
+  "runtime_test_facade_dispatches_without_desktop_server"
+]
+
+[[target]]
+phase = "4"
+package = "cosmic-ext-storage"
+kind = "rust-integration"
+name = "operation_workflow_contract"
+tests = [
+  "usage_workflow_is_routed_through_contract",
+  "image_workflow_is_routed_through_contract",
+  "desktop_actions_are_routed_through_services",
+  "production_workflow_semantics_are_preserved",
+  "legacy_image_device_contract_is_removed_atomically"
+]
+
+[[target]]
+phase = "5"
+package = "test-backend"
+kind = "rust-integration"
+name = "schema"
+tests = [
+  "rejects_unknown_or_unsupported_schema",
+  "rejects_schema_version_that_is_not_first_lexical_key",
+  "rejects_ambiguous_behaviour_rules",
+  "rejects_invalid_cross_references",
+  "scenario_round_trip_is_deterministic",
+  "overlay_write_is_atomic_and_never_rewrites_fixture",
+  "query_snapshot_and_subscription_cutover_are_linearized",
+  "scenario_control_is_actor_serialized"
+]
+
+[[target]]
+phase = "5"
+package = "test-backend"
+kind = "rust-integration"
+name = "physical_state"
+tests = ["partition_transition_emits_ordered_device_event", "busy_unmount_preserves_state"]
+
+[[target]]
+phase = "6"
+package = "test-backend"
+kind = "rust-integration"
+name = "logical_network_state"
+tests = [
+  "logical_confirmation_requires_current_preflight_key",
+  "logical_mutation_emits_one_declared_refresh_event",
+  "btrfs_utility_state_never_uses_host_tools",
+  "network_mutations_follow_declared_schema",
+  "scenario_reload_is_atomic_and_refreshes_once"
+]
+
+[[target]]
+phase = "6"
+package = "test-backend"
+kind = "rust-integration"
+name = "workflow_state"
+tests = [
+  "cancelled_image_operation_cannot_complete_successfully",
+  "same_tick_cancel_order_is_deterministic",
+  "trace_redacts_passphrases_and_descriptors",
+  "generated_cases_cover_success_error_trace_and_transition_for_every_modelled_operation"
+]
+
+[[target]]
+phase = "7"
+package = "cosmic-ext-storage"
+kind = "rust-integration"
+name = "ui_scenario_contract"
+features = ["test-backend"]
+tests = [
+  "physical_scenario_drives_dialog_and_refresh",
+  "configured_backend_error_remains_actionable",
+  "usage_and_image_progress_render_from_contract_events",
+  "network_scenario_exercises_crud_and_mount_state",
+  "keyboard_dialog_flow_has_named_controls",
+  "scenario_factory_never_constructs_production_adapters",
+  "scenario_mode_has_no_real_backend_fallback"
+]
+
+[[target]]
+phase = "7"
+package = "cosmic-ext-storage"
+kind = "rust-integration"
+name = "scenario_feature_disabled_contract"
+tests = ["feature_disabled_scenario_request_fails_before_real_factory"]
+
+[[target]]
+phase = "workflow-v2"
+package = "cosmic-ext-storage"
+kind = "rust-integration"
+name = "application_workflows"
+features = ["test-backend"]
+tests = [
+  "workflow_harness_uses_only_selected_scenario_runtime",
+  "logical_open_preflight_confirm_executes_once_and_refreshes_once",
+  "logical_stale_preflight_completion_is_rejected",
+  "partition_format_validation_and_completion_preserve_effect_order",
+  "busy_unmount_keeps_actionable_error_and_does_not_refresh",
+  "luks_unlock_uses_secret_input_and_redacts_every_projection",
+  "network_create_mount_and_status_are_reduced_from_one_flow",
+  "image_progress_cancel_and_terminal_state_are_virtual_clock_driven",
+  "image_usage_stale_completion_cannot_replace_newer_workflow_state",
+  "usage_scan_and_delete_map_results_without_host_file_access",
+  "scenario_reload_is_atomic_and_generation_checked_by_the_application",
+  "reload_stale_completion_cannot_move_virtual_time_backwards",
+  "workflow_effects_do_not_call_global_operations_context",
+  "workflow_facade_covers_every_migrated_path"
+]
+
+[[target]]
+phase = "8"
+package = "ui-e2e-runner"
+kind = "rust-bin"
+name = "ui-e2e-runner"
+tests = [
+  "png_signature_requires_all_eight_bytes",
+  "legacy_case_inventory_is_sorted_and_rejects_duplicate_ids"
+]
+
+[[target]]
+phase = "9"
+kind = "e2e-case"
+name = "tests/ui/cases"
+tests = [
+  "physical_partition_format", "busy_unmount", "luks_unlock",
+  "logical_preflight_confirmation", "network_mount", "image_usage_progress",
+  "keyboard_accessibility", "live_scenario_reload"
+]

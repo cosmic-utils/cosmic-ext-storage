@@ -2,10 +2,18 @@ use crate::models::UiDrive;
 use cosmic::widget::nav_bar;
 use std::collections::{HashMap, HashSet};
 
+fn compare_drive_sort_keys(left: &UiDrive, right: &UiDrive) -> std::cmp::Ordering {
+    left.device()
+        .cmp(right.device())
+        .then_with(|| left.name().cmp(&right.name()))
+}
+
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub enum SidebarNodeKey {
     Drive(String),
     Volume(String),
+    LogicalCandidate(String),
+    LogicalEntity(String),
 }
 
 #[derive(Debug, Default)]
@@ -21,6 +29,9 @@ pub struct SidebarState {
 
     /// Selected (focused) child node. Drive selection is still managed via `app.nav`.
     pub selected_child: Option<SidebarNodeKey>,
+    pub drives_loading: bool,
+    pub network_loading: bool,
+    pub drive_builds_pending: usize,
 }
 
 impl SidebarState {
@@ -36,6 +47,39 @@ impl SidebarState {
 
     pub fn set_drive_entities(&mut self, entities: HashMap<String, nav_bar::Id>) {
         self.drive_entities = entities;
+    }
+
+    pub fn set_network_loading(&mut self, loading: bool) {
+        self.network_loading = loading;
+    }
+
+    pub fn start_drive_loading(&mut self, total: usize) {
+        self.drives_loading = true;
+        self.drive_builds_pending = total;
+        self.drives.clear();
+    }
+
+    pub fn finish_drive_loading(&mut self) {
+        self.drives_loading = false;
+        self.drive_builds_pending = 0;
+    }
+
+    pub fn mark_drive_build_finished(&mut self) -> bool {
+        self.drive_builds_pending = self.drive_builds_pending.saturating_sub(1);
+        self.drive_builds_pending == 0
+    }
+
+    pub fn upsert_drive_sorted(&mut self, drive: UiDrive) {
+        if let Some(index) = self
+            .drives
+            .iter()
+            .position(|current| current.device() == drive.device())
+        {
+            self.drives[index] = drive;
+        } else {
+            self.drives.push(drive);
+        }
+        self.drives.sort_by(compare_drive_sort_keys);
     }
 
     pub fn is_expanded(&self, key: &SidebarNodeKey) -> bool {

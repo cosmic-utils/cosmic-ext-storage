@@ -96,25 +96,25 @@ impl UsageCategory {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct UsageCategoryTotal {
     pub category: UsageCategory,
     pub bytes: u64,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct UsageTopFileEntry {
     pub path: PathBuf,
     pub bytes: u64,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct UsageCategoryTopFiles {
     pub category: UsageCategory,
     pub files: Vec<UsageTopFileEntry>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct UsageScanRequest {
     pub scan_id: String,
     pub top_files_per_category: usize,
@@ -122,19 +122,19 @@ pub struct UsageScanRequest {
     pub parallelism_preset: UsageScanParallelismPreset,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct UsageDeleteFailure {
     pub path: String,
     pub reason: String,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct UsageDeleteResult {
     pub deleted: Vec<String>,
     pub failed: Vec<UsageDeleteFailure>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct UsageScanResult {
     pub categories: Vec<UsageCategoryTotal>,
     pub top_files_by_category: Vec<UsageCategoryTopFiles>,

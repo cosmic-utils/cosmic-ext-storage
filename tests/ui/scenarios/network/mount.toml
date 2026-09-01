@@ -1,0 +1,22 @@
+schema_version = 2
+id = "network-mount"
+description = "An initially unmounted declarative remote with a closed configuration schema."
+
+[backend]
+id = "ui-scenario"
+capabilities = ["network"]
+
+[world]
+revision = 0
+
+[[world.network.providers]]
+id = "s3"
+label = "S3"
+required_fields = ["endpoint", "bucket"]
+
+[[world.network.configs]]
+id = "remote"
+name = "remote"
+provider_id = "s3"
+options = { endpoint = "https://fixture.invalid", bucket = "storage" }
+mounted = false

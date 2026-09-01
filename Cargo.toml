@@ -6,6 +6,13 @@ license = "GPL-3.0-only"
 description = "A Storage utility for the COSMIC™ desktop"
 repository = "https://github.com/cosmic-utils/cosmic-ext-storage"
 
+[lib]
+doctest = false
+
+[[test]]
+name = "application_workflows"
+required-features = ["test-backend"]
+
 [features]
 default = [
     "btrfs-tools",
@@ -27,12 +34,22 @@ fs-btrfs = []
 fs-vfat = []
 fs-ntfs = []
 fs-exfat = []
+ui-test = []
+test-backend = [
+    "dep:test-backend",
+    "dep:tempfile",
+    "dep:base64",
+    "dep:serde_json",
+    "dep:sha2",
+    "ui-test",
+]
 
 [build-dependencies]
 vergen = { workspace = true }
 
 [dependencies]
 anyhow.workspace = true
+async-trait.workspace = true
 futures-util.workspace = true
 i18n-embed.workspace = true
 i18n-embed-fl.workspace = true
@@ -54,6 +71,11 @@ tracing-appender.workspace = true
 tracing-subscriber.workspace = true
 uuid.workspace = true
 which.workspace = true
+test-backend = { path = "crates/test-backend", optional = true }
+tempfile = { version = "=3.27.0", optional = true }
+base64 = { workspace = true, optional = true }
+serde_json = { workspace = true, optional = true }
+sha2 = { workspace = true, optional = true }
 
 [workspace]
 members = [
@@ -62,7 +84,10 @@ members = [
     "crates/storage-btrfs",
     "crates/storage-types",
     "crates/storage-contracts",
+    "crates/test-backend",
     "crates/storage-sys",
+    "crates/ui-e2e-runner",
+    "tools/storage-testing",
 ]
 default-members = ["."]
 resolver = "2"
@@ -97,6 +122,8 @@ uuid = { version = "1.21.0", features = ["serde", "v4"] }
 chrono = { version = "0.4.44", features = ["serde"] }
 clap = { version = "4.5.60", features = ["derive"] }
 async-trait = "0.1.89"
+base64 = "0.22.1"
+sha2 = "0.10.9"
 
 # workspace dependencies
 storage-udisks = { package = "storage-udisks", path = "crates/storage-udisks", version = "0.1.0" }
@@ -111,8 +138,10 @@ version = "0.16"
 features = ["fluent-system", "desktop-requester"]
 
 [workspace.dependencies.libcosmic]
-git = "https://github.com/pop-os/libcosmic.git"
-rev = "ef162b8e16ba4493e05c169cd56c7b9f77f0fda5"
+# Temporary maintained accessibility bridge. Remove this override once the
+# AccessKit widget-tree forwarding fix lands in upstream libcosmic.
+git = "https://github.com/stoorps/libcosmic.git"
+rev = "3d5fdb087534fb4944e64da2346f3bb673cc0215"
 features = [
     # Accessibility support
     "a11y",

@@ -22,7 +22,7 @@ static LOG_TO_DISK: AtomicBool = AtomicBool::new(true);
 const DEFAULT_LOG_PREFIX: &str = "cosmic-ext-storage.log";
 const KEEP_DAYS: u64 = 7;
 
-pub(crate) fn init(config: &Config) {
+pub fn init(config: &Config) {
     set_log_level(config.log_level);
     set_log_to_disk(config.log_to_disk);
 

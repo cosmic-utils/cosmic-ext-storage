@@ -17,10 +17,10 @@ pub enum BtrfsError {
     #[error("Invalid path: {0}")]
     InvalidPath(String),
 
-    #[error("BTRFS operation failed: {0}")]
+    #[error("{0}")]
     OperationFailed(String),
 
-    #[error("Command execution failed: {0}")]
+    #[error("{0}")]
     CommandFailed(String),
 
     #[error("Parse error: {0}")]
@@ -32,3 +32,16 @@ pub enum BtrfsError {
 
 /// Result type alias for BTRFS operations
 pub type Result<T> = std::result::Result<T, BtrfsError>;
+
+#[cfg(test)]
+mod tests {
+    use super::BtrfsError;
+
+    #[test]
+    fn command_error_preserves_the_native_message() {
+        assert_eq!(
+            BtrfsError::CommandFailed("Operation not permitted".into()).to_string(),
+            "Operation not permitted"
+        );
+    }
+}

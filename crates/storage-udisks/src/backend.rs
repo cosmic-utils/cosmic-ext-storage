@@ -2,7 +2,13 @@
 
 //! UDisks2 implementation of the application-facing backend contracts.
 
-use std::pin::Pin;
+use std::{
+    pin::Pin,
+    sync::{
+        Arc,
+        atomic::{AtomicU64, Ordering},
+    },
+};
 
 use async_trait::async_trait;
 use futures::{Stream, StreamExt};
@@ -24,22 +30,44 @@ use crate::DiskManager;
 #[derive(Clone)]
 pub struct UdisksBackend {
     manager: DiskManager,
+    object_manager_epoch: Arc<AtomicU64>,
 }
 
 impl UdisksBackend {
     pub async fn new() -> Result<Self, StorageError> {
         DiskManager::new()
             .await
-            .map(|manager| Self { manager })
+            .map(|manager| Self {
+                manager,
+                object_manager_epoch: Arc::new(AtomicU64::new(0)),
+            })
             .map_err(unavailable)
     }
 
     pub fn from_manager(manager: DiskManager) -> Self {
-        Self { manager }
+        Self {
+            manager,
+            object_manager_epoch: Arc::new(AtomicU64::new(0)),
+        }
     }
 
     pub fn manager(&self) -> &DiskManager {
         &self.manager
+    }
+
+    /// Ask UDisks to load optional modules (notably the Btrfs module) through
+    /// the system daemon. This is deliberately separate from any direct
+    /// `btrfs` command so native operations retain UDisks/Polkit handling.
+    pub async fn enable_optional_modules(&self) -> Result<(), StorageError> {
+        self.manager.enable_modules().await.map_err(unavailable)
+    }
+
+    pub(crate) fn logical_epoch(&self) -> u64 {
+        self.object_manager_epoch.load(Ordering::Acquire)
+    }
+
+    fn advance_logical_epoch(&self) {
+        self.object_manager_epoch.fetch_add(1, Ordering::AcqRel);
     }
 }
 
@@ -110,7 +138,9 @@ impl DeviceEventSource for UdisksBackend {
             .device_event_stream_signals()
             .await
             .map_err(error)?;
-        Ok(Box::pin(stream.map(|event| {
+        let backend = self.clone();
+        Ok(Box::pin(stream.map(move |event| {
+            backend.advance_logical_epoch();
             Ok(match event {
                 crate::DeviceEvent::Added(path) => DeviceEvent::Added(path),
                 crate::DeviceEvent::Removed(path) => DeviceEvent::Removed(path),
@@ -489,6 +519,7 @@ impl BackendMetadata for UdisksBackend {
             filesystem_operations: true,
             encryption_operations: true,
             image_operations: true,
+            logical_storage: true,
         }
     }
 }

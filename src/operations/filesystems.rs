@@ -7,11 +7,15 @@ use std::{
     sync::Arc,
 };
 
+use async_trait::async_trait;
+use storage_contracts::{StorageError, StorageErrorKind, UsageOperations};
 use storage_types::{
     FilesystemToolInfo, FormatOptions, MountOptions, MountOptionsSettings, UnmountResult,
-    UsageCategory, UsageDeleteFailure, UsageDeleteResult, UsageScanParallelismPreset,
-    UsageScanResult,
+    UsageCategory, UsageDeleteFailure, UsageDeleteRequest, UsageDeleteResponse, UsageDeleteResult,
+    UsageScanParallelismPreset, UsageScanResult, UsageWorkflowRequest, UsageWorkflowStatus,
+    WorkflowState,
 };
+use tokio::sync::Mutex;
 
 use super::{OperationError, StorageOperations, protected_paths, shared};
 
@@ -148,6 +152,141 @@ fn filter_hidden_categories(result: &mut UsageScanResult) {
         .sum();
 }
 
+/// Production implementation of the usage workflow contract.  Host scanning
+/// and deletion stay here at the adapter boundary; UI clients only exchange
+/// typed request/status/result values through `UsageOperations`.
+#[derive(Default)]
+pub struct ProductionUsageOperations {
+    scans: Mutex<std::collections::HashMap<String, UsageWorkflowStatus>>,
+}
+
+fn usage_storage_error(error: OperationError) -> StorageError {
+    let kind = match error {
+        OperationError::InvalidInput(_) => StorageErrorKind::InvalidInput,
+        OperationError::Unavailable(_) => StorageErrorKind::Unavailable,
+        OperationError::PermissionDenied(_) => StorageErrorKind::PermissionDenied,
+        OperationError::Unsupported(_) => StorageErrorKind::Unsupported,
+        OperationError::MissingOperation(_) => StorageErrorKind::NotFound,
+        OperationError::Busy(_) => StorageErrorKind::Busy,
+        OperationError::Conflict(_) => StorageErrorKind::Conflict,
+        OperationError::Other(_) => StorageErrorKind::Other,
+        OperationError::Failed(_) => StorageErrorKind::Internal,
+    };
+    StorageError::new(kind, error.to_string())
+}
+
+#[async_trait]
+impl UsageOperations for ProductionUsageOperations {
+    async fn list_usage_mounts(&self) -> Result<Vec<String>, StorageError> {
+        storage_sys::usage::discover_local_mounts_under(Path::new("/"))
+            .map(|mounts| {
+                mounts
+                    .into_iter()
+                    .map(|mount| mount.to_string_lossy().to_string())
+                    .collect()
+            })
+            .map_err(|error| StorageError::new(StorageErrorKind::Other, error.to_string()))
+    }
+
+    async fn authorize_show_all_files(&self) -> Result<bool, StorageError> {
+        Ok(true)
+    }
+
+    async fn start_usage_scan(
+        &self,
+        request: UsageWorkflowRequest,
+    ) -> Result<String, StorageError> {
+        let mounts = validate_selected_mounts(&request.mounts).map_err(usage_storage_error)?;
+        let estimate = storage_sys::usage::estimate_used_bytes_for_mounts(&mounts);
+        let config = storage_sys::usage::ScanConfig {
+            threads: Some(scan_threads(request.parallelism_preset)),
+            top_files_per_category: request.top_files_per_category as usize,
+            show_all_files: request.show_all_files,
+            caller_uid: Some(unsafe { libc::geteuid() }),
+            caller_gids: None,
+        };
+        let mut result =
+            tokio::task::spawn_blocking(move || storage_sys::usage::scan_paths(&mounts, &config))
+                .await
+                .map_err(|error| StorageError::new(StorageErrorKind::Internal, error.to_string()))?
+                .map_err(|error| StorageError::new(StorageErrorKind::Other, error.to_string()))?;
+        if !request.show_all_files {
+            filter_hidden_categories(&mut result);
+        }
+        result.total_free_bytes = estimate.free_bytes;
+        let scan_id = request.scan_id;
+        self.scans.lock().await.insert(
+            scan_id.clone(),
+            UsageWorkflowStatus {
+                scan_id: scan_id.clone(),
+                state: WorkflowState::Completed,
+                processed_bytes: result.total_bytes,
+                estimated_total_bytes: result.total_bytes,
+                result: Some(result),
+                message: None,
+            },
+        );
+        Ok(scan_id)
+    }
+
+    async fn usage_scan_status(&self, scan_id: &str) -> Result<UsageWorkflowStatus, StorageError> {
+        self.scans
+            .lock()
+            .await
+            .get(scan_id)
+            .cloned()
+            .ok_or_else(|| {
+                StorageError::new(StorageErrorKind::NotFound, "usage scan does not exist")
+            })
+    }
+
+    async fn wait_for_usage_scan(
+        &self,
+        scan_id: &str,
+    ) -> Result<UsageWorkflowStatus, StorageError> {
+        self.usage_scan_status(scan_id).await
+    }
+
+    async fn delete_usage_files(
+        &self,
+        request: UsageDeleteRequest,
+    ) -> Result<UsageDeleteResponse, StorageError> {
+        let mut result = UsageDeleteResult {
+            deleted: Vec::new(),
+            failed: Vec::new(),
+        };
+        for path_string in request.paths {
+            let path = Path::new(&path_string);
+            let reason = if !path.is_absolute() {
+                Some("Path must be absolute".into())
+            } else if path == Path::new("/") {
+                Some("Refusing to delete root path".into())
+            } else {
+                match std::fs::symlink_metadata(path) {
+                    Ok(metadata) if !metadata.is_file() => {
+                        Some("Only regular files can be deleted".into())
+                    }
+                    Ok(_) => match std::fs::remove_file(path) {
+                        Ok(()) => {
+                            result.deleted.push(path_string.clone());
+                            None
+                        }
+                        Err(error) => Some(error.to_string()),
+                    },
+                    Err(error) => Some(error.to_string()),
+                }
+            };
+            if let Some(reason) = reason {
+                result.failed.push(UsageDeleteFailure {
+                    path: path_string,
+                    reason,
+                });
+            }
+        }
+        Ok(UsageDeleteResponse { result })
+    }
+}
+
 #[allow(dead_code)]
 impl FilesystemsClient {
     pub async fn new() -> Result<Self, OperationError> {
@@ -157,7 +296,11 @@ impl FilesystemsClient {
         Self(operations)
     }
     pub async fn get_filesystem_tools(&self) -> Result<Vec<FilesystemToolInfo>, OperationError> {
-        Ok(self.0.filesystem_tools.clone())
+        self.0
+            .filesystem_tool_discovery
+            .list_filesystem_tools()
+            .await
+            .map_err(Into::into)
     }
 
     pub async fn format(
@@ -318,78 +461,52 @@ impl FilesystemsClient {
         show_all_files: bool,
         preset: UsageScanParallelismPreset,
     ) -> Result<UsageScanResult, OperationError> {
-        let mounts = validate_selected_mounts(mounts)?;
-        let estimate = storage_sys::usage::estimate_used_bytes_for_mounts(&mounts);
-        let config = storage_sys::usage::ScanConfig {
-            threads: Some(scan_threads(preset)),
-            top_files_per_category: top_files as usize,
-            show_all_files,
-            caller_uid: Some(unsafe { libc::geteuid() }),
-            caller_gids: None,
-        };
-        let mut result =
-            tokio::task::spawn_blocking(move || storage_sys::usage::scan_paths(&mounts, &config))
-                .await
-                .map_err(|error| OperationError::Failed(error.to_string()))?
-                .map_err(|error| OperationError::Failed(error.to_string()))?;
-        if !show_all_files {
-            filter_hidden_categories(&mut result);
-        }
-        result.total_free_bytes = estimate.free_bytes;
-        Ok(result)
+        let scan_id = self
+            .0
+            .usage_operations
+            .start_usage_scan(UsageWorkflowRequest {
+                scan_id: _scan_id.into(),
+                mounts: mounts.to_vec(),
+                top_files_per_category: top_files,
+                show_all_files,
+                parallelism_preset: preset,
+            })
+            .await?;
+        self.0
+            .usage_operations
+            .wait_for_usage_scan(&scan_id)
+            .await?
+            .result
+            .ok_or_else(|| OperationError::Failed("usage scan completed without a result".into()))
     }
 
     pub async fn delete_usage_files(
         &self,
         paths: &[String],
     ) -> Result<UsageDeleteResult, OperationError> {
-        let mut result = UsageDeleteResult {
-            deleted: Vec::new(),
-            failed: Vec::new(),
-        };
-        for path_string in paths {
-            let path = Path::new(path_string);
-            let reason = if !path.is_absolute() {
-                Some("Path must be absolute".into())
-            } else if path == Path::new("/") {
-                Some("Refusing to delete root path".into())
-            } else {
-                match std::fs::symlink_metadata(path) {
-                    Ok(metadata) if !metadata.is_file() => {
-                        Some("Only regular files can be deleted".into())
-                    }
-                    Ok(_) => match std::fs::remove_file(path) {
-                        Ok(()) => {
-                            result.deleted.push(path_string.clone());
-                            None
-                        }
-                        Err(error) => Some(error.to_string()),
-                    },
-                    Err(error) => Some(error.to_string()),
-                }
-            };
-            if let Some(reason) = reason {
-                result.failed.push(UsageDeleteFailure {
-                    path: path_string.clone(),
-                    reason,
-                });
-            }
-        }
-        Ok(result)
+        Ok(self
+            .0
+            .usage_operations
+            .delete_usage_files(UsageDeleteRequest {
+                paths: paths.to_vec(),
+            })
+            .await?
+            .result)
     }
 
     pub async fn list_usage_mount_points(&self) -> Result<Vec<String>, OperationError> {
-        storage_sys::usage::discover_local_mounts_under(Path::new("/"))
-            .map(|mounts| {
-                mounts
-                    .into_iter()
-                    .map(|mount| mount.to_string_lossy().to_string())
-                    .collect()
-            })
-            .map_err(|error| OperationError::Failed(error.to_string()))
+        self.0
+            .usage_operations
+            .list_usage_mounts()
+            .await
+            .map_err(Into::into)
     }
     pub async fn authorize_usage_show_all_files(&self) -> Result<bool, OperationError> {
-        Ok(true)
+        self.0
+            .usage_operations
+            .authorize_show_all_files()
+            .await
+            .map_err(Into::into)
     }
     pub async fn get_mount_options(
         &self,
