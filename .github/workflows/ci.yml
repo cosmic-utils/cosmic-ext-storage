@@ -92,6 +92,20 @@ jobs:
       - run: cargo test -p cosmic-ext-storage --locked --test scenario_feature_disabled_contract
       - run: cargo test -p cosmic-ext-storage --features test-backend --locked --test ui_scenario_contract
 
+  application-workflow-integration:
+    name: Application workflow integration
+    if: github.event.pull_request.draft == false
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: rustup toolchain install stable --profile minimal
+      - uses: Swatinem/rust-cache@v2
+      - run: sudo apt-get update && sudo apt-get install -y just libxkbcommon-dev libbtrfsutil-dev
+      - run: just ui-plan-check
+      - run: just app-workflow-check
+      - run: cargo test -p test-backend --locked
+      - run: cargo test -p cosmic-ext-storage --features test-backend --locked --test ui_scenario_contract
+
   ui-e2e:
     name: UI E2E capability
     if: github.event.pull_request.draft == false

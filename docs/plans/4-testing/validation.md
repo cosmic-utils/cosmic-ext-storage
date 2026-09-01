@@ -19,6 +19,7 @@ must match exactly.
 | Application composition | `app_runtime_uses_injected_operations_for_startup_and_updates`; `device_subscription_uses_selected_runtime`; `background_tasks_do_not_reconstruct_operations`; `production_runtime_constructs_real_registry_once`; `runtime_test_facade_dispatches_without_desktop_server` |
 | Production workflow migration | `usage_workflow_is_routed_through_contract`; `image_workflow_is_routed_through_contract`; `desktop_actions_are_routed_through_services`; `production_workflow_semantics_are_preserved` |
 | In-process UI | `physical_scenario_drives_dialog_and_refresh`; `configured_backend_error_remains_actionable`; `network_scenario_exercises_crud_and_mount_state`; `usage_and_image_progress_render_from_contract_events`; `keyboard_dialog_flow_has_named_controls` |
+| Application workflow integration | `workflow_harness_uses_only_selected_scenario_runtime`; `logical_open_preflight_confirm_executes_once_and_refreshes_once`; `logical_stale_preflight_completion_is_rejected`; `partition_format_validation_and_completion_preserve_effect_order`; `busy_unmount_keeps_actionable_error_and_does_not_refresh`; `luks_unlock_uses_secret_input_and_redacts_every_projection`; `network_create_mount_and_status_are_reduced_from_one_flow`; `image_progress_cancel_and_terminal_state_are_virtual_clock_driven`; `image_usage_stale_completion_cannot_replace_newer_workflow_state`; `usage_scan_and_delete_map_results_without_host_file_access`; `scenario_reload_is_atomic_and_generation_checked_by_the_application`; `reload_stale_completion_cannot_move_virtual_time_backwards`; `workflow_effects_do_not_call_global_operations_context`; `workflow_facade_covers_every_migrated_path` |
 | Runner/environment | `png_signature_requires_all_eight_bytes`; `legacy_case_inventory_is_sorted_and_rejects_duplicate_ids`; `ui-e2e` capability gate |
 | E2E a11y/visual | `physical_partition_format`; `busy_unmount`; `luks_unlock`; `logical_preflight_confirmation`; `network_mount`; `image_usage_progress`; `keyboard_accessibility`; `live_scenario_reload` |
 
@@ -52,6 +53,7 @@ cargo test -p test-backend --locked
 cargo test -p cosmic-ext-storage --locked --features test-backend --test ui_runtime_contract
 cargo test -p cosmic-ext-storage --locked --test scenario_feature_disabled_contract
 cargo test -p cosmic-ext-storage --locked --features test-backend --test ui_scenario_contract
+cargo test -p cosmic-ext-storage --locked --features test-backend --test application_workflows
 cargo test --workspace --all-features --locked
 cargo fmt --all -- --check
 cargo clippy --workspace --all-targets --all-features --locked -- -D warnings

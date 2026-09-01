@@ -19,7 +19,6 @@ use crate::message::app::{ImagePathPickerKind, Message};
 use crate::message::network::NetworkMessage;
 use crate::models::{build_drive_timed, load_all_drives, load_drive_candidates};
 use crate::operations::FilesystemsClient;
-use crate::operations::shared;
 use crate::state::app::AppModel;
 use crate::state::dialogs::ShowDialog;
 use crate::state::sidebar::SidebarNodeKey;
@@ -49,16 +48,14 @@ fn execute_confirmed_logical_action(
             return Task::none();
         }
     };
+    let operations = app.runtime.operations();
     Task::perform(
         async move {
-            let result = match shared().await {
-                Ok(operations) => operations
-                    .execute_logical_action(confirmed)
-                    .await
-                    .map(|_| ())
-                    .map_err(|error| error.to_string()),
-                Err(error) => Err(error.to_string()),
-            };
+            let result = operations
+                .execute_logical_action(confirmed)
+                .await
+                .map(|_| ())
+                .map_err(|error| error.to_string());
             Message::LogicalActionFinished { generation, result }
         },
         |message| message.into(),
@@ -191,15 +188,13 @@ pub(crate) fn update(app: &mut AppModel, message: Message) -> Task<Message> {
                 return Task::none();
             }
             if let Some(device_path) = device_path {
+                let operations = app.runtime.operations();
                 return Task::perform(
                     async move {
-                        let result = match shared().await {
-                            Ok(operations) => operations
-                                .capture_logical_candidate(device_path.clone())
-                                .await
-                                .map_err(|error| error.to_string()),
-                            Err(error) => Err(error.to_string()),
-                        };
+                        let result = operations
+                            .capture_logical_candidate(device_path.clone())
+                            .await
+                            .map_err(|error| error.to_string());
                         Message::LogicalCandidateCaptured {
                             device_path,
                             result,
@@ -232,15 +227,13 @@ pub(crate) fn update(app: &mut AppModel, message: Message) -> Task<Message> {
             let request = storage_types::LogicalLoadRequest {
                 anchor: app.logical.selected_candidate.clone(),
             };
+            let operations = app.runtime.operations();
             return Task::perform(
                 async move {
-                    let result = match shared().await {
-                        Ok(operations) => operations
-                            .load_logical_topology_for(request)
-                            .await
-                            .map_err(|error| error.to_string()),
-                        Err(error) => Err(error.to_string()),
-                    };
+                    let result = operations
+                        .load_logical_topology_for(request)
+                        .await
+                        .map_err(|error| error.to_string());
                     Message::LogicalEntitiesLoaded { generation, result }
                 },
                 |message| message.into(),
@@ -295,17 +288,15 @@ pub(crate) fn update(app: &mut AppModel, message: Message) -> Task<Message> {
             }
             let request_key = app.logical.begin_device_picker(picker);
             app.logical.action_status = Some("Loading current eligible devices…".into());
+            let operations = app.runtime.operations();
             return Task::perform(
                 async move {
-                    let result = match shared().await {
-                        Ok(operations) => operations
-                            .preflight_logical_action(storage_contracts::LogicalPreflightRequest {
-                                request_key: request_key.clone(),
-                            })
-                            .await
-                            .map_err(|error| error.to_string()),
-                        Err(error) => Err(error.to_string()),
-                    };
+                    let result = operations
+                        .preflight_logical_action(storage_contracts::LogicalPreflightRequest {
+                            request_key: request_key.clone(),
+                        })
+                        .await
+                        .map_err(|error| error.to_string());
                     Message::LogicalPreflightLoaded {
                         request_key,
                         result,
@@ -348,17 +339,15 @@ pub(crate) fn update(app: &mut AppModel, message: Message) -> Task<Message> {
             let target = logical::action_entity(&action);
             let request_key = app.logical.begin_draft(action, target);
             app.logical.action_status = Some("Reviewing current logical storage…".into());
+            let operations = app.runtime.operations();
             return Task::perform(
                 async move {
-                    let result = match shared().await {
-                        Ok(operations) => operations
-                            .preflight_logical_action(storage_contracts::LogicalPreflightRequest {
-                                request_key: request_key.clone(),
-                            })
-                            .await
-                            .map_err(|error| error.to_string()),
-                        Err(error) => Err(error.to_string()),
-                    };
+                    let result = operations
+                        .preflight_logical_action(storage_contracts::LogicalPreflightRequest {
+                            request_key: request_key.clone(),
+                        })
+                        .await
+                        .map_err(|error| error.to_string());
                     Message::LogicalPreflightLoaded {
                         request_key,
                         result,

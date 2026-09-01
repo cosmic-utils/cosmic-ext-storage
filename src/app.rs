@@ -11,6 +11,8 @@ use crate::runtime::AppRuntime;
 use crate::state::logical::LogicalState;
 use crate::state::network::NetworkState;
 use crate::state::sidebar::SidebarState;
+#[cfg(feature = "test-backend")]
+use crate::workflows::ApplicationWorkflowState;
 use cosmic::app::{Core, Task};
 use cosmic::widget::nav_bar;
 use cosmic::{Application, Element};
@@ -45,6 +47,8 @@ impl Application for AppModel {
             filesystem_tools: vec![],
             network: NetworkState::new(),
             logical: LogicalState::default(),
+            #[cfg(feature = "test-backend")]
+            workflows: ApplicationWorkflowState::default(),
             config: Config::load(Self::APP_ID),
             runtime: flags,
         };

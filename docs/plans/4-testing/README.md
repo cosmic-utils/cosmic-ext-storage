@@ -62,3 +62,8 @@ and mutation flows repeatable without touching the host.
   for the current placeholder runner, fixtures, and metadata-only goldens. It
   is the implementation authority for replacing them with a Rust AT-SPI and
   pixel-visual test system.
+- [Application-workflow v2 revision plan](application-workflow-v2-revision-plan.md)
+  defines the deterministic, headless layer that exercises `AppModel`-owned
+  workflow reducers and selected scenario adapters without a renderer,
+  compositor, or accessibility action path. It is deliberately distinct from
+  both backend-contract coverage and accessibility/visual E2E.

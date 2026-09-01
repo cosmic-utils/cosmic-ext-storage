@@ -2,6 +2,11 @@
 # from contract-surface-v1.toml; this file intentionally never repeats method IDs.
 schema_version = 1
 contract_inventory = "docs/plans/4-testing/contract-surface-v1.toml"
+workflow_v2_cross_cutting_tests = [
+  "workflow_harness_uses_only_selected_scenario_runtime",
+  "workflow_effects_do_not_call_global_operations_context",
+  "workflow_facade_covers_every_migrated_path"
+]
 
 [[generated_contract_rows]]
 families = [
@@ -30,6 +35,7 @@ branches = ["open", "validation", "cancel", "success", "configured_error", "refr
 in_process_test = "physical_scenario_drives_dialog_and_refresh"
 e2e_case = "physical_partition_format"
 runtime_field = "AppRuntime.operations"
+application_workflow_tests = ["partition_format_validation_and_completion_preserve_effect_order"]
 
 [[flow]]
 id = "busy_unmount"
@@ -40,6 +46,7 @@ branches = ["open", "busy_error", "cancel", "retry", "refresh"]
 in_process_test = "configured_backend_error_remains_actionable"
 e2e_case = "busy_unmount"
 runtime_field = "AppRuntime.operations"
+application_workflow_tests = ["busy_unmount_keeps_actionable_error_and_does_not_refresh"]
 
 [[flow]]
 id = "luks_unlock"
@@ -50,6 +57,7 @@ branches = ["open", "validation", "configured_error", "success", "refresh"]
 in_process_test = "configured_backend_error_remains_actionable"
 e2e_case = "luks_unlock"
 runtime_field = "AppRuntime.operations"
+application_workflow_tests = ["luks_unlock_uses_secret_input_and_redacts_every_projection"]
 
 [[flow]]
 id = "logical_preflight_confirmation"
@@ -60,6 +68,10 @@ branches = ["open", "blocked", "stale", "cancel", "success", "refresh"]
 in_process_test = "physical_scenario_drives_dialog_and_refresh"
 e2e_case = "logical_preflight_confirmation"
 runtime_field = "AppRuntime.operations"
+application_workflow_tests = [
+  "logical_open_preflight_confirm_executes_once_and_refreshes_once",
+  "logical_stale_preflight_completion_is_rejected"
+]
 
 [[flow]]
 id = "network_mount"
@@ -70,6 +82,7 @@ branches = ["open", "validation", "configured_error", "success", "refresh"]
 in_process_test = "network_scenario_exercises_crud_and_mount_state"
 e2e_case = "network_mount"
 runtime_field = "AppRuntime.operations"
+application_workflow_tests = ["network_create_mount_and_status_are_reduced_from_one_flow"]
 
 [[flow]]
 id = "image_usage_progress"
@@ -80,6 +93,11 @@ branches = ["open", "pending", "advance_clock", "progress", "cancel", "completio
 in_process_test = "usage_and_image_progress_render_from_contract_events"
 e2e_case = "image_usage_progress"
 runtime_field = "AppRuntime.operations,AppRuntime.desktop"
+application_workflow_tests = [
+  "image_progress_cancel_and_terminal_state_are_virtual_clock_driven",
+  "image_usage_stale_completion_cannot_replace_newer_workflow_state",
+  "usage_scan_and_delete_map_results_without_host_file_access"
+]
 
 [[flow]]
 id = "keyboard_accessibility"
@@ -100,3 +118,7 @@ branches = ["atomic_replace", "semantic_reload", "valid_reload", "invalid_reload
 in_process_test = "scenario_reload_is_atomic_and_refreshes_once"
 e2e_case = "live_scenario_reload"
 runtime_field = "AppRuntime.scenario_control,AppRuntime.operations"
+application_workflow_tests = [
+  "scenario_reload_is_atomic_and_generation_checked_by_the_application",
+  "reload_stale_completion_cannot_move_virtual_time_backwards"
+]

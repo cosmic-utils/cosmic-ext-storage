@@ -37,6 +37,12 @@ ui-plan-check:
 ui-assert-tests phase='all':
     @phase_value="{{ phase }}"; python3 tools/ui-testing/assert_tests.py --phase "${phase_value#phase=}"
 
+# Run deterministic application workflow tests without a compositor, desktop
+# session, or accessibility stack.
+app-workflow-check:
+    just ui-assert-tests phase='workflow-v2'
+    cargo test -p cosmic-ext-storage --features test-backend --locked --test application_workflows
+
 ui-scenario-check:
     python3 tools/ui-testing/assert_tests.py --plan-only
     @find tests/ui/scenarios -name '*.toml' -print0 | sort -z | xargs -0 -n1 cargo run -p test-backend --locked --bin ui-scenario -- validate

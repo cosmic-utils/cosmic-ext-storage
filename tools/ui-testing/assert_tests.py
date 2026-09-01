@@ -31,7 +31,7 @@ def main() -> int:
     parser.add_argument("--phase", default=None)
     arguments = parser.parse_args()
     if not arguments.plan_only and arguments.phase is None:
-        parser.error("pass --plan-only or --phase <number|all>")
+        parser.error("pass --plan-only or --phase <name|all>")
 
     root = Path(__file__).resolve().parents[2]
     schema_path = root / "docs/plans/4-testing/schema-v1.json"
@@ -137,6 +137,37 @@ def main() -> int:
         fail(f"missing required flows: {sorted(required_flows - flow_ids)}")
     if not required_flows.issubset(all_named_tests):
         fail(f"missing required E2E names: {sorted(required_flows - all_named_tests)}")
+
+    workflow_target = [
+        target for target in manifest.get("target", []) if target["phase"] == "workflow-v2"
+    ]
+    if len(workflow_target) != 1:
+        fail("workflow-v2 requires exactly one required-test target")
+    workflow_target = workflow_target[0]
+    if (
+        workflow_target["kind"] != "rust-integration"
+        or workflow_target["package"] != "cosmic-ext-storage"
+        or workflow_target["name"] != "application_workflows"
+        or workflow_target.get("features") != ["test-backend"]
+    ):
+        fail("workflow-v2 must select the feature-gated application_workflows integration target")
+
+    workflow_names = list(matrix.get("workflow_v2_cross_cutting_tests", []))
+    if len(workflow_names) != len(set(workflow_names)):
+        fail("workflow-v2 cross-cutting tests must be unique")
+    for flow in matrix.get("flow", []):
+        tests = flow.get("application_workflow_tests", [])
+        if flow["id"] == "keyboard_accessibility" and tests:
+            fail("keyboard accessibility remains E2E-only")
+        if len(tests) != len(set(tests)):
+            fail(f"workflow-v2 tests must be unique within flow {flow['id']}")
+        workflow_names.extend(tests)
+    if len(workflow_names) != len(set(workflow_names)):
+        fail("workflow-v2 tests must map to exactly one traceability source")
+    if set(workflow_target["tests"]) != set(workflow_names):
+        missing = sorted(set(workflow_names) - set(workflow_target["tests"]))
+        extra = sorted(set(workflow_target["tests"]) - set(workflow_names))
+        fail(f"workflow-v2 target/traceability mismatch; missing={missing}, extra={extra}")
 
     validation = validation_path.read_text(encoding="utf-8")
     undocumented = sorted(test for test in all_named_tests if f"`{test}`" not in validation)

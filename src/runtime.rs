@@ -106,6 +106,25 @@ impl AppRuntime {
         Self::scenario_with_control(fixture, overlay, trace, None)
     }
 
+    /// Test-only variant of scenario composition that receives fixture secret
+    /// values out of band. The map is consumed by the scenario runtime; it is
+    /// never written to a fixture, overlay, trace, socket, or environment.
+    #[cfg(feature = "test-backend")]
+    pub(crate) fn scenario_with_fixture_secrets(
+        fixture: PathBuf,
+        overlay: Option<PathBuf>,
+        trace: Option<PathBuf>,
+        secrets: std::collections::BTreeMap<String, String>,
+    ) -> Result<Self, OperationError> {
+        let scenario =
+            test_backend::ScenarioRuntime::load_with_secrets(fixture, overlay, trace, secrets)
+                .map_err(OperationError::from)?;
+        let marker = scenario.marker();
+        let mut runtime = Self::from_adapters(scenario.adapters())?;
+        runtime.scenario_marker = Some(marker);
+        Ok(runtime)
+    }
+
     #[cfg(feature = "test-backend")]
     fn scenario_with_control(
         fixture: PathBuf,

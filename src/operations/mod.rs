@@ -8,6 +8,9 @@
 
 use std::{collections::BTreeMap, sync::Arc};
 
+#[cfg(feature = "test-backend")]
+use std::{cell::Cell, marker::PhantomData, rc::Rc};
+
 use storage_contracts::{
     BlockStorageBackend, BtrfsBackend, FilesystemToolDiscovery, ImageWorkflowOperations,
     LogicalOperations, LogicalTopologySource, NetworkDriveBackend, RuntimeAdapters,
@@ -175,6 +178,35 @@ impl FilesystemToolDiscovery for StaticFilesystemTools {
 
 static SHARED_OPERATIONS: OnceCell<Arc<StorageOperations>> = OnceCell::const_new();
 
+#[cfg(feature = "test-backend")]
+thread_local! {
+    static REJECT_SHARED_OPERATIONS: Cell<u32> = const { Cell::new(0) };
+}
+
+/// Test-only migration detector for application-workflow tests.
+///
+/// This does not replace or mutate the selected production context. It simply
+/// makes an accidental compatibility lookup fail on the current test thread.
+#[cfg(feature = "test-backend")]
+pub(crate) fn reject_global_operations_for_workflow_tests() -> GlobalOperationsGuard {
+    REJECT_SHARED_OPERATIONS.with(|depth| depth.set(depth.get().saturating_add(1)));
+    GlobalOperationsGuard(PhantomData)
+}
+
+#[cfg(feature = "test-backend")]
+pub(crate) struct GlobalOperationsGuard(PhantomData<Rc<()>>);
+
+#[cfg(feature = "test-backend")]
+impl Drop for GlobalOperationsGuard {
+    fn drop(&mut self) {
+        REJECT_SHARED_OPERATIONS.with(|depth| {
+            let current = depth.get();
+            assert!(current > 0, "workflow global-operations guard underflow");
+            depth.set(current - 1);
+        });
+    }
+}
+
 pub fn install_selected(operations: Arc<StorageOperations>) -> Result<(), OperationError> {
     SHARED_OPERATIONS.set(operations).map_err(|_| {
         OperationError::Failed("a storage runtime is already installed for this process".into())
@@ -187,6 +219,12 @@ pub fn install_selected(operations: Arc<StorageOperations>) -> Result<(), Operat
 /// before any task runs. This prevents a scenario task from falling back to
 /// host-backed operations.
 pub async fn shared() -> Result<Arc<StorageOperations>, OperationError> {
+    #[cfg(feature = "test-backend")]
+    if REJECT_SHARED_OPERATIONS.with(|depth| depth.get() > 0) {
+        return Err(OperationError::Failed(
+            "workflow test attempted global operations context".into(),
+        ));
+    }
     SHARED_OPERATIONS.get().cloned().ok_or_else(|| {
         OperationError::Failed("storage runtime was not installed by the composition root".into())
     })
