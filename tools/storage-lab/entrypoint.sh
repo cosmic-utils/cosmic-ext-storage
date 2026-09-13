@@ -2,6 +2,21 @@
 set -eu
 
 mkdir -p /run/dbus /run/sshd /tmp/storage-lab
+# A privileged container still may not receive device-mapper nodes. UDisks
+# creates mapper devices for LUKS/LVM, so provide only the conventional
+# container-local control node and a small numbered range. The container is
+# never given a host block-device mount and removal is its final backstop.
+mkdir -p /dev/mapper
+if [ ! -e /dev/mapper/control ]; then
+    mknod /dev/mapper/control c 10 236
+fi
+for index in $(seq 0 15); do
+    device="/dev/dm$index"
+    if [ ! -e "$device" ]; then
+        mknod "$device" b 253 "$index"
+    fi
+done
+
 dbus-daemon --system --fork --nopidfile
 
 # UDisks observes block-device changes through udev. Start the daemon before
