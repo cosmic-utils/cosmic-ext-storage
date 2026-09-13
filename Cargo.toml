@@ -86,6 +86,7 @@ members = [
     "crates/storage-contracts",
     "crates/test-backend",
     "crates/storage-sys",
+    "crates/storage-lab-tests",
     "crates/ui-e2e-runner",
     "tools/storage-testing",
 ]

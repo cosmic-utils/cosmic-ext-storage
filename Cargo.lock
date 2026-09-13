@@ -5274,6 +5274,10 @@ dependencies = [
 ]
 
 [[package]]
+name = "storage-lab-tests"
+version = "0.1.0"
+
+[[package]]
 name = "storage-testing"
 version = "0.1.0"
 dependencies = [

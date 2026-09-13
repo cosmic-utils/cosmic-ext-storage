@@ -1,0 +1,44 @@
+# The builder and runtime use pinned Bookworm bases so the test binary and its
+# glibc ABI match. Package versions come from the pinned Debian snapshot.
+FROM docker.io/library/rust@sha256:300ec56abce8cc9448ddea2172747d048ed902a3090e6b57babb2bf19f754081 AS builder
+
+WORKDIR /workspace
+COPY . .
+RUN --mount=type=cache,target=/usr/local/cargo/registry \
+    --mount=type=cache,target=/usr/local/cargo/git \
+    --mount=type=cache,target=/workspace/target \
+    CARGO_TARGET_DIR=/workspace/target cargo test --locked -p storage-lab-tests --test capability --no-run \
+ && test_binary=$(find /workspace/target/debug/deps -maxdepth 1 -type f -name 'capability-*' -perm /111 | head -n 1) \
+ && test -n "$test_binary" \
+ && install -D -m 0755 "$test_binary" /out/storage-lab-capability
+
+FROM docker.io/library/rust@sha256:300ec56abce8cc9448ddea2172747d048ed902a3090e6b57babb2bf19f754081
+
+RUN rm -f /etc/apt/sources.list.d/debian.sources \
+ && printf '%s\n' \
+      'deb [check-valid-until=no] https://snapshot.debian.org/archive/debian/20250701T000000Z/ bookworm main' \
+      > /etc/apt/sources.list \
+ && apt-get update \
+ && DEBIAN_FRONTEND=noninteractive apt-get install --yes --no-install-recommends \
+      btrfs-progs=6.2-1+deb12u1 \
+      cryptsetup=2:2.6.1-4~deb12u2 \
+      dbus=1.14.10-1~deb12u1 \
+      dosfstools=4.2-1 \
+      e2fsprogs=1.47.0-2 \
+      iproute2=6.1.0-3 \
+      kmod=30+20221128-1 \
+      lvm2=2.03.16-2 \
+      mdadm=4.2-5 \
+      openssh-server=1:9.2p1-2+deb12u6 \
+      polkitd=122-3 \
+      udisks2=2.9.4-4 \
+      util-linux=2.38.1-5+deb12u3 \
+      xfsprogs=6.1.0-1 \
+ && rm -rf /var/lib/apt/lists/* /usr/local/cargo /usr/local/rustup
+
+COPY --from=builder /out/storage-lab-capability /opt/storage-lab/bin/storage-lab-capability
+COPY tools/storage-lab/entrypoint.sh /usr/local/bin/storage-lab-entrypoint
+COPY tools/storage-lab/run-tests.sh /usr/local/bin/storage-lab-run-tests
+RUN chmod 0755 /usr/local/bin/storage-lab-entrypoint /usr/local/bin/storage-lab-run-tests
+
+ENTRYPOINT ["/usr/local/bin/storage-lab-entrypoint"]
