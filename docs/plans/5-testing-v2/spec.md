@@ -157,6 +157,12 @@ directory, host home directory, or a developer's configuration. Its readiness
 endpoint proves that the private D-Bus service and UDisks object manager are
 available before a test begins.
 
+The entry point must resolve and invoke the installed `udisksd` binary by its
+image-specific path rather than assuming it is on `PATH`. The Phase 0 Ubuntu
+image installed it at `/usr/libexec/udisks2/udisksd`; image construction must
+fail early if the chosen base image/package layout does not provide the
+expected daemon.
+
 The container has no external network after image build. Testcontainers must
 start it with networking disabled. Image build may use the normal build
 network, but test execution may not.
@@ -169,25 +175,35 @@ following enforcement:
 
 1. A test creates sparse backing files only beneath a unique, container-local
    `LAB_ROOT` directory.
-2. A lab fixture records every backing file, loop device, mapper device, mount
+2. The fixture creates only the loop-device nodes it needs *inside* the
+   privileged container (major 7), records which nodes it created, and removes
+   those nodes during teardown. A privileged Docker container must not assume
+   `/dev/loopN` nodes were inherited from the host.
+3. A lab fixture records every backing file, loop device, mapper device, mount
    point, volume group, and MD array in an in-memory and on-disk ledger.
-3. Every mutating helper accepts a typed lab-owned target, not a free-form
+4. Every mutating helper accepts a typed lab-owned target, not a free-form
    path or command string.
-4. Before every mutation, the fixture verifies that the device resolves to one
+5. Before every mutation, the fixture verifies that the device resolves to one
    of its recorded loop devices and rejects `/dev/sd*`, `/dev/nvme*`,
    `/dev/vd*`, raw `/dev/loop*` values not in the ledger, and all host mounts.
-5. The image mounts no host block device, no Docker socket, and no host D-Bus
-   socket. Workspace access is read-only except for one explicitly mounted
-   artefact directory.
-6. Teardown is idempotent and runs after every test, including failure. It
+6. The image mounts no host block device, no Docker socket, host D-Bus socket,
+   or workspace directory. The outer Rust fixture writes host-side artefacts
+   under `target/storage-lab-artifacts/` from captured command output.
+7. Teardown is idempotent and runs after every test, including failure. It
    unmounts, closes mappings, deactivates groups/arrays, detaches loops, and
-   then verifies no ledgered resource remains.
-7. Testcontainers container removal is a final backstop, never the only
+   then uses a bounded poll of `losetup --list --output BACK-FILE` to verify no
+   ledgered loop still has a backing file. Do not assert that
+   `/sys/class/block/loopN` disappears: an unused loop node can legitimately
+   remain. Do not rely on a non-portable `losetup --wait` option.
+8. Testcontainers container removal is a final backstop, never the only
    cleanup mechanism.
 
 Failure to obtain the required loop capability is a clear failure for the CI
 `storage-lab` job. Locally, lab tests are opt-in via `STORAGE_LAB=1` and are
-reported as ignored unless that variable is set. The CI job sets it.
+reported as ignored unless that variable is set. The CI job sets it. A nested
+or otherwise restricted local Docker daemon may reject loop allocation; that
+is a hard opt-in test failure with artefacts, not a skip or a fallback to a
+second mechanism.
 
 ### 5.5 Test runner
 
@@ -199,6 +215,11 @@ fixtures.
 slot and a hard timeout. Tests sharing a lab must never run in parallel. There
 are no automatic retries: a storage test that flakes must be diagnosed, not
 silently turned green.
+
+The basic Testcontainers capability test belongs in `storage-lab-tests`, not
+the root GUI package, so a cold hosted run does not compile the application
+solely to prove lab setup. Cache Cargo outputs in CI and budget a five-minute
+capability-job timeout; Phase 0 took 4m51s on a cold GitHub-hosted runner.
 
 Normal test targets remain normal Cargo/nextest targets:
 

@@ -23,6 +23,34 @@ review conditions must pass first.
 
 ## Phase 0 — Testcontainers capability prototype PR
 
+**Outcome: passed on 2026-09-13.** The GitHub-hosted `Storage lab prototype`
+job created `/dev/loop0` from a container-local sparse file, reached private
+D-Bus/UDisks, detached it, and recorded an empty post-cleanup `losetup` list.
+The final run took 4m51s. The prototype PR and branch are intentionally
+disposable; its lessons are retained here and in the specification, while the
+production implementation begins afresh in Phase 1.
+
+### Recorded implementation constraints
+
+1. Use `testcontainers` with its `blocking` feature when the fixture uses
+   `SyncRunner`.
+2. Start the image as privileged and network-disabled, but create only the
+   required `/dev/loopN` device nodes inside the container. They are not
+   reliably supplied by a privileged Docker container.
+3. Ubuntu's packaged daemon was `/usr/libexec/udisks2/udisksd`; resolve the
+   daemon path in the entrypoint instead of assuming `PATH`.
+4. Linux loop detach is asynchronous. After `losetup --detach`, poll the
+   backing-file mapping for a bounded interval. Do not assert that the sysfs
+   loop node vanished and do not use `losetup --wait`, which is unavailable on
+   the hosted runner's util-linux.
+5. Capture container command output into a host-side target artefact directory;
+   do not mount the workspace simply to obtain logs. Keep the image ID,
+   container ID, loop ledger, probe exit code, and post-cleanup `losetup`
+   result in machine-readable evidence.
+6. Keep this low-level capability test in `storage-lab-tests` so that it does
+   not compile the root GUI package. Maintain Cargo caching and a five-minute
+   job timeout for a cold hosted runner.
+
 ### Branch and pull request
 
 Starting from the current `4-ui-testing` tip, create and push:
@@ -66,7 +94,7 @@ The prototype must not alter production storage code, `test-backend`,
    - attach and record a loop device;
    - confirm that the private D-Bus/UDisks object manager is reachable;
    - detach the loop device and remove the backing file; and
-   - write JSON evidence and service logs to the mounted artifact directory.
+   - write JSON evidence and service logs to a host-side artifact directory.
 4. Extend the existing CI workflow with a clearly named
    `storage-lab-prototype` job that runs only this test and uploads its
    artifacts on both success and failure. The job is informational while the
@@ -79,6 +107,7 @@ The prototype must not alter production storage code, `test-backend`,
 ```sh
 cargo test --locked --test storage_lab_capability -- --list
 cargo test --locked --test storage_lab_capability
+cargo test --locked --test storage_lab_capability -- --ignored --nocapture
 docker build -f tools/storage-lab/Containerfile -t cosmic-storage-lab:spike .
 ```
 
@@ -120,10 +149,12 @@ Cargo.lock
    `LabLoopDevice`, `LabMount`, `LabMapper`, `LabVolumeGroup`, and `LabArray`.
    No mutation helper accepts a raw device path or command text.
 3. Implement a persistent ledger plus idempotent teardown. It records all
-   resource creation before a later operation can use the resource.
+   resource creation before a later operation can use the resource, including
+   container-created loop nodes. After detach, teardown polls the loop backing
+   mapping until it disappears rather than checking for a vanished sysfs node.
 4. Start private D-Bus, UDisks, Polkit policy, udev support, and the local
-   SFTP service inside the container. Add explicit health checks for each
-   service needed by a selected test.
+   SFTP service inside the container. Resolve the packaged `udisksd` path and
+   add explicit health checks for each service needed by a selected test.
 5. Make the lab image/network/root/mount restrictions testable. The image has
    no host D-Bus or block-device mount and execution has no external network.
 
