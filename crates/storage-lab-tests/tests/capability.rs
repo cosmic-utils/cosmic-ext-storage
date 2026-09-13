@@ -1,9 +1,10 @@
 use std::{os::unix::fs::FileTypeExt, process::Command};
 
 use std::sync::Arc;
-use storage_contracts::{DiskDiscovery, PartitionOperations};
+use storage_contracts::{DiskDiscovery, FilesystemOperations, PartitionOperations};
 use storage_lab_tests::{LabFixture, Result};
 use storage_udisks::UdisksBackend;
+use storage_udisks::storage_types::FormatOptions;
 use zbus::Connection;
 
 /// This is compiled into the lab image and executed there by the outer bridge.
@@ -96,6 +97,61 @@ fn dropping_a_fixture_detaches_its_ledgered_loop() -> Result<()> {
         String::from_utf8_lossy(&mappings.stdout).trim().is_empty(),
         "a dropped fixture left a loop backing mapping"
     );
+    Ok(())
+}
+
+#[tokio::test]
+#[ignore = "runs only inside the private Testcontainers storage lab"]
+async fn filesystem_format_and_label_use_the_production_adapter() -> Result<()> {
+    let mut fixture = LabFixture::create("filesystem")?;
+    let loop_device = fixture.attach_sparse_loop("disk.img", 128 * 1024 * 1024)?;
+    let loop_path = loop_device.path().to_owned();
+    let backend = private_backend().await?;
+    wait_for_discovery(&backend, &loop_path).await?;
+
+    let invalid = backend
+        .format_filesystem(
+            &loop_path.to_string_lossy(),
+            "not-a-filesystem",
+            "invalid",
+            FormatOptions::default(),
+        )
+        .await;
+    assert!(
+        invalid.is_err(),
+        "UDisks must reject an unknown filesystem type"
+    );
+
+    backend
+        .format_filesystem(
+            &loop_path.to_string_lossy(),
+            "ext4",
+            "storage-lab",
+            FormatOptions::default(),
+        )
+        .await
+        .map_err(|error| error.to_string())?;
+    assert_eq!(
+        backend
+            .filesystem_label(&loop_path.to_string_lossy())
+            .await
+            .map_err(|error| error.to_string())?,
+        "storage-lab"
+    );
+    let filesystem_type = require_success(Command::new("blkid").args([
+        "--probe",
+        "--output",
+        "value",
+        "--match-token",
+        "TYPE",
+        loop_path.to_string_lossy().as_ref(),
+    ]))?;
+    assert_eq!(
+        String::from_utf8_lossy(&filesystem_type.stdout).trim(),
+        "ext4"
+    );
+
+    fixture.cleanup()?;
     Ok(())
 }
 
