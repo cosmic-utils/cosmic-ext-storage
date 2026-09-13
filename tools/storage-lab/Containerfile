@@ -2,6 +2,13 @@
 # glibc ABI match. Package versions come from the pinned Debian snapshot.
 FROM docker.io/library/rust@sha256:300ec56abce8cc9448ddea2172747d048ed902a3090e6b57babb2bf19f754081 AS builder
 
+RUN apt-get update \
+ && DEBIAN_FRONTEND=noninteractive apt-get install --yes --no-install-recommends \
+      libbtrfsutil-dev \
+      libclang-dev \
+      pkg-config \
+ && rm -rf /var/lib/apt/lists/*
+
 WORKDIR /workspace
 COPY . .
 RUN --mount=type=cache,target=/usr/local/cargo/registry \

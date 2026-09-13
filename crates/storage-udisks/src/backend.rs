@@ -24,6 +24,7 @@ use storage_types::{
 };
 
 use crate::DiskManager;
+use zbus::Connection;
 
 /// The shipped UDisks2 adapter.  It owns one `DiskManager`, and therefore one
 /// system-bus connection, for discovery and device-event subscription.
@@ -49,6 +50,13 @@ impl UdisksBackend {
             manager,
             object_manager_epoch: Arc::new(AtomicU64::new(0)),
         }
+    }
+
+    /// Construct the production adapter over an explicitly supplied D-Bus
+    /// transport.  The caller owns choosing that transport; [`Self::new`]
+    /// retains the normal system-bus production behaviour.
+    pub fn from_connection(connection: Arc<Connection>) -> Self {
+        Self::from_manager(DiskManager::from_connection(connection))
     }
 
     pub fn manager(&self) -> &DiskManager {

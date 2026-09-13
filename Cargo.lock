@@ -5276,6 +5276,12 @@ dependencies = [
 [[package]]
 name = "storage-lab-tests"
 version = "0.1.0"
+dependencies = [
+ "storage-contracts",
+ "storage-udisks",
+ "tokio",
+ "zbus",
+]
 
 [[package]]
 name = "storage-testing"

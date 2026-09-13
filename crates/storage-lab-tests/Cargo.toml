@@ -7,3 +7,7 @@ license = "GPL-3.0-only"
 description = "Private Testcontainers storage-lab fixtures and integration tests"
 
 [dependencies]
+storage-contracts.workspace = true
+storage-udisks.workspace = true
+tokio.workspace = true
+zbus.workspace = true
