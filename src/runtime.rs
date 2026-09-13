@@ -77,6 +77,22 @@ impl AppRuntime {
         })
     }
 
+    /// Compose real adapters on the caller's async runtime using an explicitly
+    /// constructed UDisks adapter. No global runtime or bus selection changes.
+    pub async fn with_udisks_backend(
+        backend: Arc<storage_udisks::UdisksBackend>,
+    ) -> Result<Self, OperationError> {
+        Ok(Self {
+            operations: StorageOperations::with_udisks_backend(backend).await?,
+            desktop: Arc::new(ProductionDesktopServices),
+            scenario_control: None,
+            scenario_marker: None,
+            #[cfg(feature = "test-backend")]
+            scenario_control_server: None,
+            bootstrap: None,
+        })
+    }
+
     pub fn operations(&self) -> Arc<StorageOperations> {
         self.operations.clone()
     }

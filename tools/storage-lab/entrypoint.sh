@@ -1,6 +1,13 @@
 #!/bin/sh
 set -eu
 
+if [ -n "${STORAGE_LAB_KERNEL_RELEASE:-}" ]; then
+    test "$(uname -r)" = "$STORAGE_LAB_KERNEL_RELEASE" || {
+        echo 'Kernel metadata does not match the Docker daemon kernel' >&2
+        exit 64
+    }
+fi
+
 mkdir -p /run/dbus /run/sshd /tmp/storage-lab /tmp/storage-lab-evidence
 touch /run/storage-lab-private
 # A privileged container still may not receive device-mapper nodes. UDisks
@@ -34,10 +41,12 @@ udevadm settle --timeout=10 || true
 
 /usr/lib/polkit-1/polkitd --no-debug >/tmp/storage-lab/polkitd.log 2>&1 &
 polkitd_pid=$!
-/usr/libexec/udisks2/udisksd >/tmp/storage-lab/udisksd.log 2>&1 &
+G_MESSAGES_DEBUG=all /usr/libexec/udisks2/udisksd >/tmp/storage-lab/udisksd.log 2>&1 &
 udisksd_pid=$!
 ssh-keygen -A >/tmp/storage-lab/ssh-keygen.log 2>&1
-/usr/sbin/sshd -D -p 2222 >/tmp/storage-lab/sshd.log 2>&1 &
+useradd --create-home --home-dir /tmp/storage-lab-sftp --shell /bin/sh storage-lab-sftp
+printf '%s\n' 'storage-lab-sftp:storage-lab-fake-password' | chpasswd
+/usr/sbin/sshd -D -p 2222 -o ListenAddress=127.0.0.1 -o PasswordAuthentication=yes >/tmp/storage-lab/sshd.log 2>&1 &
 sshd_pid=$!
 
 for attempt in $(seq 1 100); do

@@ -7,11 +7,15 @@ license = "GPL-3.0-only"
 description = "Private Testcontainers storage-lab fixtures and integration tests"
 
 [features]
-outer-bridge = ["dep:testcontainers"]
+outer-bridge = ["dep:testcontainers", "dep:sha2"]
 
 [dependencies]
 storage-contracts.workspace = true
 storage-udisks.workspace = true
+storage-btrfs = { path = "../storage-btrfs" }
+storage-sys = { path = "../storage-sys", package = "cosmic-ext-storage-storage-sys" }
 testcontainers = { version = "0.28.0", features = ["blocking"], optional = true }
 tokio.workspace = true
 zbus.workspace = true
+futures.workspace = true
+sha2 = { workspace = true, optional = true }

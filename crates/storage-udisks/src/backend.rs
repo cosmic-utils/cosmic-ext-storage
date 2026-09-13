@@ -324,18 +324,30 @@ impl PartitionOperations for UdisksBackend {
     }
 
     async fn delete_partition(&self, partition: &str) -> Result<(), StorageError> {
-        crate::partition::delete::delete_partition_with_connection(
+        let path = crate::disk::discovery::block_object_path_for_device_with_connection(
             self.manager.connection().as_ref(),
             partition,
+        )
+        .await
+        .map_err(error)?;
+        crate::partition::delete::delete_partition_with_connection(
+            self.manager.connection().as_ref(),
+            &path,
         )
         .await
         .map_err(error)
     }
 
     async fn resize_partition(&self, partition: &str, new_size: u64) -> Result<(), StorageError> {
-        crate::partition::resize::resize_partition_with_connection(
+        let path = crate::disk::discovery::block_object_path_for_device_with_connection(
             self.manager.connection().as_ref(),
             partition,
+        )
+        .await
+        .map_err(error)?;
+        crate::partition::resize::resize_partition_with_connection(
+            self.manager.connection().as_ref(),
+            &path,
             new_size,
         )
         .await
@@ -343,9 +355,15 @@ impl PartitionOperations for UdisksBackend {
     }
 
     async fn set_partition_type(&self, partition: &str, type_id: &str) -> Result<(), StorageError> {
-        crate::partition::edit::set_partition_type_with_connection(
+        let path = crate::disk::discovery::block_object_path_for_device_with_connection(
             self.manager.connection().as_ref(),
             partition,
+        )
+        .await
+        .map_err(error)?;
+        crate::partition::edit::set_partition_type_with_connection(
+            self.manager.connection().as_ref(),
+            &path,
             type_id,
         )
         .await
@@ -353,9 +371,15 @@ impl PartitionOperations for UdisksBackend {
     }
 
     async fn set_partition_flags(&self, partition: &str, flags: u64) -> Result<(), StorageError> {
-        crate::partition::edit::set_partition_flags_with_connection(
+        let path = crate::disk::discovery::block_object_path_for_device_with_connection(
             self.manager.connection().as_ref(),
             partition,
+        )
+        .await
+        .map_err(error)?;
+        crate::partition::edit::set_partition_flags_with_connection(
+            self.manager.connection().as_ref(),
+            &path,
             flags,
         )
         .await
@@ -363,9 +387,15 @@ impl PartitionOperations for UdisksBackend {
     }
 
     async fn set_partition_name(&self, partition: &str, name: &str) -> Result<(), StorageError> {
-        crate::partition::edit::set_partition_name_with_connection(
+        let path = crate::disk::discovery::block_object_path_for_device_with_connection(
             self.manager.connection().as_ref(),
             partition,
+        )
+        .await
+        .map_err(error)?;
+        crate::partition::edit::set_partition_name_with_connection(
+            self.manager.connection().as_ref(),
+            &path,
             name,
         )
         .await

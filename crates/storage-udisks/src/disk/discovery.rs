@@ -536,13 +536,41 @@ pub async fn get_disks_with_partitions(
     manager: &DiskManager,
 ) -> Result<Vec<(DiskInfo, Vec<PartitionInfo>)>> {
     let pairs = get_disks_with_volumes_inner(manager.connection()).await?;
-    Ok(pairs
-        .into_iter()
-        .map(|(d, vols)| {
-            let device = d.device.clone();
-            (d, flatten_volumes_to_partitions(&vols, &device))
-        })
-        .collect())
+    let connection = manager.connection().as_ref();
+    let mut result = Vec::new();
+    for (disk, volumes) in pairs {
+        let mut partitions = flatten_volumes_to_partitions(&volumes, &disk.device);
+        for partition in &mut partitions {
+            let path = super::resolve::block_object_path_for_device_with_connection(
+                connection,
+                &partition.device,
+            )
+            .await?;
+            let proxy = udisks2::partition::PartitionProxy::builder(connection)
+                .path(&path)?
+                .build()
+                .await?;
+            // Volume labels describe filesystem/UI presentation, not GPT
+            // metadata. Never substitute them for the actual partition name,
+            // type, flags or UUID exposed by the Partition interface.
+            partition.name = proxy.name().await?;
+            partition.type_id = proxy.type_().await?;
+            partition.flags = proxy.flags().await?.bits();
+            partition.uuid = proxy.uuid().await?;
+            partition.number = proxy.number().await?;
+            partition.offset = proxy.offset().await?;
+            partition.size = proxy.size().await?;
+            let table = proxy.table().await?;
+            partition.table_type = PartitionTableProxy::builder(connection)
+                .path(&table)?
+                .build()
+                .await?
+                .type_()
+                .await?;
+        }
+        result.push((disk, partitions));
+    }
+    Ok(result)
 }
 
 /// Get DiskInfo for a drive given its UDisks2 drive object path (e.g. from InterfacesAdded).

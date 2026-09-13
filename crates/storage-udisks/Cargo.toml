@@ -31,4 +31,4 @@ chrono.workspace = true
 serde_json.workspace = true
 
 [dev-dependencies]
-zbus = { workspace = true, features = ["p2p"] }
+zbus = { workspace = true, features = ["p2p", "tokio"] }

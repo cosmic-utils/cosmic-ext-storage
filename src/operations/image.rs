@@ -2,6 +2,7 @@
 
 use std::{
     collections::HashMap,
+    io::{Seek, SeekFrom},
     path::{Path, PathBuf},
     sync::{
         Arc,
@@ -69,14 +70,22 @@ impl ImageOperationManager {
             ImageKind::Restore => block.open_for_restore(&device).await?,
         };
         let total = match kind {
-            ImageKind::Backup => std::fs::File::from(
-                descriptor
-                    .try_clone()
-                    .map_err(|error| OperationError::Failed(error.to_string()))?,
-            )
-            .metadata()
-            .map(|metadata| metadata.len())
-            .unwrap_or(0),
+            ImageKind::Backup => {
+                // Block-device metadata reports zero length. The seekable
+                // descriptor supplied by UDisks exposes the actual extent.
+                let mut file = std::fs::File::from(
+                    descriptor
+                        .try_clone()
+                        .map_err(|error| OperationError::Failed(error.to_string()))?,
+                );
+                let length = file
+                    .seek(SeekFrom::End(0))
+                    .map_err(|error| OperationError::Failed(error.to_string()))?;
+                // dup shares its file offset with the copy descriptor.
+                file.seek(SeekFrom::Start(0))
+                    .map_err(|error| OperationError::Failed(error.to_string()))?;
+                length
+            }
             ImageKind::Restore => std::fs::metadata(&path)
                 .map(|metadata| metadata.len())
                 .unwrap_or(0),
@@ -97,8 +106,9 @@ impl ImageOperationManager {
                 return;
             }
             let started = Instant::now();
+            let copy_cancelled = Arc::clone(&task_cancelled);
             let copied = tokio::task::spawn_blocking(move || match kind {
-                ImageKind::Backup => storage_sys::copy_image_to_file(
+                ImageKind::Backup => storage_sys::image::copy_image_to_file_cancellable(
                     descriptor,
                     &task_path,
                     Some(|bytes| {
@@ -107,8 +117,9 @@ impl ImageOperationManager {
                         progress.bytes_completed = bytes;
                         progress.speed_bytes_per_sec = bytes / elapsed;
                     }),
+                    &copy_cancelled,
                 ),
-                ImageKind::Restore => storage_sys::copy_file_to_image(
+                ImageKind::Restore => storage_sys::image::copy_file_to_image_cancellable(
                     &task_path,
                     descriptor,
                     Some(|bytes| {
@@ -117,6 +128,7 @@ impl ImageOperationManager {
                         progress.bytes_completed = bytes;
                         progress.speed_bytes_per_sec = bytes / elapsed;
                     }),
+                    &copy_cancelled,
                 ),
             })
             .await;

@@ -219,7 +219,7 @@ impl LogicalOperations for UdisksBackend {
                     .await
                     .map_err(native_error)?;
                 proxy
-                    .delete(preserve_delete_options())
+                    .delete(false, preserve_delete_options())
                     .await
                     .map_err(native_error)?;
             }
@@ -255,7 +255,7 @@ impl LogicalOperations for UdisksBackend {
                     .await
                     .map_err(native_error)?;
                 proxy
-                    .remove_device(&device.path.as_ref(), preserve_wipe_options())
+                    .remove_device(&device.path.as_ref(), false, preserve_wipe_options())
                     .await
                     .map_err(native_error)?;
             }
@@ -431,6 +431,7 @@ impl LogicalOperations for UdisksBackend {
                     .add_device(&device.path.as_ref(), empty_options())
                     .await
                     .map_err(native_error)?;
+                rescan_member(self, &device.path).await?;
             }
             LogicalAction::RemoveBtrfsDevice { filesystem, device } => {
                 let proxy = btrfs_proxy(self, filesystem).await?;
@@ -439,6 +440,7 @@ impl LogicalOperations for UdisksBackend {
                     .remove_device(&device.path.as_ref(), empty_options())
                     .await
                     .map_err(native_error)?;
+                rescan_member(self, &device.path).await?;
             }
             LogicalAction::ResizeBtrfsFilesystem {
                 filesystem,
@@ -837,6 +839,22 @@ async fn resolve_fresh_block(
     )
 }
 
+/// UDisks 2.9's Btrfs member operation refreshes the filesystem's primary
+/// block, not the added/removed member. Refresh that exact member on the same
+/// transport so subsequent discovery and confirmation see its new signature.
+async fn rescan_member(
+    backend: &UdisksBackend,
+    path: &OwnedObjectPath,
+) -> Result<(), StorageError> {
+    let proxy = udisks2::block::BlockProxy::builder(backend.manager().connection())
+        .path(path)
+        .map_err(native_error)?
+        .build()
+        .await
+        .map_err(native_error)?;
+    proxy.rescan(empty_options()).await.map_err(native_error)
+}
+
 async fn find_volume_group(
     backend: &UdisksBackend,
     target: &LogicalEntityId,
@@ -887,13 +905,8 @@ async fn find_logical_volume(
         ));
     };
     let vg_path = find_volume_group(backend, &LogicalEntityId(format!("lvm-vg:{vg_uuid}"))).await?;
-    let vg = VolumeGroupProxy::builder(backend.manager().connection())
-        .path(vg_path)
-        .map_err(native_error)?
-        .build()
-        .await
-        .map_err(native_error)?;
-    for path in vg.logical_volumes().await.map_err(native_error)? {
+    let (logical_volumes, _) = super::resolve::lvm_members(backend.manager(), &vg_path).await?;
+    for path in logical_volumes {
         let lv = LogicalVolumeProxy::builder(backend.manager().connection())
             .path(&path)
             .map_err(native_error)?
@@ -1056,7 +1069,8 @@ async fn verify_vg_scope(
         .map_err(native_error)?;
     let uuid = proxy.uuid().await.map_err(native_error)?;
     let mut entity_ids = Vec::new();
-    for lv_path in proxy.logical_volumes().await.map_err(native_error)? {
+    let (logical_volumes, _) = super::resolve::lvm_members(backend.manager(), path).await?;
+    for lv_path in logical_volumes {
         let lv = LogicalVolumeProxy::builder(backend.manager().connection())
             .path(lv_path)
             .map_err(native_error)?

@@ -110,7 +110,9 @@ jobs:
     name: Storage lab
     if: github.event.pull_request.draft == false
     runs-on: ubuntu-latest
-    timeout-minutes: 8
+    # Includes the cold root-application build for real registry/image cases.
+    # Each native lab case retains Nextest's separate five-minute hard limit.
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
       - run: rustup update

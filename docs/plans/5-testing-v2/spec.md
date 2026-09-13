@@ -195,6 +195,16 @@ images may differ only in their build/test profile and profile-output setup,
 not in services, device permissions, network isolation, fixture layout, or
 selected test semantics.
 
+For libblockdev's Btrfs dependency check, the outer bridge copies a bounded,
+SHA-256-recorded set of the running kernel's real module indexes and (when
+loadable) its Btrfs module into the container with read-only file modes. This
+is not a bind mount or an application binary import. It grants no host
+filesystem access and never substitutes a fake module or command. The entry
+point verifies the payload's kernel release matches the Docker daemon's kernel;
+a remote daemon mismatch fails. Built-in drivers need their real built-in
+indexes too: libblockdev 2.28 checks libkmod metadata, not just live filesystem
+availability. Record this kernel-dependent input alongside the pinned image.
+
 ### 5.4 Device safety contract
 
 The lab requires the capabilities necessary to create loop devices; this is a

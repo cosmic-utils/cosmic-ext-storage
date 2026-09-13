@@ -19,6 +19,44 @@ pub(crate) const VOLUME_GROUP_INTERFACE: &str = "org.freedesktop.UDisks2.VolumeG
 pub(crate) const MDRAID_INTERFACE: &str = "org.freedesktop.UDisks2.MDRaid";
 pub(crate) const BTRFS_INTERFACE: &str = "org.freedesktop.UDisks2.Filesystem.BTRFS";
 
+/// UDisks has no VolumeGroup.LogicalVolumes/PhysicalVolumes properties.
+/// Membership is expressed by each LV/PV's VolumeGroup back-reference.
+pub(crate) async fn lvm_members(
+    manager: &DiskManager,
+    group: &OwnedObjectPath,
+) -> Result<(Vec<OwnedObjectPath>, Vec<OwnedObjectPath>), StorageError> {
+    let mut logical = Vec::new();
+    let mut physical = Vec::new();
+    for (path, interfaces) in managed_paths(manager).await? {
+        for (interface, output) in [
+            ("org.freedesktop.UDisks2.LogicalVolume", &mut logical),
+            ("org.freedesktop.UDisks2.PhysicalVolume", &mut physical),
+        ] {
+            if !interfaces.iter().any(|candidate| candidate == interface) {
+                continue;
+            }
+            let proxy = zbus::Proxy::new(
+                manager.connection(),
+                "org.freedesktop.UDisks2",
+                &path,
+                interface,
+            )
+            .await
+            .map_err(native_error)?;
+            let parent: OwnedObjectPath = proxy
+                .get_property("VolumeGroup")
+                .await
+                .map_err(native_error)?;
+            if &parent == group {
+                output.push(path.clone());
+            }
+        }
+    }
+    logical.sort_by(|left, right| left.as_str().cmp(right.as_str()));
+    physical.sort_by(|left, right| left.as_str().cmp(right.as_str()));
+    Ok((logical, physical))
+}
+
 #[derive(Debug, Clone)]
 pub(crate) struct ResolvedBlock {
     pub path: OwnedObjectPath,

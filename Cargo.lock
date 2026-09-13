@@ -1356,6 +1356,7 @@ dependencies = [
  "sha2 0.10.9",
  "storage-btrfs",
  "storage-contracts",
+ "storage-lab-tests",
  "storage-types",
  "storage-udisks",
  "tempfile",
@@ -1368,6 +1369,7 @@ dependencies = [
  "uuid 1.24.0",
  "vergen-git2",
  "which 8.0.5",
+ "zbus",
 ]
 
 [[package]]
@@ -1385,6 +1387,7 @@ dependencies = [
  "serde_json",
  "storage-contracts",
  "storage-types",
+ "tempfile",
  "thiserror 2.0.19",
  "tokio",
  "tracing",
@@ -6060,6 +6063,10 @@ dependencies = [
 name = "storage-lab-tests"
 version = "0.1.0"
 dependencies = [
+ "cosmic-ext-storage-storage-sys",
+ "futures",
+ "sha2 0.10.9",
+ "storage-btrfs",
  "storage-contracts",
  "storage-udisks",
  "testcontainers",

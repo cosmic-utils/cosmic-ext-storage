@@ -70,8 +70,11 @@ pub(crate) async fn create_partition_with_connection(
 
     // Create partition
     let options: HashMap<&str, Value<'_>> = HashMap::new();
-    let partition_path = table_proxy
-        .create_partition(offset, size, type_id, "", options)
+    // udisks2::Error::Failed discards the daemon's diagnostic text. Retain the
+    // original D-Bus error here so a failed partition operation is actionable.
+    let partition_path: OwnedObjectPath = table_proxy
+        .inner()
+        .call("CreatePartition", &(offset, size, type_id, "", options))
         .await
         .map_err(|e| DiskError::OperationFailed(format!("Create partition failed: {}", e)))?;
 

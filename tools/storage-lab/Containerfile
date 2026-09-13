@@ -2,23 +2,41 @@
 # glibc ABI match. Package versions come from the pinned Debian snapshot.
 FROM docker.io/library/rust@sha256:300ec56abce8cc9448ddea2172747d048ed902a3090e6b57babb2bf19f754081 AS builder
 
-RUN apt-get update \
+RUN rm -f /etc/apt/sources.list.d/debian.sources \
+ && printf '%s\n' 'deb [check-valid-until=no] https://snapshot.debian.org/archive/debian/20250701T000000Z/ bookworm main' > /etc/apt/sources.list \
+ && apt-get update \
  && DEBIAN_FRONTEND=noninteractive apt-get install --yes --no-install-recommends \
-      libbtrfsutil-dev \
-      libclang-dev \
-      jq \
-      pkg-config \
+      libbtrfsutil-dev=6.2-1+deb12u1 \
+      libclang-dev=1:14.0-55.7~deb12u1 \
+      libxkbcommon-dev=1.5.0-1 \
+      jq=1.6-2.1 \
+      pkg-config=1.8.1-1 \
  && rm -rf /var/lib/apt/lists/*
 
+RUN RUSTUP_NO_SELF_UPDATE=1 rustup toolchain install 1.95.0 --profile minimal
 WORKDIR /workspace
 COPY . .
+ARG VERGEN_GIT_SHA
+ARG VERGEN_GIT_COMMIT_DATE
+ARG STORAGE_LAB_COVERAGE=0
 RUN --mount=type=cache,target=/usr/local/cargo/registry \
     --mount=type=cache,target=/usr/local/cargo/git \
     --mount=type=cache,target=/workspace/target \
-    CARGO_TARGET_DIR=/workspace/target cargo test --locked -p storage-lab-tests --test capability --no-run --message-format=json > /tmp/storage-lab-build.json \
- && test_binary=$(jq -ers '[.[] | select(.reason == "compiler-artifact" and .target.name == "capability" and .profile.test == true and .executable != null) | .executable] | if length == 1 then .[0] else error("expected exactly one capability test executable") end' /tmp/storage-lab-build.json) \
- && test -x "$test_binary" \
- && install -D -m 0755 "$test_binary" /out/storage-lab-capability
+    case "$STORAGE_LAB_COVERAGE" in 0) ;; 1) export RUSTFLAGS='-C instrument-coverage' ;; *) exit 64 ;; esac \
+ && (CARGO_TARGET_DIR=/workspace/target cargo test --locked -p storage-lab-tests --tests --no-run --message-format=json > /tmp/storage-lab-build.json || { jq -r 'select(.reason == "compiler-message") | .message.rendered // empty' /tmp/storage-lab-build.json >&2; exit 1; }) \
+ && jq -ers '[.[] | select(.reason == "compiler-artifact" and (.target.kind | index("test")) and .profile.test == true and .executable != null)] | if length == 0 then error("no integration test executables") else .[] | [.target.name, .executable] | @tsv end' /tmp/storage-lab-build.json > /tmp/storage-lab-executables.tsv \
+ && while read -r test_name test_binary; do \
+      test -x "$test_binary" && install -D -m 0755 "$test_binary" "/out/storage-lab-$test_name" || exit 1; \
+    done < /tmp/storage-lab-executables.tsv
+
+RUN --mount=type=cache,target=/usr/local/cargo/registry \
+    --mount=type=cache,target=/usr/local/cargo/git \
+    --mount=type=cache,target=/workspace/target \
+    case "$STORAGE_LAB_COVERAGE" in 0) ;; 1) export RUSTFLAGS='-C instrument-coverage' ;; *) exit 64 ;; esac \
+ && (CARGO_TARGET_DIR=/workspace/target cargo test --locked -p cosmic-ext-storage --test storage_lab --no-run --message-format=json > /tmp/storage-app-build.json || { jq -r 'select(.reason == "compiler-message") | .message.rendered // empty' /tmp/storage-app-build.json >&2; exit 1; }) \
+ && test_binary=$(jq -ers '[.[] | select(.reason == "compiler-artifact" and .target.name == "storage_lab" and .profile.test == true and .executable != null) | .executable] | if length == 1 then .[0] else error("expected exactly one application lab executable") end' /tmp/storage-app-build.json) \
+ && install -D -m 0755 "$test_binary" /out/storage-lab-application \
+ && printf '%s\n' "$STORAGE_LAB_COVERAGE" > /out/coverage-mode
 
 FROM docker.io/library/rust@sha256:300ec56abce8cc9448ddea2172747d048ed902a3090e6b57babb2bf19f754081
 
@@ -35,22 +53,28 @@ RUN rm -f /etc/apt/sources.list.d/debian.sources \
       dbus=1.14.10-1~deb12u1 \
       dosfstools=4.2-1 \
       e2fsprogs=1.47.0-2 \
+      fuse3=3.14.0-4 \
       iproute2=6.1.0-3 \
       kmod=30+20221128-1 \
       libblockdev-btrfs2=2.28-2 \
       libblockdev-crypto2=2.28-2 \
       libblockdev-lvm2=2.28-2 \
       libblockdev-mdraid2=2.28-2 \
+      libbtrfsutil1=6.2-1+deb12u1 \
+      libxkbcommon0=1.5.0-1 \
       lvm2=2.03.16-2 \
       mdadm=4.2-5 \
       openssh-server=1:9.2p1-2+deb12u6 \
       polkitd=122-3 \
+      rclone=1.60.1+dfsg-2+b5 \
       udisks2=2.9.4-4 \
+      udisks2-btrfs=2.9.4-4 \
+      udisks2-lvm2=2.9.4-4 \
       util-linux=2.38.1-5+deb12u3 \
       xfsprogs=6.1.0-1 \
  && rm -rf /var/lib/apt/lists/* /usr/local/cargo /usr/local/rustup
 
-COPY --from=builder /out/storage-lab-capability /opt/storage-lab/bin/storage-lab-capability
+COPY --from=builder /out/ /opt/storage-lab/bin/
 COPY tools/storage-lab/entrypoint.sh /usr/local/bin/storage-lab-entrypoint
 COPY tools/storage-lab/run-tests.sh /usr/local/bin/storage-lab-run-tests
 RUN chmod 0755 /usr/local/bin/storage-lab-entrypoint /usr/local/bin/storage-lab-run-tests

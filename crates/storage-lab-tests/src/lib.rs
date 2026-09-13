@@ -20,6 +20,7 @@ const DETACH_ATTEMPTS: u32 = 100;
 const DETACH_POLL: Duration = Duration::from_millis(100);
 const EVIDENCE_ROOT: &str = "/tmp/storage-lab-evidence";
 
+mod nodes;
 mod resources;
 pub use resources::{LabArray, LabMapper, LabMount, LabVolumeGroup};
 
@@ -51,6 +52,18 @@ impl From<std::io::Error> for LabError {
 impl From<String> for LabError {
     fn from(message: String) -> Self {
         Self::new(message)
+    }
+}
+
+impl From<storage_contracts::StorageError> for LabError {
+    fn from(error: storage_contracts::StorageError) -> Self {
+        Self::new(error.to_string())
+    }
+}
+
+impl From<zbus::Error> for LabError {
+    fn from(error: zbus::Error) -> Self {
+        Self::new(error.to_string())
     }
 }
 
@@ -119,7 +132,7 @@ impl LabBackingFile {
 }
 
 /// A loop device allocated from a [`LabBackingFile`].
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct LabLoopDevice {
     path: PathBuf,
     backing: PathBuf,
@@ -127,7 +140,7 @@ pub struct LabLoopDevice {
 }
 
 impl LabLoopDevice {
-    pub fn attach(backing: &LabBackingFile) -> Result<Self> {
+    fn attach(backing: &LabBackingFile) -> Result<Self> {
         require_private_lab()?;
         let created_nodes = create_missing_loop_nodes()?;
         let attach_result = run(Command::new("losetup").args([
@@ -161,7 +174,7 @@ impl LabLoopDevice {
         &self.path
     }
 
-    pub fn detach(&self) -> Result<()> {
+    fn detach(&self) -> Result<()> {
         // A loop number can be reused. Never detach it unless its current
         // backing file still belongs to this exact capability.
         if loop_backing(&self.path)?.is_none() {
@@ -194,8 +207,11 @@ impl LabLoopDevice {
 pub struct LabFixture {
     root: Option<LabRoot>,
     loops: Vec<LabLoopDevice>,
+    pending_images: Vec<PathBuf>,
     ledger: PathBuf,
     resources: Vec<resources::Resource>,
+    partition_nodes: Vec<nodes::PartitionNodes>,
+    created_partition_nodes: Vec<PathBuf>,
 }
 
 impl LabFixture {
@@ -208,8 +224,11 @@ impl LabFixture {
         let fixture = Self {
             root: Some(root),
             loops: Vec::new(),
+            pending_images: Vec::new(),
             ledger,
             resources: Vec::new(),
+            partition_nodes: Vec::new(),
+            created_partition_nodes: Vec::new(),
         };
         fixture.record("root", fixture.root()?.path())?;
         Ok(fixture)
@@ -228,6 +247,11 @@ impl LabFixture {
             self.record("node", node)?;
         }
         self.record("loop", device.path())?;
+        self.partition_nodes.push(nodes::PartitionNodes::start(
+            device.path.clone(),
+            device.backing.clone(),
+            self.ledger.clone(),
+        ));
         self.loops
             .last()
             .ok_or_else(|| LabError::new("loop device was not recorded"))
@@ -239,9 +263,96 @@ impl LabFixture {
             .ok_or_else(|| LabError::new("lab fixture has already been cleaned up"))
     }
 
+    /// Exercise the real image-attach adapter with rollback registered before
+    /// the async call. Even a failed or cancelled call can leave a kernel loop.
+    pub async fn attach_image_loop(
+        &mut self,
+        backend: &impl storage_contracts::ImageDeviceOperations,
+        name: &str,
+        bytes: u64,
+    ) -> Result<String> {
+        require_private_lab()?;
+        let backing = self.root()?.sparse_file(name, bytes)?;
+        self.record("pending-image", backing.path())?;
+        self.pending_images.push(backing.path.clone());
+        self.created_partition_nodes
+            .extend(create_missing_loop_nodes()?);
+        let result = backend
+            .loop_setup(
+                backing
+                    .path()
+                    .to_str()
+                    .ok_or_else(|| LabError::new("image path is not UTF-8"))?,
+            )
+            .await;
+        // Reconcile regardless of adapter success; pending entries survive
+        // until cleanup if the call failed before returning an object path.
+        self.reconcile_images()?;
+        let device = result?;
+        self.owned_loop(Path::new(&device))?;
+        Ok(device)
+    }
+
+    fn reconcile_images(&mut self) -> Result<()> {
+        for backing in &self.pending_images {
+            let output = run(Command::new("losetup")
+                .args([
+                    "--list",
+                    "--noheadings",
+                    "--raw",
+                    "--output",
+                    "NAME",
+                    "--associated",
+                ])
+                .arg(backing))?;
+            for name in String::from_utf8_lossy(&output.stdout).lines() {
+                if !is_lab_loop_device(name) {
+                    return Err(LabError::new(
+                        "image reconciliation returned a non-loop device",
+                    ));
+                }
+                let path = PathBuf::from(name);
+                if self.loops.iter().any(|device| device.path == path) {
+                    continue;
+                }
+                let device = LabLoopDevice {
+                    path,
+                    backing: backing.clone(),
+                    created_nodes: Vec::new(),
+                };
+                device.verify()?;
+                self.record("loop", device.path())?;
+                self.partition_nodes.push(nodes::PartitionNodes::start(
+                    device.path.clone(),
+                    backing.clone(),
+                    self.ledger.clone(),
+                ));
+                self.loops.push(device);
+            }
+        }
+        Ok(())
+    }
+
     pub fn cleanup(&mut self) -> Result<()> {
         // Keep failed entries and their backing files for a retry/diagnosis.
         // Unlinking a busy backing file hides a leaked kernel resource.
+        if !self.pending_images.is_empty() {
+            self.reconcile_images()?;
+        }
+        let mut worker_error = None;
+        for worker in &mut self.partition_nodes {
+            match worker.finish() {
+                Ok(nodes) => self.created_partition_nodes.extend(nodes),
+                Err(error) => {
+                    worker_error.get_or_insert(error);
+                    // Joining consumed the worker; a second finish recovers
+                    // nodes created before its failure. Still tear down other
+                    // independently verified resources, then report failure.
+                    self.created_partition_nodes.extend(worker.finish()?);
+                }
+            }
+        }
+        self.partition_nodes.clear();
         while let Some(resource) = self.resources.last() {
             self.cleanup_resource(resource)?;
             self.record("removed-resource", Path::new(&format!("{resource:?}")))?;
@@ -255,12 +366,18 @@ impl LabFixture {
             self.record("detached", device.path())?;
             self.loops.pop();
         }
+        remove_created_nodes(&self.created_partition_nodes);
+        self.created_partition_nodes.clear();
+        self.pending_images.clear();
         if let Some(root) = &self.root {
             fs::remove_dir_all(root.path())?;
             self.record("removed-root", root.path())?;
             self.root = None;
         }
-        Ok(())
+        match worker_error {
+            Some(error) => Err(error),
+            None => Ok(()),
+        }
     }
 
     /// Read-only evidence survives successful cleanup of the fixture root.
@@ -285,7 +402,7 @@ impl LabFixture {
             .create(true)
             .append(true)
             .open(&self.ledger)?;
-        writeln!(file, "{action}\t{}", path.display())?;
+        file.write_all(format!("{action}\t{}\n", path.display()).as_bytes())?;
         file.sync_all()?;
         Ok(())
     }

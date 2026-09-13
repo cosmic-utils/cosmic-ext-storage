@@ -15,9 +15,11 @@ backing mappings disappear during cleanup.
 starting the container, passing that filter, and collecting its artifacts.
 
 Run the same suite locally and in CI with `STORAGE_LAB=1 just test-lab`.
-The five required bridge tests cover private-service readiness, GPT creation,
-filesystem formatting and labels, fixture cleanup, and the LUKS lifecycle
-(format, lock, reject a wrong secret, unlock, lock, cleanup). The opt-in runner
+The bridge covers private-service readiness; partition lifecycle and events;
+filesystem formatting, labels, mount options, busy retry, read-only protection
+and usage scanning; image backup/restore/attach/cancellation; LUKS lifecycle and
+unwind cleanup; Btrfs subvolumes; LVM and MDRAID lifecycle; local SFTP/rclone;
+and selected application-registry mappings. The opt-in runner
 executes the normally ignored tests and retains Nextest JUnit output plus
 device, service, and cleanup diagnostics under `target/`.
 
@@ -26,6 +28,25 @@ running kernel in `/proc/devices`. Never hardcode that major: it can identify
 another block driver. UDisks automatically unlocks a newly formatted encrypted
 volume, so the LUKS test locks it before checking wrong credentials.
 
-PR #119 proved these five tests on a GitHub-hosted Docker runner and inside
-QEMU/KVM. A VM is not required for this suite. LVM and MDRAID still need their
-own capability tests before making equivalent claims about them.
+PR #119 proved the original five tests on a GitHub-hosted Docker runner and
+inside QEMU/KVM. The expanded fifteen-case suite passed locally on 2026-09-13;
+hosted CI must independently validate the expanded matrix. These results do
+not establish the near-100% coverage acceptance gate or interactive UI E2E.
+
+Partition and MD nodes can be missing even when UDisks sees their objects. A
+fixture worker materializes only verified descendants, taking major/minor from
+sysfs. MD aliases require the exact reserved member set; transient partial
+assembly does not grant an alias. Worker failures are reported but do not
+prevent cleanup of other independently verified resources. Ledger files remain
+under `/tmp/storage-lab-evidence` after backing files have been removed.
+
+UDisks replies can precede updated discovery properties. Tests wait for bounded
+observable postconditions, never retry a destructive operation to hide a race.
+Each bridge invocation writes its exact target/filter, exit code, stdout/stderr,
+service logs, ledger, and post-test loop list before checking the outcome.
+
+The Btrfs member case also needs the running kernel's libkmod metadata. The
+bridge makes bounded copies of its real module indexes and Btrfs module (when
+not built in), records their SHA-256 hashes, and verifies the container kernel
+release. No host module directory is mounted. This requires a Linux Docker
+daemon using the same kernel as the bridge; a mismatched remote daemon fails.

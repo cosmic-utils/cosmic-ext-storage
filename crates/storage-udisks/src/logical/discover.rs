@@ -79,8 +79,8 @@ async fn volume_groups(
         let name = proxy.name().await.unwrap_or_else(|_| uuid.clone());
         let size = proxy.size().await.unwrap_or(0);
         let free = proxy.free_size().await.unwrap_or(0);
-        let logical_volumes = proxy.logical_volumes().await.unwrap_or_default();
-        let physical_volumes = proxy.physical_volumes().await.unwrap_or_default();
+        let (logical_volumes, physical_volumes) =
+            super::resolve::lvm_members(manager, path).await?;
         let mut members = Vec::new();
         let mut children = Vec::new();
         let mut logical_volume_summaries = Vec::new();

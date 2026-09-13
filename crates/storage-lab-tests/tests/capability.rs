@@ -219,10 +219,10 @@ fn failing_case_still_removes_all_ledgered_resources() -> Result<()> {
     assert_ne!(first, second);
     // The test succeeds only when an actual panic unwinds the fixture and
     // independent kernel observations prove both resources were removed.
-    let outcome = std::panic::catch_unwind(move || {
+    let outcome = std::panic::catch_unwind(std::panic::AssertUnwindSafe(move || {
         let _owned_until_unwind = fixture;
         panic!("deliberate inner case failure");
-    });
+    }));
     assert!(outcome.is_err());
     assert!(!root.exists());
     let output = require_success(Command::new("losetup").args([
@@ -292,4 +292,16 @@ fn require_success(command: &mut Command) -> Result<std::process::Output> {
         String::from_utf8_lossy(&output.stderr).trim()
     )
     .into())
+}
+/// The outer bridge must observe this failure, not turn it into a successful
+/// catalog result. It selects this exact native test only for that regression.
+#[test]
+#[ignore = "deliberately fails; executed only by the bridge failure-propagation regression"]
+fn deliberate_failure_after_fixture_cleanup() {
+    let mut fixture = storage_lab_tests::LabFixture::create("deliberate-failure").unwrap();
+    fixture
+        .attach_sparse_loop("disk.img", 8 * 1024 * 1024)
+        .unwrap();
+    fixture.cleanup().unwrap();
+    panic!("deliberate inner assertion failure");
 }

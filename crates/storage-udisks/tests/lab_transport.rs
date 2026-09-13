@@ -2,7 +2,6 @@
 //! the peer always denies discovery, so no storage mutation can occur.
 use std::{
     collections::HashMap,
-    os::unix::net::UnixStream,
     sync::{
         Arc,
         atomic::{AtomicUsize, Ordering},
@@ -17,6 +16,7 @@ use storage_udisks::{
     UdisksBackend,
     storage_types::{FormatOptions, MountOptions},
 };
+use tokio::net::UnixStream;
 use zbus::{
     Connection,
     connection::Builder,

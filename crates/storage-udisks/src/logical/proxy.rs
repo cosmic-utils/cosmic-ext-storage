@@ -31,9 +31,14 @@ pub trait LvmManager {
     default_service = "org.freedesktop.UDisks2"
 )]
 pub trait VolumeGroup {
-    fn delete(&self, options: Options<'_>) -> zbus::Result<()>;
+    fn delete(&self, wipe: bool, options: Options<'_>) -> zbus::Result<()>;
     fn add_device(&self, device: &ObjectPath<'_>, options: Options<'_>) -> zbus::Result<()>;
-    fn remove_device(&self, device: &ObjectPath<'_>, options: Options<'_>) -> zbus::Result<()>;
+    fn remove_device(
+        &self,
+        device: &ObjectPath<'_>,
+        wipe: bool,
+        options: Options<'_>,
+    ) -> zbus::Result<()>;
     fn create_plain_volume(
         &self,
         name: &str,
@@ -49,10 +54,6 @@ pub trait VolumeGroup {
     fn size(&self) -> zbus::Result<u64>;
     #[zbus(property, name = "FreeSize")]
     fn free_size(&self) -> zbus::Result<u64>;
-    #[zbus(property, name = "LogicalVolumes")]
-    fn logical_volumes(&self) -> zbus::Result<Vec<OwnedObjectPath>>;
-    #[zbus(property, name = "PhysicalVolumes")]
-    fn physical_volumes(&self) -> zbus::Result<Vec<OwnedObjectPath>>;
 }
 
 #[proxy(

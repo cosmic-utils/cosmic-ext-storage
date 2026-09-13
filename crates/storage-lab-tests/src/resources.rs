@@ -12,6 +12,7 @@ use std::{
 pub struct LabMount {
     pub(crate) path: PathBuf,
     source: PathBuf,
+    network: bool,
 }
 #[derive(Debug)]
 pub struct LabMapper {
@@ -56,6 +57,92 @@ pub(crate) enum Resource {
 }
 
 impl LabFixture {
+    pub fn prepare_array(&self, name: &str, members: &[crate::LabLoopDevice]) -> Result<()> {
+        if members.len() < 2
+            || name.is_empty()
+            || !name
+                .bytes()
+                .all(|byte| byte.is_ascii_alphanumeric() || byte == b'-')
+        {
+            return Err(LabError::new(
+                "array reservation requires a safe name and two owned loops",
+            ));
+        }
+        let mut paths = Vec::new();
+        for member in members {
+            self.owned_loop(member.path())?;
+            paths.push(member.path().to_string_lossy().into_owned());
+        }
+        paths.sort();
+        if paths.windows(2).any(|pair| pair[0] == pair[1]) {
+            return Err(LabError::new("array members must be distinct"));
+        }
+        if fs::read_to_string(self.ledger_path())?
+            .lines()
+            .any(|line| line.starts_with("reserved-array\t"))
+        {
+            return Err(LabError::new(
+                "one array reservation per fixture is supported",
+            ));
+        }
+        self.record(
+            "reserved-array",
+            Path::new(&format!("{name}\t{}", paths.join(","))),
+        )
+    }
+    pub fn prepare_volume_group(&mut self, name: &str) -> Result<()> {
+        validate_group_name(name)?;
+        // Cleanup first checks every reported PV against this fixture; even a
+        // same-name pre-existing host group can never be adopted or removed.
+        self.resources
+            .push(Resource::VolumeGroup(LabVolumeGroup { name: name.into() }));
+        self.record("reserved-volume-group", Path::new(name))
+    }
+
+    pub fn prepare_network_mount(&mut self, name: &str) -> Result<PathBuf> {
+        if name.is_empty()
+            || !name
+                .bytes()
+                .all(|byte| byte.is_ascii_alphanumeric() || byte == b'-')
+        {
+            return Err(LabError::new(
+                "network mount name must be a single safe component",
+            ));
+        }
+        let path = self.root()?.path().join("mnt").join(name);
+        fs::create_dir_all(&path)?;
+        self.resources.push(Resource::Mount(LabMount {
+            path: path.clone(),
+            source: PathBuf::from(format!("{name}:")),
+            network: true,
+        }));
+        self.record("reserved-network-mount", &path)?;
+        Ok(path)
+    }
+
+    /// Reserve cleanup before asking the production adapter to mount. A failed
+    /// mount call may still leave a live mount, so registering afterwards alone
+    /// is not sufficient for failure safety.
+    pub fn prepare_mount(&mut self, device: &crate::LabLoopDevice, name: &str) -> Result<PathBuf> {
+        self.owned_loop(device.path())?;
+        if name.is_empty()
+            || !name
+                .bytes()
+                .all(|byte| byte.is_ascii_alphanumeric() || byte == b'-')
+        {
+            return Err(LabError::new("mount name must be a single safe component"));
+        }
+        let path = self.root()?.path().join(name);
+        fs::create_dir(&path)?;
+        self.resources.push(Resource::Mount(LabMount {
+            path: path.clone(),
+            source: device.path().to_owned(),
+            network: false,
+        }));
+        self.record("reserved-mount", &path)?;
+        Ok(path)
+    }
+
     /// UDisks can create a cleartext mapping and then fail before returning its
     /// name. Discover only children of a still-owned loop as a rollback net.
     /// Never traverse upwards from unrelated devices or use remove-all flags.
@@ -108,6 +195,7 @@ impl LabFixture {
         self.resources.push(Resource::Mount(LabMount {
             path: path.clone(),
             source,
+            network: false,
         }));
         self.record("mount", &path)?;
         match self.resources.last().unwrap() {
@@ -162,7 +250,7 @@ impl LabFixture {
     }
 
     /// Walk every slave, not merely one: a mixed host/lab array is forbidden.
-    pub(crate) fn verify_derived_device(&self, path: &Path) -> Result<()> {
+    pub fn verify_derived_device(&self, path: &Path) -> Result<()> {
         self.verify_ancestry(path, 0)
     }
 
@@ -232,7 +320,9 @@ impl LabFixture {
                     if source != mount.source {
                         return Err(LabError::new("mount source changed since registration"));
                     }
-                    self.verify_derived_device(&source)?;
+                    if !mount.network {
+                        self.verify_derived_device(&source)?;
+                    }
                     run(Command::new("umount").arg("--").arg(&mount.path))?;
                 }
             }
@@ -245,7 +335,26 @@ impl LabFixture {
             Resource::Array(array) => {
                 if sysfs_present(&array.path) {
                     self.verify_derived_device(&array.path)?;
+                    let missing_node = !array.path.exists();
+                    if missing_node {
+                        let numbers = fs::read_to_string(
+                            Path::new("/sys/class/block")
+                                .join(array.path.file_name().unwrap())
+                                .join("dev"),
+                        )?;
+                        let (major, minor) = numbers
+                            .trim()
+                            .split_once(':')
+                            .ok_or_else(|| LabError::new("invalid array device number"))?;
+                        self.record("cleanup-array-node", &array.path)?;
+                        run(Command::new("mknod")
+                            .arg(&array.path)
+                            .args(["b", major, minor]))?;
+                    }
                     run(Command::new("mdadm").arg("--stop").arg(&array.path))?;
+                    if missing_node {
+                        fs::remove_file(&array.path)?;
+                    }
                 }
             }
             Resource::VolumeGroup(group) => {
@@ -281,7 +390,11 @@ fn mount_source(path: &Path) -> Result<Option<PathBuf>> {
         return Err(LabError::new("could not query mount source"));
     }
     let source = String::from_utf8_lossy(&output.stdout);
-    Ok(Some(fs::canonicalize(source.trim())?))
+    Ok(Some(if source.trim().starts_with("/dev/") {
+        fs::canonicalize(source.trim())?
+    } else {
+        PathBuf::from(source.trim())
+    }))
 }
 
 fn validate_group_name(name: &str) -> Result<()> {

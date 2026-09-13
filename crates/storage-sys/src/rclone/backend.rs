@@ -28,12 +28,23 @@ pub struct RcloneNetworkBackend {
 
 impl RcloneNetworkBackend {
     pub fn new() -> Result<Self, SysError> {
-        let cli = RCloneCli::new()?;
         let home = std::env::var_os("HOME").map(PathBuf::from).ok_or_else(|| {
             SysError::OperationFailed(
                 "Could not determine the current user's home directory".into(),
             )
         })?;
+        Self::with_home(home)
+    }
+
+    /// Select a user home at the composition boundary without changing global
+    /// environment variables. Configurations and mounts remain under this root.
+    pub fn with_home(home: PathBuf) -> Result<Self, SysError> {
+        if !home.is_absolute() {
+            return Err(SysError::OperationFailed(
+                "rclone home must be an absolute path".into(),
+            ));
+        }
+        let cli = RCloneCli::new()?;
         Ok(Self { cli, home })
     }
 
