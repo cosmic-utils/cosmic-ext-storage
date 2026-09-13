@@ -205,6 +205,14 @@ STORAGE_LAB=1 cargo test -p storage-lab-tests --locked --test capability
   wrong secret. LVM and MDRAID still require their own executed capability tests;
   a successful LUKS case cannot stand in for either. Preserve service logs and
   artifacts before asserting success, including when VM startup fails.
+  PR #119 subsequently passed all five storage tests (four existing plus LUKS,
+  zero skips) both directly on GitHub-hosted Docker and inside QEMU/KVM:
+  [source commit 6a84f95, run 34767576483](https://github.com/cosmic-utils/cosmic-ext-storage/actions/runs/34767576483).
+  Also resolve device-mapper's major number from `/proc/devices`: the guest uses
+  `252` for device mapper and `253` for its virtual disks, so a hardcoded major
+  can alias the wrong device. The VM works but is unnecessary for these tested
+  cases. Carry the container fixes and meaningful LUKS lifecycle assertions
+  into implementation, and execute LVM/MDRAID capability gates separately.
 
 ## Phase 2 — Production transport seam
 
