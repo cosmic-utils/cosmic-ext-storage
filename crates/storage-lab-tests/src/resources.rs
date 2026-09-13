@@ -328,8 +328,32 @@ impl LabFixture {
             }
             Resource::Mapper(mapper) => {
                 if sysfs_present(&mapper.path) {
-                    self.verify_derived_device(&mapper.path)?;
-                    run(Command::new("dmsetup").arg("remove").arg(&mapper.path))?;
+                    let sys = Path::new("/sys/class/block").join(mapper.path.file_name().unwrap());
+                    let identity = fs::read_to_string(sys.join("dm/uuid"))?;
+                    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(5);
+                    loop {
+                        // UDisks/udev can briefly keep a freshly formatted mapper
+                        // open. Retry only EBUSY, never force or defer removal;
+                        // recheck both identity and every owned slave each time.
+                        if !sysfs_present(&mapper.path) {
+                            break;
+                        }
+                        self.verify_derived_device(&mapper.path)?;
+                        if fs::read_to_string(sys.join("dm/uuid"))? != identity {
+                            return Err(LabError::new("mapper identity changed during cleanup"));
+                        }
+                        match run(Command::new("dmsetup").arg("remove").arg(&mapper.path)) {
+                            Ok(_) => break,
+                            Err(error)
+                                if error.to_string().contains("Device or resource busy")
+                                    && std::time::Instant::now() < deadline =>
+                            {
+                                self.record("retry-busy-mapper", &mapper.path)?;
+                                std::thread::sleep(std::time::Duration::from_millis(25));
+                            }
+                            Err(error) => return Err(error),
+                        }
+                    }
                 }
             }
             Resource::Array(array) => {

@@ -171,6 +171,18 @@ async fn btrfs_subvolume_snapshot_default_and_conflict_round_trip() -> Result<()
                 })
                 .and_then(|member| member.block.clone())
         {
+            let ids: Vec<_> = details
+                .members
+                .iter()
+                .map(|member| member.block.as_ref().unwrap().id.major_minor())
+                .collect();
+            assert!(
+                ids.windows(2).all(|pair| pair[0] < pair[1]),
+                "Btrfs members must use stable device ordering"
+            );
+            assert!(matches!(&details.primary_member,
+                storage_udisks::storage_types::BtrfsPrimaryMember::Selected { member_id }
+                if member_id == &details.members[0].member_id));
             let review = backend
                 .preflight_logical_action(LogicalPreflightRequest {
                     request_key: LogicalPreflightRequestKey {
@@ -201,6 +213,62 @@ async fn btrfs_subvolume_snapshot_default_and_conflict_round_trip() -> Result<()
         "new Btrfs member must be discoverable and removable; observed: {:?}",
         backend.list_logical_entities().await?
     );
+    btrfs.create_subvolume(&mount_str, "stale-source").await?;
+    let entities = backend.list_logical_entities().await?;
+    let current = entities
+        .iter()
+        .find(|entity| entity.id == filesystem.id)
+        .unwrap();
+    let storage_udisks::storage_types::LogicalEntityDetails::BtrfsFilesystem(details) =
+        &current.details
+    else {
+        panic!("expected Btrfs details");
+    };
+    let subvolume = details
+        .subvolumes
+        .iter()
+        .find(|volume| volume.relative_path.as_str() == "stale-source")
+        .expect("created subvolume must be exposed by native discovery");
+    let review = backend
+        .preflight_logical_action(LogicalPreflightRequest {
+            request_key: LogicalPreflightRequestKey {
+                target: LogicalPreflightTarget::Root(filesystem.id.clone()),
+                action_kind: LogicalActionKind::DeleteBtrfsSubvolume,
+                logical_load_generation: 1,
+                draft_revision: 3,
+            },
+        })
+        .await?;
+    let stale = storage_udisks::storage_types::BtrfsSubvolumeRef {
+        filesystem: filesystem.id.clone(),
+        id: subvolume.id,
+        expected_relative_path: subvolume.relative_path.clone(),
+        expected_parent_id: subvolume.parent_id,
+        observed_topology_epoch: review.key.udisks_epoch,
+    };
+    let stale_path = mount.join("stale-source");
+    btrfs
+        .delete_subvolume(&mount_str, &stale_path.to_string_lossy(), false)
+        .await?;
+    btrfs.create_subvolume(&mount_str, "stale-source").await?;
+    let error = backend
+        .execute_logical_action(ConfirmedLogicalAction {
+            action: LogicalAction::DeleteBtrfsSubvolume {
+                filesystem: filesystem.id.clone(),
+                subvolume: stale,
+            },
+            preflight_key: review.key,
+        })
+        .await
+        .unwrap_err();
+    assert_eq!(error.kind, StorageErrorKind::Conflict);
+    assert!(
+        stale_path.is_dir(),
+        "stale confirmation must not delete the replacement"
+    );
+    btrfs
+        .delete_subvolume(&mount_str, &stale_path.to_string_lossy(), false)
+        .await?;
     backend
         .unmount_filesystem(owned(&fixture, &disk)?, false)
         .await?;

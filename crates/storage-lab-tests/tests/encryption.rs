@@ -20,6 +20,29 @@ async fn luks_failure_after_format_cleans_auto_opened_mapper() -> Result<()> {
             )
             .await
             .unwrap();
+        let holders = std::fs::read_dir(
+            std::path::Path::new("/sys/class/block")
+                .join(std::path::Path::new(&disk).file_name().unwrap())
+                .join("holders"),
+        )
+        .unwrap();
+        let mapper = holders
+            .map(|entry| std::path::Path::new("/dev").join(entry.unwrap().file_name()))
+            .find(|path| {
+                path.file_name()
+                    .unwrap()
+                    .to_string_lossy()
+                    .starts_with("dm-")
+            })
+            .expect("format must leave an auto-opened mapper");
+        fixture.verify_derived_device(&mapper).unwrap();
+        // Deterministically reproduce the short-lived open that udev/UDisks
+        // probing caused on the hosted runner. Cleanup must wait, not force it.
+        let probe = std::fs::File::open(mapper).unwrap();
+        std::thread::spawn(move || {
+            std::thread::sleep(std::time::Duration::from_millis(300));
+            drop(probe);
+        });
         panic!("deliberate failure after successful LUKS format");
     })
     .await
@@ -32,6 +55,7 @@ async fn luks_failure_after_format_cleans_auto_opened_mapper() -> Result<()> {
         "cleanup did not discover the auto-opened mapper"
     );
     assert!(!evidence.contains("cleanup-failed"));
+    assert!(evidence.contains("retry-busy-mapper\t/dev/dm-"));
     assert!(!evidence.contains("storage-lab-fake-secret"));
     Ok(())
 }

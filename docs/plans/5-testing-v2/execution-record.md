@@ -62,6 +62,15 @@ iteration. Subsequent changes need their own final run and hosted evidence.
   postcondition with a deadline; do not rerun a destructive operation.
 - UDisks format can auto-open a LUKS mapper before returning. Rollback must
   discover owned dependent mappings even when setup fails before registration.
+- Hosted run `34773799230` exposed a transient busy mapper during that unwind:
+  `dmsetup remove` returned `Device or resource busy`, leaving a loop and
+  correctly failing subsequent leak checks. Cleanup now retries only this
+  error for at most five seconds, revalidating the mapper UUID and all owned
+  ancestors before each attempt. It never uses force or deferred removal.
+  The regression holds an actual mapper descriptor open for 300 ms during
+  panic cleanup and requires the retry ledger entry. The complete local suite
+  passed all 16 selected cases in 60.900 seconds (Nextest
+  `759dd30e-e8a0-4409-8ce7-60ea7af61118`); hosted revalidation is still required.
 - Transfer `File` ownership into `OwnedFd`; `from_raw_fd(file.as_raw_fd())`
   returned an already-closed descriptor and risked closing a reused descriptor.
 - Cancellation must stop copying between chunks, not merely change the final
