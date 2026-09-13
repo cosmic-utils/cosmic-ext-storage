@@ -43,6 +43,8 @@ jobs:
         run: |
           set -Eeuo pipefail
           mkdir -p "$VM_DIR" "$VM_ARTIFACTS"
+          # Retain evidence even if QEMU fails or reaches its deadline.
+          trap 'sudo chown -R "$USER:$USER" "$VM_ARTIFACTS"; mkdir -p "$VM_DIR/artifacts"; cp -a "$VM_ARTIFACTS/." "$VM_DIR/artifacts/"' EXIT
           curl --fail --location --retry 3 --output "$VM_DIR/noble-server-cloudimg-amd64.img" \
             https://cloud-images.ubuntu.com/noble/current/noble-server-cloudimg-amd64.img
           curl --fail --location --retry 3 --output "$VM_DIR/SHA256SUMS" \

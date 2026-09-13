@@ -11,7 +11,7 @@ if [ ! -e /dev/mapper/control ]; then
     mknod /dev/mapper/control c 10 236
 fi
 for index in $(seq 0 15); do
-    device="/dev/dm$index"
+    device="/dev/dm-$index"
     if [ ! -e "$device" ]; then
         mknod "$device" b 253 "$index"
     fi

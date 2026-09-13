@@ -49,7 +49,7 @@ fn filesystem_runs_in_the_private_storage_lab() -> Result<(), Box<dyn Error>> {
     run_inner_test(FILESYSTEM_FILTER)
 }
 
-fn run_inner_test(filter: &str) -> Result<(), Box<dyn Error>> {
+pub(crate) fn run_inner_test(filter: &str) -> Result<(), Box<dyn Error>> {
     if std::env::var("STORAGE_LAB").as_deref() != Ok("1") {
         return Err("STORAGE_LAB=1 is required to execute the private storage lab".into());
     }
@@ -108,7 +108,7 @@ fn run_inner_test(filter: &str) -> Result<(), Box<dyn Error>> {
         artifact_dir.display()
     );
     assert!(
-        !loops_stdout.contains("/tmp/storage-lab/capability-"),
+        !loops_stdout.contains("/tmp/storage-lab/"),
         "a lab-backed loop survived the inner test; inspect {}",
         artifact_dir.display()
     );

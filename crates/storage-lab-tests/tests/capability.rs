@@ -174,6 +174,12 @@ async fn luks_unlock_rejects_bad_secret_and_locks_cleanly() -> Result<()> {
         .format_luks(&loop_path.to_string_lossy(), passphrase, "luks2")
         .await
         .map_err(|error| error.to_string())?;
+    // UDisks automatically unlocks after formatting. Test bad credentials only
+    // after closing that mapping, otherwise "already unlocked" proves nothing.
+    backend
+        .lock_luks(&loop_path.to_string_lossy())
+        .await
+        .map_err(|error| error.to_string())?;
     assert!(
         backend
             .unlock_luks(&loop_path.to_string_lossy(), "wrong-secret")

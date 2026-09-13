@@ -47,7 +47,7 @@ test -n "$bridge_binary"
 
 set +e
 STORAGE_LAB=1 STORAGE_LAB_ARTIFACT_ROOT="$artifacts" \
-    "$bridge_binary" --ignored --exact luks_runs_in_a_guest_vm_through_testcontainers --nocapture \
+    "$bridge_binary" --ignored --test-threads=1 --nocapture \
     2>&1 | tee "$artifacts/vm-bridge.log"
 result=${PIPESTATUS[0]}
 set -e
