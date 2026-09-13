@@ -17,6 +17,11 @@ async fn filesystem_mount_options_busy_retry_and_cleanup() -> Result<()> {
             FormatOptions::default(),
         )
         .await?;
+    assert!(
+        backend
+            .check_filesystem(owned(&fixture, &disk)?, false)
+            .await?
+    );
     let device = fixture.owned_loop(Path::new(&disk))?.clone();
     let mount = fixture.prepare_mount(&device, "mount")?;
     // UDisks uses fstab for an explicit target; its Mount method otherwise

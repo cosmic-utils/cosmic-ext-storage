@@ -342,7 +342,11 @@ impl LabFixture {
                         if fs::read_to_string(sys.join("dm/uuid"))? != identity {
                             return Err(LabError::new("mapper identity changed during cleanup"));
                         }
-                        match run(Command::new("dmsetup").arg("remove").arg(&mapper.path)) {
+                        match run(Command::new("dmsetup")
+                            .env("LC_ALL", "C")
+                            .arg("remove")
+                            .arg(&mapper.path))
+                        {
                             Ok(_) => break,
                             Err(error)
                                 if error.to_string().contains("Device or resource busy")

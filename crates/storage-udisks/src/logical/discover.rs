@@ -71,7 +71,21 @@ async fn volume_groups(
             .build()
             .await
             .map_err(native_error)?;
-        let uuid = proxy.uuid().await.map_err(native_error)?;
+        let uuid = match proxy.uuid().await {
+            Ok(uuid) => uuid,
+            Err(error) => {
+                // The object-manager snapshot can outlive a concurrently
+                // deleted group. Confirm its absence on the same transport;
+                // never turn a still-present object's permission/transport
+                // failure into a successful empty discovery result.
+                let current = managed_paths(manager).await?;
+                let present = current.get(path).is_some_and(|interfaces| {
+                    interfaces.iter().any(|name| name == VOLUME_GROUP_INTERFACE)
+                });
+                confirm_vanished_group(error, present)?;
+                continue;
+            }
+        };
         if uuid.trim().is_empty() {
             continue;
         }
@@ -249,6 +263,45 @@ async fn volume_groups(
         output.extend(children);
     }
     Ok(output)
+}
+
+fn confirm_vanished_group(error: zbus::Error, still_present: bool) -> Result<(), StorageError> {
+    if still_present {
+        Err(native_error(error))
+    } else {
+        Ok(())
+    }
+}
+
+#[cfg(test)]
+mod vanished_group_tests {
+    use super::*;
+    #[test]
+    fn a_removed_group_is_skipped_only_after_fresh_discovery_confirms_absence() {
+        assert!(
+            confirm_vanished_group(
+                zbus::fdo::Error::UnknownObject("removed".into()).into(),
+                false
+            )
+            .is_ok()
+        );
+        let error = confirm_vanished_group(
+            zbus::fdo::Error::AccessDenied("private".into()).into(),
+            true,
+        )
+        .unwrap_err();
+        assert_eq!(
+            error.kind,
+            storage_contracts::StorageErrorKind::PermissionDenied
+        );
+        assert!(
+            confirm_vanished_group(
+                zbus::fdo::Error::UnknownObject("still in snapshot".into()).into(),
+                true
+            )
+            .is_err()
+        );
+    }
 }
 
 async fn mdraid_arrays(

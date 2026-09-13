@@ -71,6 +71,21 @@ iteration. Subsequent changes need their own final run and hosted evidence.
   panic cleanup and requires the retry ledger entry. The complete local suite
   passed all 16 selected cases in 60.900 seconds (Nextest
   `759dd30e-e8a0-4409-8ce7-60ea7af61118`); hosted revalidation is still required.
+- Run `34774662856` passed both hosted LUKS cases with the bounded retry.
+  It then exposed a separate MD alias race: udev created the expected symlink
+  between the worker's existence check and creation. Compare `read_link`
+  targets (including dangling links), tolerate only the exact expected target,
+  and never overwrite an existing conflicting alias or regular file. A native
+  host unit test injects both same-target and conflicting-target races.
+- An LVM object-manager snapshot may outlive a volume group deleted during
+  discovery. On a property failure, query a fresh snapshot on the selected
+  connection and skip only confirmed-absent groups. Preserve failures for
+  still-present objects and failures of the confirming discovery call.
+- Exercise encryption options, not just unlock/lock. The real daemon rejected
+  a missing `passphrase-contents` argument even when no key was being stored;
+  send an empty byte string for that case. Decode startup unlocking from the
+  `noauto` option rather than always returning false. The exact daemon contract
+  is in [UDisks 2.9.4's crypttab implementation](https://github.com/storaged-project/udisks/blob/udisks-2.9.4/src/udiskslinuxblock.c#L1617).
 - Transfer `File` ownership into `OwnedFd`; `from_raw_fd(file.as_raw_fd())`
   returned an already-closed descriptor and risked closing a reused descriptor.
 - Cancellation must stop copying between chunks, not merely change the final

@@ -171,19 +171,55 @@ async fn luks_unlock_rejects_bad_secret_and_locks_cleanly() -> Result<()> {
         .format_luks(&loop_path.to_string_lossy(), passphrase, "luks2")
         .await
         .map_err(|error| error.to_string())?;
+    let mut options = storage_udisks::storage_types::EncryptionOptionsSettings {
+        name: "storage-lab-options".into(),
+        require_auth: true,
+        other_options: "nofail".into(),
+        ..Default::default()
+    };
+    fixture.owned_loop(&loop_path)?;
+    backend
+        .set_encryption_options(&loop_path.to_string_lossy(), &options)
+        .await?;
+    assert_eq!(
+        backend
+            .encryption_options(&loop_path.to_string_lossy())
+            .await?,
+        Some(options.clone())
+    );
+    options.unlock_at_startup = true;
+    fixture.owned_loop(&loop_path)?;
+    backend
+        .set_encryption_options(&loop_path.to_string_lossy(), &options)
+        .await?;
+    assert_eq!(
+        backend
+            .encryption_options(&loop_path.to_string_lossy())
+            .await?,
+        Some(options)
+    );
+    fixture.owned_loop(&loop_path)?;
+    backend
+        .clear_encryption_options(&loop_path.to_string_lossy())
+        .await?;
+    assert_eq!(
+        backend
+            .encryption_options(&loop_path.to_string_lossy())
+            .await?,
+        None
+    );
     // UDisks automatically unlocks after formatting. Test bad credentials only
     // after closing that mapping, otherwise "already unlocked" proves nothing.
     backend
         .lock_luks(&loop_path.to_string_lossy())
         .await
         .map_err(|error| error.to_string())?;
-    assert!(
-        backend
-            .unlock_luks(&loop_path.to_string_lossy(), "wrong-secret")
-            .await
-            .is_err(),
-        "a wrong LUKS passphrase must be rejected"
-    );
+    let error = backend
+        .unlock_luks(&loop_path.to_string_lossy(), "wrong-secret")
+        .await
+        .expect_err("a wrong LUKS passphrase must be rejected");
+    assert!(!error.to_string().contains("wrong-secret"));
+    assert!(!error.to_string().contains(passphrase));
     let cleartext = backend
         .unlock_luks(&loop_path.to_string_lossy(), passphrase)
         .await

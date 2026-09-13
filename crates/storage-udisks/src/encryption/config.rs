@@ -66,7 +66,9 @@ pub(crate) async fn get_encryption_options_with_connection(
     // Build EncryptionOptionsSettings from crypttab entry
     let settings = EncryptionOptionsSettings {
         name: name_str.unwrap_or_default().trim().to_string(),
-        unlock_at_startup: false,
+        unlock_at_startup: opts_str
+            .as_ref()
+            .is_some_and(|options| !split_options(options).iter().any(|token| token == "noauto")),
         require_auth: opts_str
             .as_ref()
             .map(|o| split_options(o).iter().any(|t| t == "x-udisks-auth"))
@@ -174,6 +176,12 @@ pub(crate) async fn set_encryption_options_with_connection(
         bs::bytestring_owned_value(&settings.name),
     );
     dict.insert("options".to_string(), bs::bytestring_owned_value(&opts));
+    // UDisks requires this key even when no stored passphrase is requested.
+    // An empty byte string means prompt at unlock, not a missing argument.
+    dict.insert(
+        "passphrase-contents".to_string(),
+        bs::bytestring_owned_value(""),
+    );
 
     // Add passphrase fields if provided
     if let Some(passphrase) = &settings.passphrase {

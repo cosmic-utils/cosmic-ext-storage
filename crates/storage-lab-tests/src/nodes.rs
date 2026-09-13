@@ -4,7 +4,7 @@ use crate::{LabError, Result, loop_backing, run};
 use std::{
     fs::{self, OpenOptions},
     io::Write,
-    path::PathBuf,
+    path::{Path, PathBuf},
     process::Command,
     sync::{
         Arc, Mutex,
@@ -151,7 +151,7 @@ impl PartitionNodes {
                             }
                             fs::create_dir_all("/dev/md")?;
                             let link = PathBuf::from("/dev/md").join(alias);
-                            if !link.exists() {
+                            let created = ensure_array_alias(&link, &node, || {
                                 let mut journal = OpenOptions::new().append(true).open(&ledger)?;
                                 journal.write_all(
                                     format!(
@@ -162,7 +162,9 @@ impl PartitionNodes {
                                     .as_bytes(),
                                 )?;
                                 journal.sync_all()?;
-                                std::os::unix::fs::symlink(&node, &link)?;
+                                Ok(())
+                            })?;
+                            if created {
                                 worker_created
                                     .lock()
                                     .map_err(|_| LabError::new("node ledger poisoned"))?
@@ -195,11 +197,76 @@ impl PartitionNodes {
     }
 }
 
+fn ensure_array_alias(
+    link: &Path,
+    node: &Path,
+    before_create: impl FnOnce() -> Result<()>,
+) -> Result<bool> {
+    match fs::read_link(link) {
+        Ok(existing) if existing == node => return Ok(false),
+        Ok(_) => return Err(LabError::new("array alias points to a different device")),
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
+        Err(error) => return Err(error.into()),
+    }
+    before_create()?;
+    match std::os::unix::fs::symlink(node, link) {
+        Ok(()) => Ok(true),
+        // udev or the other owned member's worker can publish the same alias
+        // between observation and creation. Never replace an existing entry.
+        Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => {
+            if fs::read_link(link)? == node {
+                Ok(false)
+            } else {
+                Err(LabError::new("array alias changed during creation"))
+            }
+        }
+        Err(error) => Err(error.into()),
+    }
+}
+
 impl Drop for PartitionNodes {
     fn drop(&mut self) {
         // Fixture cleanup normally joins and records these nodes first.
         if let Err(error) = self.finish() {
             eprintln!("partition node worker: {error}");
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    #[test]
+    fn alias_creation_handles_udev_races_without_overwriting_foreign_targets() {
+        let fixture = crate::LabFixture::create("alias-race").unwrap();
+        let root = fixture.root().unwrap().path();
+        let target = root.join("missing-owned-node");
+        let link = root.join("alias");
+        assert!(ensure_array_alias(&link, &target, || Ok(())).unwrap());
+        // read_link, unlike exists(), recognizes an already-created dangling alias.
+        assert!(!ensure_array_alias(&link, &target, || panic!("must not recreate")).unwrap());
+        fs::remove_file(&link).unwrap();
+        assert!(
+            !ensure_array_alias(&link, &target, || {
+                std::os::unix::fs::symlink(&target, &link)?;
+                Ok(())
+            })
+            .unwrap()
+        );
+        fs::remove_file(&link).unwrap();
+        let foreign = root.join("foreign");
+        assert!(
+            ensure_array_alias(&link, &target, || {
+                std::os::unix::fs::symlink(&foreign, &link)?;
+                Ok(())
+            })
+            .is_err()
+        );
+        assert_eq!(fs::read_link(&link).unwrap(), foreign);
+        assert!(ensure_array_alias(&link, &target, || Ok(())).is_err());
+        fs::remove_file(&link).unwrap();
+        fs::write(&link, b"not an alias").unwrap();
+        assert!(ensure_array_alias(&link, &target, || Ok(())).is_err());
+        assert_eq!(fs::read(&link).unwrap(), b"not an alias");
     }
 }
