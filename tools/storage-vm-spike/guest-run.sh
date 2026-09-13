@@ -42,8 +42,8 @@ readonly image_archive="$workspace/target/vm-storage-lab-prototype/storage-lab-i
 test -f "$image_archive"
 docker load --input "$image_archive"
 
-readonly bridge_binary="$(find "$workspace/target/debug/deps" -maxdepth 1 -type f -name 'vm_bridge-*' -perm -111 | head -n 1)"
-test -n "$bridge_binary"
+readonly bridge_binary="$workspace/target/vm-storage-lab-prototype/bridge"
+test -x "$bridge_binary"
 
 set +e
 STORAGE_LAB=1 STORAGE_LAB_ARTIFACT_ROOT="$artifacts" \

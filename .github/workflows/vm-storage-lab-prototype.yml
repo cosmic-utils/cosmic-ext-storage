@@ -35,7 +35,18 @@ jobs:
           docker build --tag cosmic-storage-lab:local --file tools/storage-lab/Containerfile .
           mkdir -p target/vm-storage-lab-prototype
           docker save --output target/vm-storage-lab-prototype/storage-lab-image.tar cosmic-storage-lab:local
-          cargo test --locked -p storage-lab-tests --features vm-spike --test vm_bridge --no-run
+          bridge_executable=$(cargo test --locked -p storage-lab-tests --features vm-spike --test vm_bridge --no-run --message-format=json | jq -r 'select(.reason == "compiler-artifact" and .target.name == "vm_bridge") | .executable // empty')
+          test -x "$bridge_executable"
+          install -m 0755 "$bridge_executable" target/vm-storage-lab-prototype/bridge
+      - name: Compare the same suite directly on the runner
+        id: host-control
+        continue-on-error: true
+        env:
+          STORAGE_LAB: "1"
+          STORAGE_LAB_ARTIFACT_ROOT: ${{ github.workspace }}/target/vm-storage-lab-prototype/host-control
+        run: |
+          mkdir -p "$STORAGE_LAB_ARTIFACT_ROOT"
+          timeout 5m target/vm-storage-lab-prototype/bridge --ignored --test-threads=1 --nocapture 2>&1 | tee "$STORAGE_LAB_ARTIFACT_ROOT/bridge.log"
       - name: Boot a disposable guest and run the Testcontainers LUKS bridge
         env:
           VM_DIR: ${{ github.workspace }}/target/vm-storage-lab-prototype
@@ -91,5 +102,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: vm-storage-lab-prototype-evidence
-          path: target/vm-storage-lab-prototype/artifacts
+          path: |
+            target/vm-storage-lab-prototype/artifacts
+            target/vm-storage-lab-prototype/host-control
           if-no-files-found: warn

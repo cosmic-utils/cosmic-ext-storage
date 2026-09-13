@@ -63,6 +63,16 @@ pub(crate) fn run_inner_test(filter: &str) -> Result<(), Box<dyn Error>> {
     let container = image.start()?;
 
     write_artifact(&artifact_dir, "container-id.txt", container.id())?;
+    let (devices, devices_stderr, _) = execute(
+        &container,
+        [
+            "sh",
+            "-ec",
+            "cat /proc/devices; ls -l /dev/dm-* /dev/mapper/control; dmsetup info -c; lsblk -o NAME,MAJ:MIN,TYPE,MOUNTPOINTS",
+        ],
+    )?;
+    write_artifact(&artifact_dir, "devices-before.stdout.log", &devices)?;
+    write_artifact(&artifact_dir, "devices-before.stderr.log", &devices_stderr)?;
     let mut test = container.exec(
         ExecCommand::new(["/usr/local/bin/storage-lab-run-tests"])
             .with_env_vars([("STORAGE_LAB_TEST_FILTER", filter)]),
