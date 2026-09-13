@@ -11,9 +11,9 @@ udevd_pid=$!
 udevadm trigger --action=add --subsystem-match=block || true
 udevadm settle --timeout=10 || true
 
-polkitd >/tmp/storage-lab/polkitd.log 2>&1 &
+/usr/lib/polkit-1/polkitd --no-debug >/tmp/storage-lab/polkitd.log 2>&1 &
 polkitd_pid=$!
-/usr/lib/udisks2/udisksd >/tmp/storage-lab/udisksd.log 2>&1 &
+/usr/libexec/udisks2/udisksd >/tmp/storage-lab/udisksd.log 2>&1 &
 udisksd_pid=$!
 ssh-keygen -A >/tmp/storage-lab/ssh-keygen.log 2>&1
 /usr/sbin/sshd -D -p 2222 >/tmp/storage-lab/sshd.log 2>&1 &
