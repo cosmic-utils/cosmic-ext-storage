@@ -196,6 +196,13 @@ STORAGE_LAB=1 cargo test -p storage-lab-tests --locked --test capability
   The same Testcontainers bridge passed both private adapter discovery and GPT
   partition-table creation on a GitHub-hosted runner; local failure preserves
   its captured artifacts and is never treated as a skip.
+- GitHub-hosted Docker exposes loop setup but not a usable device-mapper kernel
+  under this hermetic container contract. Installing UDisks' crypto plugins
+  and creating container-local `/dev/dm*` nodes is insufficient: UDisks still
+  receives `ENODEV` for the mapper. Do not mark LUKS, LVM, or MDRAID cases as
+  passed or skipped. They remain blocked pending a separately authorised
+  kernel-capable execution environment; mounting host kernel/device state
+  would violate this plan's isolation rules.
 
 ## Phase 2 — Production transport seam
 
