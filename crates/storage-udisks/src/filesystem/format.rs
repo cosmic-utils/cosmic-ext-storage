@@ -18,11 +18,23 @@ pub async fn format_filesystem(
     let connection = crate::manager::shared_connection()
         .await
         .map_err(|e| DiskError::ConnectionFailed(e.to_string()))?;
+    format_filesystem_with_connection(connection.as_ref(), device_path, fs_type, label, options)
+        .await
+}
 
-    let block_path = crate::disk::resolve::block_object_path_for_device(device_path).await?;
+pub(crate) async fn format_filesystem_with_connection(
+    connection: &zbus::Connection,
+    device_path: &str,
+    fs_type: &str,
+    label: &str,
+    options: FormatOptions,
+) -> Result<(), DiskError> {
+    let block_path =
+        crate::disk::resolve::block_object_path_for_device_with_connection(connection, device_path)
+            .await?;
 
     // Format using Block.Format
-    let block_proxy = BlockProxy::builder(&connection)
+    let block_proxy = BlockProxy::builder(connection)
         .path(&block_path)
         .map_err(|e| DiskError::DBusError(e.to_string()))?
         .build()

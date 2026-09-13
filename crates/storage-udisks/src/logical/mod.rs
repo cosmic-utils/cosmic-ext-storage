@@ -1,7 +1,7 @@
 //! UDisks-native logical storage discovery and mutations.
 
 mod discover;
-mod error;
+pub(crate) mod error;
 mod operations;
 mod proxy;
 mod resolve;

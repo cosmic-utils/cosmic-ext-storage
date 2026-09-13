@@ -23,20 +23,38 @@ fn is_anyhow_device_busy(e: &anyhow::Error) -> bool {
 
 /// Eject a drive by device path (e.g. "/dev/sda")
 pub async fn eject_drive_by_device(device: &str, ejectable: bool) -> Result<()> {
-    let drive_path = super::resolve::drive_object_path_for_device(device)
-        .await
-        .map_err(anyhow::Error::msg)?;
-    eject_drive(drive_path, ejectable).await
+    let connection = crate::manager::shared_connection().await?;
+    eject_drive_by_device_with_connection(connection.as_ref(), device, ejectable).await
+}
+
+pub(crate) async fn eject_drive_by_device_with_connection(
+    connection: &zbus::Connection,
+    device: &str,
+    ejectable: bool,
+) -> Result<()> {
+    let drive_path =
+        crate::disk::resolve::drive_object_path_for_device_with_connection(connection, device)
+            .await
+            .map_err(anyhow::Error::msg)?;
+    crate::disk::power::eject_drive_with_connection(connection, drive_path, ejectable).await
 }
 
 /// Eject a drive
 pub async fn eject_drive(drive_path: OwnedObjectPath, ejectable: bool) -> Result<()> {
+    let connection = crate::manager::shared_connection().await?;
+    eject_drive_with_connection(connection.as_ref(), drive_path, ejectable).await
+}
+
+pub(crate) async fn eject_drive_with_connection(
+    connection: &zbus::Connection,
+    drive_path: OwnedObjectPath,
+    ejectable: bool,
+) -> Result<()> {
     if !ejectable {
         return Err(anyhow::anyhow!("Not supported by this drive"));
     }
 
-    let connection = crate::manager::shared_connection().await?;
-    let proxy = DriveProxy::builder(&connection)
+    let proxy = DriveProxy::builder(connection)
         .path(drive_path)?
         .build()
         .await?;
@@ -55,20 +73,38 @@ pub async fn eject_drive(drive_path: OwnedObjectPath, ejectable: bool) -> Result
 
 /// Power off a drive by device path
 pub async fn power_off_drive_by_device(device: &str, can_power_off: bool) -> Result<()> {
-    let drive_path = super::resolve::drive_object_path_for_device(device)
-        .await
-        .map_err(anyhow::Error::msg)?;
-    power_off_drive(drive_path, can_power_off).await
+    let connection = crate::manager::shared_connection().await?;
+    power_off_drive_by_device_with_connection(connection.as_ref(), device, can_power_off).await
+}
+
+pub(crate) async fn power_off_drive_by_device_with_connection(
+    connection: &zbus::Connection,
+    device: &str,
+    can_power_off: bool,
+) -> Result<()> {
+    let drive_path =
+        crate::disk::resolve::drive_object_path_for_device_with_connection(connection, device)
+            .await
+            .map_err(anyhow::Error::msg)?;
+    crate::disk::power::power_off_drive_with_connection(connection, drive_path, can_power_off).await
 }
 
 /// Power off a drive
 pub async fn power_off_drive(drive_path: OwnedObjectPath, can_power_off: bool) -> Result<()> {
+    let connection = crate::manager::shared_connection().await?;
+    power_off_drive_with_connection(connection.as_ref(), drive_path, can_power_off).await
+}
+
+pub(crate) async fn power_off_drive_with_connection(
+    connection: &zbus::Connection,
+    drive_path: OwnedObjectPath,
+    can_power_off: bool,
+) -> Result<()> {
     if !can_power_off {
         return Err(anyhow::anyhow!("Not supported by this drive"));
     }
 
-    let connection = crate::manager::shared_connection().await?;
-    let proxy = DriveProxy::builder(&connection)
+    let proxy = DriveProxy::builder(connection)
         .path(drive_path)?
         .build()
         .await?;
@@ -79,17 +115,33 @@ pub async fn power_off_drive(drive_path: OwnedObjectPath, can_power_off: bool) -
 
 /// Put a drive into standby mode by device path
 pub async fn standby_drive_by_device(device: &str) -> Result<()> {
-    let drive_path = super::resolve::drive_object_path_for_device(device)
-        .await
-        .map_err(anyhow::Error::msg)?;
-    standby_drive(drive_path).await
+    let connection = crate::manager::shared_connection().await?;
+    standby_drive_by_device_with_connection(connection.as_ref(), device).await
+}
+
+pub(crate) async fn standby_drive_by_device_with_connection(
+    connection: &zbus::Connection,
+    device: &str,
+) -> Result<()> {
+    let drive_path =
+        crate::disk::resolve::drive_object_path_for_device_with_connection(connection, device)
+            .await
+            .map_err(anyhow::Error::msg)?;
+    crate::disk::power::standby_drive_with_connection(connection, drive_path).await
 }
 
 /// Put a drive into standby mode (spin down)
 pub async fn standby_drive(drive_path: OwnedObjectPath) -> Result<()> {
     let connection = crate::manager::shared_connection().await?;
+    standby_drive_with_connection(connection.as_ref(), drive_path).await
+}
+
+pub(crate) async fn standby_drive_with_connection(
+    connection: &zbus::Connection,
+    drive_path: OwnedObjectPath,
+) -> Result<()> {
     let proxy = zbus::Proxy::new(
-        &connection,
+        connection,
         "org.freedesktop.UDisks2",
         drive_path.as_str(),
         "org.freedesktop.UDisks2.Drive.Ata",
@@ -113,17 +165,33 @@ pub async fn standby_drive(drive_path: OwnedObjectPath) -> Result<()> {
 
 /// Wake up a drive from standby by device path
 pub async fn wakeup_drive_by_device(device: &str) -> Result<()> {
-    let drive_path = super::resolve::drive_object_path_for_device(device)
-        .await
-        .map_err(anyhow::Error::msg)?;
-    wakeup_drive(drive_path).await
+    let connection = crate::manager::shared_connection().await?;
+    wakeup_drive_by_device_with_connection(connection.as_ref(), device).await
+}
+
+pub(crate) async fn wakeup_drive_by_device_with_connection(
+    connection: &zbus::Connection,
+    device: &str,
+) -> Result<()> {
+    let drive_path =
+        crate::disk::resolve::drive_object_path_for_device_with_connection(connection, device)
+            .await
+            .map_err(anyhow::Error::msg)?;
+    crate::disk::power::wakeup_drive_with_connection(connection, drive_path).await
 }
 
 /// Wake up a drive from standby
 pub async fn wakeup_drive(drive_path: OwnedObjectPath) -> Result<()> {
     let connection = crate::manager::shared_connection().await?;
+    wakeup_drive_with_connection(connection.as_ref(), drive_path).await
+}
+
+pub(crate) async fn wakeup_drive_with_connection(
+    connection: &zbus::Connection,
+    drive_path: OwnedObjectPath,
+) -> Result<()> {
     let proxy = zbus::Proxy::new(
-        &connection,
+        connection,
         "org.freedesktop.UDisks2",
         drive_path.as_str(),
         "org.freedesktop.UDisks2.Drive.Ata",
@@ -149,17 +217,37 @@ pub async fn remove_drive_by_device(
     removable: bool,
     can_power_off: bool,
 ) -> Result<()> {
-    let block_path = super::resolve::block_object_path_for_device(device)
-        .await
-        .map_err(anyhow::Error::msg)?;
+    let connection = crate::manager::shared_connection().await?;
+    remove_drive_by_device_with_connection(
+        connection.as_ref(),
+        device,
+        is_loop,
+        removable,
+        can_power_off,
+    )
+    .await
+}
+
+pub(crate) async fn remove_drive_by_device_with_connection(
+    connection: &zbus::Connection,
+    device: &str,
+    is_loop: bool,
+    removable: bool,
+    can_power_off: bool,
+) -> Result<()> {
+    let block_path =
+        crate::disk::resolve::block_object_path_for_device_with_connection(connection, device)
+            .await
+            .map_err(anyhow::Error::msg)?;
     let drive_path = if is_loop {
         block_path.clone()
     } else {
-        super::resolve::drive_object_path_for_device(device)
+        crate::disk::resolve::drive_object_path_for_device_with_connection(connection, device)
             .await
             .map_err(anyhow::Error::msg)?
     };
-    remove_drive(
+    crate::disk::power::remove_drive_with_connection(
+        connection,
         drive_path,
         block_path.as_str(),
         is_loop,
@@ -178,10 +266,28 @@ pub async fn remove_drive(
     can_power_off: bool,
 ) -> Result<()> {
     let connection = crate::manager::shared_connection().await?;
+    remove_drive_with_connection(
+        connection.as_ref(),
+        drive_path,
+        block_path,
+        is_loop,
+        removable,
+        can_power_off,
+    )
+    .await
+}
 
+pub(crate) async fn remove_drive_with_connection(
+    connection: &zbus::Connection,
+    drive_path: OwnedObjectPath,
+    block_path: &str,
+    is_loop: bool,
+    removable: bool,
+    can_power_off: bool,
+) -> Result<()> {
     if is_loop {
         let proxy = zbus::Proxy::new(
-            &connection,
+            connection,
             "org.freedesktop.UDisks2",
             block_path,
             "org.freedesktop.UDisks2.Loop",
@@ -208,7 +314,8 @@ pub async fn remove_drive(
                 "Remove not supported: drive is removable but does not support power off"
             ));
         }
-        power_off_drive(drive_path, can_power_off).await
+        crate::disk::power::power_off_drive_with_connection(connection, drive_path, can_power_off)
+            .await
     } else {
         Err(anyhow::anyhow!(
             "Remove not supported: device is neither a loop-backed image nor a removable drive"

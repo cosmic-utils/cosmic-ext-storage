@@ -109,15 +109,27 @@ fn is_anyhow_not_supported(e: &anyhow::Error) -> bool {
 ///
 /// Tries NVMe interface first, falls back to ATA if not supported.
 pub async fn get_drive_smart_info(drive_path: OwnedObjectPath) -> Result<SmartInfo> {
-    match get_nvme_smart_info(&drive_path).await {
+    let connection = crate::manager::shared_connection().await?;
+    get_drive_smart_info_with_connection(connection.as_ref(), drive_path).await
+}
+
+pub(crate) async fn get_drive_smart_info_with_connection(
+    connection: &zbus::Connection,
+    drive_path: OwnedObjectPath,
+) -> Result<SmartInfo> {
+    match crate::smart::info::get_nvme_smart_info_with_connection(connection, &drive_path).await {
         Ok(info) => Ok(info),
-        Err(e) if is_anyhow_not_supported(&e) => match get_ata_smart_info(&drive_path).await {
-            Ok(info) => Ok(info),
-            Err(e2) if is_anyhow_not_supported(&e2) => {
-                Err(anyhow::anyhow!("Not supported by this drive"))
+        Err(e) if is_anyhow_not_supported(&e) => {
+            match crate::smart::info::get_ata_smart_info_with_connection(connection, &drive_path)
+                .await
+            {
+                Ok(info) => Ok(info),
+                Err(e2) if is_anyhow_not_supported(&e2) => {
+                    Err(anyhow::anyhow!("Not supported by this drive"))
+                }
+                Err(e2) => Err(e2),
             }
-            Err(e2) => Err(e2),
-        },
+        }
         Err(e) => Err(e),
     }
 }
@@ -126,16 +138,27 @@ pub async fn get_drive_smart_info(drive_path: OwnedObjectPath) -> Result<SmartIn
 ///
 /// This is a convenience wrapper that looks up the UDisks2 object path for the device.
 pub async fn get_smart_info_by_device(device: &str) -> Result<SmartInfo> {
-    let drive_path = crate::disk::resolve::drive_object_path_for_device(device)
-        .await
-        .map_err(|e| anyhow::anyhow!("{}", e))?;
-    get_drive_smart_info(drive_path).await
+    let connection = crate::manager::shared_connection().await?;
+    get_smart_info_by_device_with_connection(connection.as_ref(), device).await
 }
 
-async fn get_nvme_smart_info(drive_path: &OwnedObjectPath) -> Result<SmartInfo> {
-    let connection = crate::manager::shared_connection().await?;
+pub(crate) async fn get_smart_info_by_device_with_connection(
+    connection: &zbus::Connection,
+    device: &str,
+) -> Result<SmartInfo> {
+    let drive_path =
+        crate::disk::resolve::drive_object_path_for_device_with_connection(connection, device)
+            .await
+            .map_err(|e| anyhow::anyhow!("{}", e))?;
+    crate::smart::info::get_drive_smart_info_with_connection(connection, drive_path).await
+}
+
+pub(crate) async fn get_nvme_smart_info_with_connection(
+    connection: &zbus::Connection,
+    drive_path: &OwnedObjectPath,
+) -> Result<SmartInfo> {
     let proxy = zbus::Proxy::new(
-        &connection,
+        connection,
         "org.freedesktop.UDisks2",
         drive_path.as_str(),
         "org.freedesktop.UDisks2.NVMe.Controller",
@@ -179,10 +202,12 @@ async fn get_nvme_smart_info(drive_path: &OwnedObjectPath) -> Result<SmartInfo> 
     })
 }
 
-async fn get_ata_smart_info(drive_path: &OwnedObjectPath) -> Result<SmartInfo> {
-    let connection = crate::manager::shared_connection().await?;
+pub(crate) async fn get_ata_smart_info_with_connection(
+    connection: &zbus::Connection,
+    drive_path: &OwnedObjectPath,
+) -> Result<SmartInfo> {
     let proxy = zbus::Proxy::new(
-        &connection,
+        connection,
         "org.freedesktop.UDisks2",
         drive_path.as_str(),
         "org.freedesktop.UDisks2.Drive.Ata",

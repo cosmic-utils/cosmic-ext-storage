@@ -12,10 +12,17 @@ use crate::image::udisks_call::call_udisks_raw;
 /// Open a block device for backup (read-only access)
 pub async fn open_for_backup(block_object_path: OwnedObjectPath) -> Result<OwnedFd> {
     let connection = crate::manager::shared_connection().await?;
+    open_for_backup_with_connection(connection.as_ref(), block_object_path).await
+}
+
+pub(crate) async fn open_for_backup_with_connection(
+    connection: &zbus::Connection,
+    block_object_path: OwnedObjectPath,
+) -> Result<OwnedFd> {
     let options_empty: HashMap<&str, Value<'_>> = HashMap::new();
 
     let fd: ZOwnedFd = call_udisks_raw(
-        &connection,
+        connection,
         &block_object_path,
         "org.freedesktop.UDisks2.Block",
         "OpenForBackup",
@@ -29,10 +36,17 @@ pub async fn open_for_backup(block_object_path: OwnedObjectPath) -> Result<Owned
 /// Open a block device for restore (read-write access)
 pub async fn open_for_restore(block_object_path: OwnedObjectPath) -> Result<OwnedFd> {
     let connection = crate::manager::shared_connection().await?;
+    open_for_restore_with_connection(connection.as_ref(), block_object_path).await
+}
+
+pub(crate) async fn open_for_restore_with_connection(
+    connection: &zbus::Connection,
+    block_object_path: OwnedObjectPath,
+) -> Result<OwnedFd> {
     let options_empty: HashMap<&str, Value<'_>> = HashMap::new();
 
     let fd: ZOwnedFd = call_udisks_raw(
-        &connection,
+        connection,
         &block_object_path,
         "org.freedesktop.UDisks2.Block",
         "OpenForRestore",

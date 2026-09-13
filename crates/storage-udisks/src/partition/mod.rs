@@ -5,10 +5,10 @@
 //! - Resizing partitions
 //! - Editing partition properties (type, name, flags)
 
-mod create;
-mod delete;
-mod edit;
-mod resize;
+pub(crate) mod create;
+pub(crate) mod delete;
+pub(crate) mod edit;
+pub(crate) mod resize;
 
 pub(crate) use create::create_partition_table_with_connection;
 pub use create::{create_partition, create_partition_table, create_partition_with_filesystem};

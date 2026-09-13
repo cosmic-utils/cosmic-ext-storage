@@ -262,6 +262,18 @@ STORAGE_LAB=1 cargo test -p storage-lab-tests --locked --test transport
 
 ## Phase 3 — Real storage-family cases
 
+### Transport implementation evidence
+
+The adapter's selected connection is now passed through partition, filesystem,
+encryption, image, and SMART/power helper calls. A private peer that always
+denies discovery verifies 15 adapter operations cannot silently use the system
+bus. Additional tests verify permission-error mapping, simultaneous independent
+adapters, clone identity, and unchanged normal-constructor behaviour. These are
+transport contract tests, not substitutes for the real storage-family matrix.
+The six existing container cases also pass after this refactor. The application
+composition root can build its unchanged production registry from an explicitly
+constructed `UdisksBackend` without installing a global runtime.
+
 Port cases as native Rust tests; do not retain the old harness catalog.
 
 | Commit | Tests to add | Required assertions |

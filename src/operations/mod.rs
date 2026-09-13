@@ -87,6 +87,14 @@ impl std::fmt::Debug for StorageOperations {
 impl StorageOperations {
     pub async fn new() -> Result<Arc<Self>, OperationError> {
         let udisks = Arc::new(storage_udisks::UdisksBackend::new().await?);
+        Self::with_udisks_backend(udisks).await
+    }
+
+    /// Build the same production registry using a caller-selected transport.
+    /// This does not install or modify the process-wide runtime context.
+    pub async fn with_udisks_backend(
+        udisks: Arc<storage_udisks::UdisksBackend>,
+    ) -> Result<Arc<Self>, OperationError> {
         if let Err(error) = udisks.enable_optional_modules().await {
             // Module availability is discovered per feature below.  Failing to
             // load an optional plugin must not prevent ordinary disks from

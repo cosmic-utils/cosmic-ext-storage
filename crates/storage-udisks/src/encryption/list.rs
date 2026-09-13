@@ -42,9 +42,16 @@ fn collect_luks_devices(volume: &VolumeInfo, output: &mut Vec<LuksInfo>) {
 
 /// List all LUKS encrypted devices
 pub async fn list_luks_devices() -> Result<Vec<LuksInfo>, DiskError> {
-    let manager = DiskManager::new()
+    let connection = crate::manager::shared_connection()
         .await
         .map_err(|e| DiskError::ConnectionFailed(e.to_string()))?;
+    list_luks_devices_with_connection(connection.as_ref()).await
+}
+
+pub(crate) async fn list_luks_devices_with_connection(
+    connection: &zbus::Connection,
+) -> Result<Vec<LuksInfo>, DiskError> {
+    let manager = DiskManager::from_connection(std::sync::Arc::new(connection.clone()));
 
     let disks_with_volumes = crate::disk::get_disks_with_volumes(&manager)
         .await

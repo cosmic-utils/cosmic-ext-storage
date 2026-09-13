@@ -11,7 +11,6 @@ use anyhow::Result;
 use zbus::zvariant::OwnedValue;
 
 use crate::dbus::bytestring as bs;
-use crate::disk::resolve;
 use crate::error::DiskError;
 use crate::infra::options::{
     join_options, remove_prefixed, remove_token, set_token_present, split_options, stable_dedup,
@@ -25,15 +24,20 @@ pub use storage_types::EncryptionOptionsSettings;
 ///
 /// Returns None if no crypttab configuration exists for the device.
 pub async fn get_encryption_options(device: &str) -> Result<Option<EncryptionOptionsSettings>> {
-    let connection = crate::manager::shared_connection()
-        .await
-        .map_err(|e| DiskError::ConnectionFailed(e.to_string()))?;
+    let connection = crate::manager::shared_connection().await?;
+    get_encryption_options_with_connection(connection.as_ref(), device).await
+}
 
-    let object_path = resolve::block_object_path_for_device(device)
-        .await
-        .map_err(|e| DiskError::DBusError(e.to_string()))?;
+pub(crate) async fn get_encryption_options_with_connection(
+    connection: &zbus::Connection,
+    device: &str,
+) -> Result<Option<EncryptionOptionsSettings>> {
+    let object_path =
+        crate::disk::resolve::block_object_path_for_device_with_connection(connection, device)
+            .await
+            .map_err(|e| DiskError::DBusError(e.to_string()))?;
 
-    let proxy = UDisks2BlockConfigurationProxy::builder(&connection)
+    let proxy = UDisks2BlockConfigurationProxy::builder(connection)
         .path(&object_path)?
         .build()
         .await
@@ -101,26 +105,32 @@ pub async fn set_encryption_options(
     device: &str,
     settings: &EncryptionOptionsSettings,
 ) -> Result<()> {
+    let connection = crate::manager::shared_connection().await?;
+    set_encryption_options_with_connection(connection.as_ref(), device, settings).await
+}
+
+pub(crate) async fn set_encryption_options_with_connection(
+    connection: &zbus::Connection,
+    device: &str,
+    settings: &EncryptionOptionsSettings,
+) -> Result<()> {
     if settings.name.trim().is_empty() {
         anyhow::bail!("Name must not be empty");
     }
 
-    let connection = crate::manager::shared_connection()
-        .await
-        .map_err(|e| DiskError::ConnectionFailed(e.to_string()))?;
+    let object_path =
+        crate::disk::resolve::block_object_path_for_device_with_connection(connection, device)
+            .await
+            .map_err(|e| DiskError::DBusError(e.to_string()))?;
 
-    let object_path = resolve::block_object_path_for_device(device)
-        .await
-        .map_err(|e| DiskError::DBusError(e.to_string()))?;
-
-    let proxy = UDisks2BlockConfigurationProxy::builder(&connection)
+    let proxy = UDisks2BlockConfigurationProxy::builder(connection)
         .path(&object_path)?
         .build()
         .await
         .map_err(|e| DiskError::DBusError(e.to_string()))?;
 
     // Get block UUID for device identification
-    let block_proxy = udisks2::block::BlockProxy::builder(&connection)
+    let block_proxy = udisks2::block::BlockProxy::builder(connection)
         .path(&object_path)?
         .build()
         .await
@@ -209,15 +219,20 @@ pub async fn set_encryption_options(
 ///
 /// Removes the crypttab entry for the device if one exists.
 pub async fn clear_encryption_options(device: &str) -> Result<()> {
-    let connection = crate::manager::shared_connection()
-        .await
-        .map_err(|e| DiskError::ConnectionFailed(e.to_string()))?;
+    let connection = crate::manager::shared_connection().await?;
+    clear_encryption_options_with_connection(connection.as_ref(), device).await
+}
 
-    let object_path = resolve::block_object_path_for_device(device)
-        .await
-        .map_err(|e| DiskError::DBusError(e.to_string()))?;
+pub(crate) async fn clear_encryption_options_with_connection(
+    connection: &zbus::Connection,
+    device: &str,
+) -> Result<()> {
+    let object_path =
+        crate::disk::resolve::block_object_path_for_device_with_connection(connection, device)
+            .await
+            .map_err(|e| DiskError::DBusError(e.to_string()))?;
 
-    let proxy = UDisks2BlockConfigurationProxy::builder(&connection)
+    let proxy = UDisks2BlockConfigurationProxy::builder(connection)
         .path(&object_path)?
         .build()
         .await

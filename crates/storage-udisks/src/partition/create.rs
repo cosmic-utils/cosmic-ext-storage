@@ -46,13 +46,22 @@ pub async fn create_partition(
     let connection = crate::manager::shared_connection()
         .await
         .map_err(|e| DiskError::ConnectionFailed(e.to_string()))?;
+    create_partition_with_connection(connection.as_ref(), disk_path, offset, size, type_id).await
+}
 
+pub(crate) async fn create_partition_with_connection(
+    connection: &zbus::Connection,
+    disk_path: &str,
+    offset: u64,
+    size: u64,
+    type_id: &str,
+) -> Result<String, DiskError> {
     let block_path: OwnedObjectPath = disk_path
         .try_into()
         .map_err(|e| DiskError::InvalidPath(format!("Invalid device path: {}", e)))?;
 
     // Create partition table proxy
-    let table_proxy = PartitionTableProxy::builder(&connection)
+    let table_proxy = PartitionTableProxy::builder(connection)
         .path(&block_path)
         .map_err(|e| DiskError::DBusError(e.to_string()))?
         .build()
@@ -67,7 +76,7 @@ pub async fn create_partition(
         .map_err(|e| DiskError::OperationFailed(format!("Create partition failed: {}", e)))?;
 
     // Get device path
-    let block_proxy = BlockProxy::builder(&connection)
+    let block_proxy = BlockProxy::builder(connection)
         .path(&partition_path)
         .map_err(|e| DiskError::DBusError(e.to_string()))?
         .build()
@@ -106,9 +115,26 @@ pub async fn create_partition_with_filesystem(
     disk_path: &str,
     info: &CreatePartitionInfo,
 ) -> Result<String, DiskError> {
+    let connection = crate::manager::shared_connection()
+        .await
+        .map_err(|e| DiskError::ConnectionFailed(e.to_string()))?;
+    create_partition_with_filesystem_with_connection(connection.as_ref(), disk_path, info).await
+}
+
+pub(crate) async fn create_partition_with_filesystem_with_connection(
+    connection: &zbus::Connection,
+    disk_path: &str,
+    info: &CreatePartitionInfo,
+) -> Result<String, DiskError> {
     // Step 1: Create the partition
-    let partition_path =
-        create_partition(disk_path, info.offset, info.size, &info.selected_type).await?;
+    let partition_path = crate::partition::create::create_partition_with_connection(
+        connection,
+        disk_path,
+        info.offset,
+        info.size,
+        &info.selected_type,
+    )
+    .await?;
 
     tracing::info!(
         "Created partition {} at offset {}, size {}",
@@ -130,11 +156,22 @@ pub async fn create_partition_with_filesystem(
         tracing::info!("Formatting {} as LUKS", partition_path);
 
         // Format as LUKS
-        crate::format_luks(&partition_path, &info.password, "luks2").await?;
+        crate::encryption::format::format_luks_with_connection(
+            connection,
+            &partition_path,
+            &info.password,
+            "luks2",
+        )
+        .await?;
 
         // After formatting with encrypt.passphrase, UDisks2 auto-unlocks the device
         // Get the cleartext device path from the Encrypted interface
-        let cleartext_path = match crate::encryption::get_cleartext_device(&partition_path).await {
+        let cleartext_path = match crate::encryption::unlock::get_cleartext_device_with_connection(
+            connection,
+            &partition_path,
+        )
+        .await
+        {
             Ok(path) if !path.is_empty() && path != "/" => {
                 tracing::info!("Using auto-unlocked cleartext device: {}", path);
                 path
@@ -142,7 +179,12 @@ pub async fn create_partition_with_filesystem(
             _ => {
                 // Not auto-unlocked, unlock manually
                 tracing::info!("Unlocking LUKS device {}", partition_path);
-                crate::unlock_luks(&partition_path, &info.password).await?
+                crate::encryption::unlock::unlock_luks_with_connection(
+                    connection,
+                    &partition_path,
+                    &info.password,
+                )
+                .await?
             }
         };
 
@@ -153,7 +195,8 @@ pub async fn create_partition_with_filesystem(
         );
 
         // Format the cleartext device with the requested filesystem
-        crate::format_filesystem(
+        crate::filesystem::format::format_filesystem_with_connection(
+            connection,
             &cleartext_path,
             fs_type,
             &info.name,
@@ -174,7 +217,14 @@ pub async fn create_partition_with_filesystem(
             ..Default::default()
         };
 
-        crate::format_filesystem(&partition_path, fs_type, &info.name, options).await?;
+        crate::filesystem::format::format_filesystem_with_connection(
+            connection,
+            &partition_path,
+            fs_type,
+            &info.name,
+            options,
+        )
+        .await?;
 
         Ok(partition_path)
     }

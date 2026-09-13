@@ -29,3 +29,6 @@ btrfsutil.workspace = true
 uuid.workspace = true
 chrono.workspace = true
 serde_json.workspace = true
+
+[dev-dependencies]
+zbus = { workspace = true, features = ["p2p"] }

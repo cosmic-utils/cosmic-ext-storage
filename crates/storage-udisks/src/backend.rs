@@ -80,7 +80,7 @@ impl UdisksBackend {
 }
 
 fn error(error: impl std::fmt::Display) -> StorageError {
-    StorageError::new(StorageErrorKind::Internal, error.to_string())
+    crate::logical::error::native_error(error)
 }
 
 fn unavailable(error: impl std::fmt::Display) -> StorageError {
@@ -160,7 +160,12 @@ impl DeviceEventSource for UdisksBackend {
 #[async_trait]
 impl DriveOperations for UdisksBackend {
     async fn smart_info(&self, device: &str) -> Result<SmartInfo, StorageError> {
-        crate::get_smart_info_by_device(device).await.map_err(error)
+        crate::smart::info::get_smart_info_by_device_with_connection(
+            self.manager.connection().as_ref(),
+            device,
+        )
+        .await
+        .map_err(error)
     }
 
     async fn start_smart_selftest(
@@ -168,29 +173,51 @@ impl DriveOperations for UdisksBackend {
         device: &str,
         kind: SmartSelfTestKind,
     ) -> Result<(), StorageError> {
-        crate::start_drive_smart_selftest_by_device(device, kind)
-            .await
-            .map_err(error)
+        crate::smart::test::start_drive_smart_selftest_by_device_with_connection(
+            self.manager.connection().as_ref(),
+            device,
+            kind,
+        )
+        .await
+        .map_err(error)
     }
 
     async fn eject(&self, device: &str, ejectable: bool) -> Result<(), StorageError> {
-        crate::eject_drive_by_device(device, ejectable)
-            .await
-            .map_err(error)
+        crate::disk::power::eject_drive_by_device_with_connection(
+            self.manager.connection().as_ref(),
+            device,
+            ejectable,
+        )
+        .await
+        .map_err(error)
     }
 
     async fn power_off(&self, device: &str, can_power_off: bool) -> Result<(), StorageError> {
-        crate::power_off_drive_by_device(device, can_power_off)
-            .await
-            .map_err(error)
+        crate::disk::power::power_off_drive_by_device_with_connection(
+            self.manager.connection().as_ref(),
+            device,
+            can_power_off,
+        )
+        .await
+        .map_err(error)
     }
 
     async fn standby(&self, device: &str) -> Result<(), StorageError> {
-        crate::standby_drive_by_device(device).await.map_err(error)
+        crate::disk::power::standby_drive_by_device_with_connection(
+            self.manager.connection().as_ref(),
+            device,
+        )
+        .await
+        .map_err(error)
     }
 
     async fn wakeup(&self, device: &str) -> Result<(), StorageError> {
-        crate::wakeup_drive_by_device(device).await.map_err(error)
+        crate::disk::power::wakeup_drive_by_device_with_connection(
+            self.manager.connection().as_ref(),
+            device,
+        )
+        .await
+        .map_err(error)
     }
 
     async fn safe_remove(
@@ -200,9 +227,15 @@ impl DriveOperations for UdisksBackend {
         removable: bool,
         can_power_off: bool,
     ) -> Result<(), StorageError> {
-        crate::remove_drive_by_device(device, is_loop, removable, can_power_off)
-            .await
-            .map_err(error)
+        crate::disk::power::remove_drive_by_device_with_connection(
+            self.manager.connection().as_ref(),
+            device,
+            is_loop,
+            removable,
+            can_power_off,
+        )
+        .await
+        .map_err(error)
     }
 }
 
@@ -253,12 +286,21 @@ impl PartitionOperations for UdisksBackend {
         size: u64,
         type_id: &str,
     ) -> Result<String, StorageError> {
-        let path = crate::block_object_path_for_device(disk)
-            .await
-            .map_err(error)?;
-        crate::create_partition(&path, offset, size, type_id)
-            .await
-            .map_err(error)
+        let path = crate::disk::discovery::block_object_path_for_device_with_connection(
+            self.manager.connection().as_ref(),
+            disk,
+        )
+        .await
+        .map_err(error)?;
+        crate::partition::create::create_partition_with_connection(
+            self.manager.connection().as_ref(),
+            &path,
+            offset,
+            size,
+            type_id,
+        )
+        .await
+        .map_err(error)
     }
 
     async fn create_partition_with_filesystem(
@@ -266,40 +308,68 @@ impl PartitionOperations for UdisksBackend {
         disk: &str,
         info: &CreatePartitionInfo,
     ) -> Result<String, StorageError> {
-        let path = crate::block_object_path_for_device(disk)
-            .await
-            .map_err(error)?;
-        crate::create_partition_with_filesystem(&path, info)
-            .await
-            .map_err(error)
+        let path = crate::disk::discovery::block_object_path_for_device_with_connection(
+            self.manager.connection().as_ref(),
+            disk,
+        )
+        .await
+        .map_err(error)?;
+        crate::partition::create::create_partition_with_filesystem_with_connection(
+            self.manager.connection().as_ref(),
+            &path,
+            info,
+        )
+        .await
+        .map_err(error)
     }
 
     async fn delete_partition(&self, partition: &str) -> Result<(), StorageError> {
-        crate::delete_partition(partition).await.map_err(error)
+        crate::partition::delete::delete_partition_with_connection(
+            self.manager.connection().as_ref(),
+            partition,
+        )
+        .await
+        .map_err(error)
     }
 
     async fn resize_partition(&self, partition: &str, new_size: u64) -> Result<(), StorageError> {
-        crate::resize_partition(partition, new_size)
-            .await
-            .map_err(error)
+        crate::partition::resize::resize_partition_with_connection(
+            self.manager.connection().as_ref(),
+            partition,
+            new_size,
+        )
+        .await
+        .map_err(error)
     }
 
     async fn set_partition_type(&self, partition: &str, type_id: &str) -> Result<(), StorageError> {
-        crate::set_partition_type(partition, type_id)
-            .await
-            .map_err(error)
+        crate::partition::edit::set_partition_type_with_connection(
+            self.manager.connection().as_ref(),
+            partition,
+            type_id,
+        )
+        .await
+        .map_err(error)
     }
 
     async fn set_partition_flags(&self, partition: &str, flags: u64) -> Result<(), StorageError> {
-        crate::set_partition_flags(partition, flags)
-            .await
-            .map_err(error)
+        crate::partition::edit::set_partition_flags_with_connection(
+            self.manager.connection().as_ref(),
+            partition,
+            flags,
+        )
+        .await
+        .map_err(error)
     }
 
     async fn set_partition_name(&self, partition: &str, name: &str) -> Result<(), StorageError> {
-        crate::set_partition_name(partition, name)
-            .await
-            .map_err(error)
+        crate::partition::edit::set_partition_name_with_connection(
+            self.manager.connection().as_ref(),
+            partition,
+            name,
+        )
+        .await
+        .map_err(error)
     }
 }
 
@@ -323,9 +393,15 @@ impl FilesystemOperations for UdisksBackend {
         label: &str,
         options: FormatOptions,
     ) -> Result<(), StorageError> {
-        crate::format_filesystem(device, filesystem_type, label, options)
-            .await
-            .map_err(error)
+        crate::filesystem::format::format_filesystem_with_connection(
+            self.manager.connection().as_ref(),
+            device,
+            filesystem_type,
+            label,
+            options,
+        )
+        .await
+        .map_err(error)
     }
 
     async fn mount_filesystem(
@@ -335,13 +411,24 @@ impl FilesystemOperations for UdisksBackend {
         options: MountOptions,
     ) -> Result<String, StorageError> {
         let uid = unsafe { libc::geteuid() };
-        crate::mount_filesystem(device, mount_point, options, Some(uid))
-            .await
-            .map_err(error)
+        crate::filesystem::mount::mount_filesystem_with_connection(
+            self.manager.connection().as_ref(),
+            device,
+            mount_point,
+            options,
+            Some(uid),
+        )
+        .await
+        .map_err(error)
     }
 
     async fn get_mount_point(&self, device: &str) -> Result<String, StorageError> {
-        crate::get_mount_point(device).await.map_err(error)
+        crate::filesystem::mount::get_mount_point_with_connection(
+            self.manager.connection().as_ref(),
+            device,
+        )
+        .await
+        .map_err(error)
     }
 
     async fn unmount_filesystem(
@@ -349,9 +436,13 @@ impl FilesystemOperations for UdisksBackend {
         device_or_mount: &str,
         force: bool,
     ) -> Result<(), StorageError> {
-        crate::unmount_filesystem(device_or_mount, force)
-            .await
-            .map_err(error)
+        crate::filesystem::mount::unmount_filesystem_with_connection(
+            self.manager.connection().as_ref(),
+            device_or_mount,
+            force,
+        )
+        .await
+        .map_err(error)
     }
 
     async fn blocking_processes(
@@ -377,28 +468,53 @@ impl FilesystemOperations for UdisksBackend {
     }
 
     async fn check_filesystem(&self, device: &str, repair: bool) -> Result<bool, StorageError> {
-        crate::check_filesystem(device, repair).await.map_err(error)
+        crate::filesystem::check::check_filesystem_with_connection(
+            self.manager.connection().as_ref(),
+            device,
+            repair,
+        )
+        .await
+        .map_err(error)
     }
 
     async fn filesystem_label(&self, device: &str) -> Result<String, StorageError> {
-        crate::get_filesystem_label(device).await.map_err(error)
+        crate::filesystem::label::get_filesystem_label_with_connection(
+            self.manager.connection().as_ref(),
+            device,
+        )
+        .await
+        .map_err(error)
     }
 
     async fn set_filesystem_label(&self, device: &str, label: &str) -> Result<(), StorageError> {
-        crate::set_filesystem_label(device, label)
-            .await
-            .map_err(error)
+        crate::filesystem::label::set_filesystem_label_with_connection(
+            self.manager.connection().as_ref(),
+            device,
+            label,
+        )
+        .await
+        .map_err(error)
     }
 
     async fn mount_options(
         &self,
         device: &str,
     ) -> Result<Option<MountOptionsSettings>, StorageError> {
-        crate::get_mount_options(device).await.map_err(error)
+        crate::filesystem::config::get_mount_options_with_connection(
+            self.manager.connection().as_ref(),
+            device,
+        )
+        .await
+        .map_err(error)
     }
 
     async fn reset_mount_options(&self, device: &str) -> Result<(), StorageError> {
-        crate::reset_mount_options(device).await.map_err(error)
+        crate::filesystem::config::reset_mount_options_with_connection(
+            self.manager.connection().as_ref(),
+            device,
+        )
+        .await
+        .map_err(error)
     }
 
     async fn set_mount_options(
@@ -415,7 +531,8 @@ impl FilesystemOperations for UdisksBackend {
         identify_as: String,
         filesystem_type: String,
     ) -> Result<(), StorageError> {
-        crate::set_mount_options(
+        crate::filesystem::config::set_mount_options_with_connection(
+            self.manager.connection().as_ref(),
             device,
             mount_at_startup,
             show_in_ui,
@@ -437,16 +554,24 @@ impl FilesystemOperations for UdisksBackend {
         device: &str,
         recursive: bool,
     ) -> Result<(), StorageError> {
-        crate::take_filesystem_ownership(device, recursive)
-            .await
-            .map_err(error)
+        crate::filesystem::ownership::take_filesystem_ownership_with_connection(
+            self.manager.connection().as_ref(),
+            device,
+            recursive,
+        )
+        .await
+        .map_err(error)
     }
 }
 
 #[async_trait]
 impl EncryptionOperations for UdisksBackend {
     async fn list_luks_devices(&self) -> Result<Vec<storage_types::LuksInfo>, StorageError> {
-        crate::list_luks_devices().await.map_err(error)
+        crate::encryption::list::list_luks_devices_with_connection(
+            self.manager.connection().as_ref(),
+        )
+        .await
+        .map_err(error)
     }
 
     async fn format_luks(
@@ -455,17 +580,33 @@ impl EncryptionOperations for UdisksBackend {
         passphrase: &str,
         version: &str,
     ) -> Result<(), StorageError> {
-        crate::format_luks(device, passphrase, version)
-            .await
-            .map_err(error)
+        crate::encryption::format::format_luks_with_connection(
+            self.manager.connection().as_ref(),
+            device,
+            passphrase,
+            version,
+        )
+        .await
+        .map_err(error)
     }
 
     async fn unlock_luks(&self, device: &str, passphrase: &str) -> Result<String, StorageError> {
-        crate::unlock_luks(device, passphrase).await.map_err(error)
+        crate::encryption::unlock::unlock_luks_with_connection(
+            self.manager.connection().as_ref(),
+            device,
+            passphrase,
+        )
+        .await
+        .map_err(error)
     }
 
     async fn lock_luks(&self, device: &str) -> Result<(), StorageError> {
-        crate::lock_luks(device).await.map_err(error)
+        crate::encryption::lock::lock_luks_with_connection(
+            self.manager.connection().as_ref(),
+            device,
+        )
+        .await
+        .map_err(error)
     }
 
     async fn change_luks_passphrase(
@@ -474,16 +615,26 @@ impl EncryptionOperations for UdisksBackend {
         current: &str,
         next: &str,
     ) -> Result<(), StorageError> {
-        crate::change_luks_passphrase(device, current, next)
-            .await
-            .map_err(error)
+        crate::encryption::passphrase::change_luks_passphrase_with_connection(
+            self.manager.connection().as_ref(),
+            device,
+            current,
+            next,
+        )
+        .await
+        .map_err(error)
     }
 
     async fn encryption_options(
         &self,
         device: &str,
     ) -> Result<Option<storage_types::EncryptionOptionsSettings>, StorageError> {
-        crate::get_encryption_options(device).await.map_err(error)
+        crate::encryption::config::get_encryption_options_with_connection(
+            self.manager.connection().as_ref(),
+            device,
+        )
+        .await
+        .map_err(error)
     }
 
     async fn set_encryption_options(
@@ -491,34 +642,52 @@ impl EncryptionOperations for UdisksBackend {
         device: &str,
         settings: &storage_types::EncryptionOptionsSettings,
     ) -> Result<(), StorageError> {
-        crate::set_encryption_options(device, settings)
-            .await
-            .map_err(error)
+        crate::encryption::config::set_encryption_options_with_connection(
+            self.manager.connection().as_ref(),
+            device,
+            settings,
+        )
+        .await
+        .map_err(error)
     }
 
     async fn clear_encryption_options(&self, device: &str) -> Result<(), StorageError> {
-        crate::clear_encryption_options(device).await.map_err(error)
+        crate::encryption::config::clear_encryption_options_with_connection(
+            self.manager.connection().as_ref(),
+            device,
+        )
+        .await
+        .map_err(error)
     }
 }
 
 #[async_trait]
 impl ImageDeviceOperations for UdisksBackend {
     async fn open_for_backup(&self, device: &str) -> Result<std::os::fd::OwnedFd, StorageError> {
-        crate::open_for_backup_by_device(device)
-            .await
-            .map_err(error)
+        crate::disk::device_apis::open_for_backup_by_device_with_connection(
+            self.manager.connection().as_ref(),
+            device,
+        )
+        .await
+        .map_err(error)
     }
 
     async fn open_for_restore(&self, device: &str) -> Result<std::os::fd::OwnedFd, StorageError> {
-        crate::open_for_restore_by_device(device)
-            .await
-            .map_err(error)
+        crate::disk::device_apis::open_for_restore_by_device_with_connection(
+            self.manager.connection().as_ref(),
+            device,
+        )
+        .await
+        .map_err(error)
     }
 
     async fn loop_setup(&self, image_path: &str) -> Result<String, StorageError> {
-        crate::loop_setup_device_path(image_path)
-            .await
-            .map_err(error)
+        crate::disk::device_apis::loop_setup_device_path_with_connection(
+            self.manager.connection().as_ref(),
+            image_path,
+        )
+        .await
+        .map_err(error)
     }
 }
 
