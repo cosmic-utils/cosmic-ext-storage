@@ -1,0 +1,17 @@
+FROM ubuntu@sha256:224a1869083a311ef3f13648a154ba79832fbef6364d31493642ca03082da254
+
+ENV DEBIAN_FRONTEND=noninteractive
+
+RUN apt-get update \
+    && apt-get install --yes --no-install-recommends \
+        dbus \
+        kmod \
+        udisks2 \
+        util-linux \
+    && rm -rf /var/lib/apt/lists/*
+
+COPY tools/storage-lab/entrypoint.sh /usr/local/bin/storage-lab-entrypoint
+
+RUN chmod 0755 /usr/local/bin/storage-lab-entrypoint
+
+ENTRYPOINT ["/usr/local/bin/storage-lab-entrypoint"]

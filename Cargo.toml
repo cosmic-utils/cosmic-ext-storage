@@ -77,6 +77,9 @@ base64 = { workspace = true, optional = true }
 serde_json = { workspace = true, optional = true }
 sha2 = { workspace = true, optional = true }
 
+[dev-dependencies]
+testcontainers = { version = "0.28.0", features = ["blocking"] }
+
 [workspace]
 members = [
     ".",

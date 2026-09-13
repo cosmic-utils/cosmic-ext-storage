@@ -121,3 +121,32 @@ jobs:
           name: ui-artifacts
           path: ui-artifacts
           if-no-files-found: warn
+
+  storage-lab-prototype:
+    name: Storage lab prototype
+    if: github.event.pull_request.draft == false
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: stable
+      - uses: Swatinem/rust-cache@v2
+
+      - name: Install Rust build dependencies
+        run: sudo apt-get update && sudo apt-get install --yes libxkbcommon-dev libbtrfsutil-dev
+
+      - name: Build the storage lab image
+        run: docker build --tag cosmic-storage-lab:spike --file tools/storage-lab/Containerfile .
+
+      - name: Run the storage lab capability probe
+        run: cargo test --locked --test storage_lab_capability -- --ignored --nocapture
+
+      - name: Upload storage lab artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: storage-lab-prototype-artifacts
+          path: target/storage-lab-prototype-artifacts
+          if-no-files-found: ignore

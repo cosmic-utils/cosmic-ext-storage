@@ -79,6 +79,7 @@ The prototype must not alter production storage code, `test-backend`,
 ```sh
 cargo test --locked --test storage_lab_capability -- --list
 cargo test --locked --test storage_lab_capability
+cargo test --locked --test storage_lab_capability -- --ignored --nocapture
 docker build -f tools/storage-lab/Containerfile -t cosmic-storage-lab:spike .
 ```
 
