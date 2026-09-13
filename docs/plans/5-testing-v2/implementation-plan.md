@@ -74,6 +74,7 @@ Cargo.lock
 tests/storage_lab_capability.rs
 tools/storage-lab/Containerfile
 tools/storage-lab/entrypoint.sh
+tools/storage-lab/run-tests.sh
 tools/storage-lab/README.md
 ```
 
@@ -143,8 +144,10 @@ Cargo.lock
 
 ### Work
 
-1. Add non-published workspace package `storage-lab-tests` and the pinned lab
-   image described in the spec.
+1. Add non-published workspace package `storage-lab-tests` and the pinned,
+   multi-stage lab image described in the spec. Its builder compiles the inner
+   Rust test binary with `cargo test --no-run`; its runtime contains that
+   binary, its dynamic libraries, and only runtime lab dependencies.
 2. Define only typed lab capabilities: `LabRoot`, `LabBackingFile`,
    `LabLoopDevice`, `LabMount`, `LabMapper`, `LabVolumeGroup`, and `LabArray`.
    No mutation helper accepts a raw device path or command text.
@@ -157,6 +160,10 @@ Cargo.lock
    add explicit health checks for each service needed by a selected test.
 5. Make the lab image/network/root/mount restrictions testable. The image has
    no host D-Bus or block-device mount and execution has no external network.
+6. Add `run-tests.sh`, which passes an exact Rust test-harness filter from
+   Testcontainers to the baked inner binary. Do not introduce a case registry,
+   host `target/` mount, or host-built binary copy. Split Docker layers so
+   dependency compilation is cached separately from workspace sources.
 
 ### Required tests
 
@@ -190,8 +197,8 @@ crates/storage-lab-tests/tests/transport.rs
 2. Preserve the normal production constructor and its system-bus semantics.
    Do not use a process-global environment override.
 3. Construct the exact production adapter registry against the private lab bus
-   from a container-internal test. No direct D-Bus probe can substitute for
-   the adapter-level test.
+   from the baked container-internal test binary. No direct D-Bus probe can
+   substitute for the adapter-level test, and no host D-Bus bridge is allowed.
 4. Prove authentication/authorization failures travel through the production
    storage error mapping.
 
@@ -240,7 +247,8 @@ cargo test --workspace --all-features --locked
 Cargo.toml
 Cargo.lock
 .config/nextest.toml
-tests/storage_lab.rs
+crates/storage-lab-tests/tests/bridge.rs
+tests/storage_lab.rs                    # selected AppRuntime cases only
 justfile
 .github/workflows/ci.yml
 tools/storage-testing/**                # delete only at phase completion
@@ -250,14 +258,19 @@ docs/plans/{2-lvm-refactor,3-logical-ui,4-testing,5-testing-v2}/**
 
 ### Work
 
-1. Add the outer Testcontainers lifecycle bridge in `tests/storage_lab.rs`.
-   It executes the compiled inner test binary, maps non-zero exit status to a
-   Rust test failure, and collects artifacts.
+1. Add the low-level outer Testcontainers lifecycle bridge in
+   `crates/storage-lab-tests/tests/bridge.rs`. It starts the baked runtime
+   image, executes the selected compiled inner test binary, maps non-zero exit
+   status to a Rust test failure, and collects artifacts. Add
+   `tests/storage_lab.rs` only for application-composition cases that require
+   the root package.
 2. Add Nextest with a single-slot `storage-lab` group, hard timeout, JUnit
-   output, and no automatic retries. A test target that is ignored locally is
-   enabled in the CI job with `STORAGE_LAB=1`.
-3. Add `just test-lab`. It uses the bridge; it never invokes an old harness
-   binary or parses a catalog report.
+   output, and no automatic retries. The low-level bridge has a five-minute
+   cold-run timeout. A test target that is ignored locally is enabled in the
+   CI job with `STORAGE_LAB=1`.
+3. Add `just test-lab`. It builds the image, uses the bridge, and passes a
+   native Rust test filter through to the inner binary; it never invokes an
+   old harness binary or parses a catalog report.
 4. Promote the CI `storage-lab` job from informational to required only after
    all Phase-3 family cases are present and passing.
 5. In the same commit, delete `tools/storage-testing`, remove it from the
@@ -305,9 +318,12 @@ crates/**
    to first-party executable code, compares changed lines/functions with the
    PR base, validates the exception manifest, and enforces every section-10
    threshold.
-3. Add `just coverage`; it instruments host tests and the inner lab test
-   binary, merges the mounted lab `.profraw` profiles, writes JSON/LCOV/HTML,
-   then runs the checker.
+3. Add `just coverage`; it builds the same lab runtime image with the inner
+   binary LLVM-instrumented, instruments host tests, and has the outer bridge
+   archive the container-only `.profraw` directory through Testcontainers even
+   after an inner failure. It extracts and merges those profiles, writes
+   JSON/LCOV/HTML, then runs the checker. It must not use a bind mount or
+   Docker CLI copy for profile collection.
 4. Add or refactor tests until every package and changed line/function meets
    the 100%/98% thresholds. Make UI/update/view code testable through reducer,
    semantic-view, and executed AT-SPI tests rather than excluding it.
@@ -370,5 +386,9 @@ Before declaring Testing V2 complete:
 6. Record commands, image digest, test names, artifact links, coverage
    results, and reviewer sign-off in a new phase record under
    `docs/plans/5-testing-v2/`.
+7. In a separate repository-administration change after the jobs are green,
+   update the GitHub ruleset/branch protection to require `storage-lab` and
+   `coverage`. Do not combine this external policy change with a functional
+   migration commit.
 
 Only then may the completed work be merged from `4-ui-testing` into `main`.

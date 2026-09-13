@@ -102,6 +102,27 @@ container-internal test binary and copy its output directory. It may not
 interpret a success report produced by a placeholder executor. A non-zero
 inner test exit status fails the outer test and therefore CI.
 
+### 5.1.1 Inner-test build and selection contract
+
+The lab image is a pinned multi-stage build. Its builder stage compiles the
+selected `storage-lab-tests` Rust test binary with `cargo test --no-run`; its
+runtime stage contains only the matching test executable, dynamic libraries,
+launcher, and runtime lab dependencies. Host `target/` files, the workspace,
+and a host-built test binary are never mounted or copied into the runtime
+container.
+
+The launcher passes a named Rust test-harness filter (including `--exact`) to
+that pre-built executable. Testcontainers supplies the filter as an argument
+or environment value and receives the test binary's native exit status. This
+is test selection by Rust's harness, not a new case registry, shell case
+catalogue, or report protocol. Docker layer boundaries must cache dependency
+compilation separately from workspace source compilation.
+
+The low-level Testcontainers bridge and capability test live in
+`storage-lab-tests` so their cold CI run does not compile the root GUI crate.
+Root-package bridges are added only for selected `AppRuntime` cases that
+actually require application composition.
+
 ### 5.2 New files and packages
 
 Implementation creates these test-only assets:
@@ -117,6 +138,7 @@ crates/storage-lab-tests/
   Cargo.toml                    # publish = false
   src/lib.rs                    # Lab fixture, safety checks, artefact helpers
   tests/
+    bridge.rs                   # outer Testcontainers lifecycle bridge
     disk.rs
     partition.rs
     filesystem.rs
@@ -126,7 +148,7 @@ crates/storage-lab-tests/
     btrfs.rs
     network.rs
 
-tests/storage_lab.rs            # Testcontainers lifecycle/inner-test bridge
+tests/storage_lab.rs            # only selected AppRuntime-to-lab bridge cases
 .config/nextest.toml            # serial storage-lab test group and timeouts
 ```
 
@@ -166,6 +188,12 @@ expected daemon.
 The container has no external network after image build. Testcontainers must
 start it with networking disabled. Image build may use the normal build
 network, but test execution may not.
+
+The coverage job builds the same runtime image contract with the inner test
+binary compiled using LLVM coverage instrumentation. The normal and coverage
+images may differ only in their build/test profile and profile-output setup,
+not in services, device permissions, network isolation, fixture layout, or
+selected test semantics.
 
 ### 5.4 Device safety contract
 
@@ -228,9 +256,10 @@ cargo nextest run --workspace --all-features
 cargo nextest run -p storage-lab-tests --profile storage-lab
 ```
 
-The outer bridge test in `tests/storage_lab.rs` is the CI/local entry point for
-the container. It emits JUnit through Nextest and copies its per-run artefact
-directory to `target/storage-lab-artifacts/`.
+The outer bridge in `storage-lab-tests` is the CI/local entry point for
+low-level lab cases; `tests/storage_lab.rs` is reserved for selected
+application cases. Both emit JUnit through Nextest and write per-run artefacts
+to `target/storage-lab-artifacts/`.
 
 ## 6. Required product seams
 
@@ -346,10 +375,14 @@ are excluded by path; no production source directory may be excluded by a
 blanket pattern.
 
 The workflow job must run each test target under LLVM instrumentation. For the
-storage lab, the container executes the coverage-instrumented test binary and
-writes its `.profraw` files to the mounted artifact directory. The outer job
-merges those profiles with the host-side test profiles before producing the
-final report. A passing host-only report is not sufficient.
+storage lab, the container executes the coverage-instrumented inner binary and
+writes `.profraw` files beneath a container-only run directory. Before the
+outer bridge returns—on both inner success and failure—it uses Testcontainers
+to execute `tar` in the still-running container, captures that archive, and
+writes it under `target/storage-lab-artifacts/<run>/profiles/`. The outer job
+extracts and merges those profiles with host-side profiles before producing the
+final report. No bind mount, Docker CLI copy, or host workspace access is
+allowed for this transfer. A passing host-only report is not sufficient.
 
 ### 10.2 Exceptions are temporary and auditable
 
