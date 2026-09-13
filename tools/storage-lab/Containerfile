@@ -6,6 +6,7 @@ RUN apt-get update \
  && DEBIAN_FRONTEND=noninteractive apt-get install --yes --no-install-recommends \
       libbtrfsutil-dev \
       libclang-dev \
+      jq \
       pkg-config \
  && rm -rf /var/lib/apt/lists/*
 
@@ -14,9 +15,9 @@ COPY . .
 RUN --mount=type=cache,target=/usr/local/cargo/registry \
     --mount=type=cache,target=/usr/local/cargo/git \
     --mount=type=cache,target=/workspace/target \
-    CARGO_TARGET_DIR=/workspace/target cargo test --locked -p storage-lab-tests --test capability --no-run \
- && test_binary=$(find /workspace/target/debug/deps -maxdepth 1 -type f -name 'capability-*' -perm /111 | head -n 1) \
- && test -n "$test_binary" \
+    CARGO_TARGET_DIR=/workspace/target cargo test --locked -p storage-lab-tests --test capability --no-run --message-format=json > /tmp/storage-lab-build.json \
+ && test_binary=$(jq -ers '[.[] | select(.reason == "compiler-artifact" and .target.name == "capability" and .profile.test == true and .executable != null) | .executable] | if length == 1 then .[0] else error("expected exactly one capability test executable") end' /tmp/storage-lab-build.json) \
+ && test -x "$test_binary" \
  && install -D -m 0755 "$test_binary" /out/storage-lab-capability
 
 FROM docker.io/library/rust@sha256:300ec56abce8cc9448ddea2172747d048ed902a3090e6b57babb2bf19f754081

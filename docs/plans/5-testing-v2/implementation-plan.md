@@ -196,13 +196,28 @@ STORAGE_LAB=1 cargo test -p storage-lab-tests --locked --test capability
   The same Testcontainers bridge passed both private adapter discovery and GPT
   partition-table creation on a GitHub-hosted runner; local failure preserves
   its captured artifacts and is never treated as a skip.
-- GitHub-hosted Docker exposes loop setup but not a usable device-mapper kernel
-  under this hermetic container contract. Installing UDisks' crypto plugins
-  and creating container-local `/dev/dm*` nodes is insufficient: UDisks still
-  receives `ENODEV` for the mapper. Do not mark LUKS, LVM, or MDRAID cases as
-  passed or skipped. They remain blocked pending a separately authorised
-  kernel-capable execution environment; mounting host kernel/device state
-  would violate this plan's isolation rules.
+- The original device-mapper diagnosis was premature. The entrypoint created
+  `/dev/dm0` while UDisks accessed `/dev/dm-0`, and the observed failure was
+  a missing path. The authorised VM spike in PR #119 exposed this naming bug.
+  Correct the node names before drawing conclusions about kernel support, and
+  compare the corrected tests in a guest and directly on a hosted runner.
+  LUKS format automatically unlocks the new volume; close it before testing a
+  wrong secret. LVM and MDRAID still require their own executed capability tests;
+  a successful LUKS case cannot stand in for either. Preserve service logs and
+  artifacts before asserting success, including when VM startup fails.
+  PR #119 subsequently passed all five storage tests (four existing plus LUKS,
+  zero skips) both directly on GitHub-hosted Docker and inside QEMU/KVM:
+  [source commit 6a84f95, run 34767576483](https://github.com/cosmic-utils/cosmic-ext-storage/actions/runs/34767576483).
+  Also resolve device-mapper's major number from `/proc/devices`: the guest uses
+  `252` for device mapper and `253` for its virtual disks, so a hardcoded major
+  can alias the wrong device. The VM works but is unnecessary for these tested
+  cases. Carry the container fixes and meaningful LUKS lifecycle assertions
+  into implementation, and execute LVM/MDRAID capability gates separately.
+  A warm local Docker build also exposed a stale-binary bug: selecting the first
+  `capability-*` file can bake an old cached executable, and Rust exits zero
+  when an exact test filter matches nothing. Select the executable from Cargo's
+  JSON build messages and reject missing test names before execution. Validate
+  both cold CI and warm local builds, and inspect inner execution counts.
 
 ## Phase 2 — Production transport seam
 

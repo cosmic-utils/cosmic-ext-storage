@@ -49,7 +49,7 @@ test-lab:
     @test "${STORAGE_LAB:-}" = "1" || { echo "STORAGE_LAB=1 is required to run the privileged disposable storage lab" >&2; exit 1; }
     docker build --tag cosmic-storage-lab:local --file tools/storage-lab/Containerfile .
     @docker image inspect --format 'storage-lab image={{"{{"}}.Id{{"}}"}}' cosmic-storage-lab:local
-    @echo 'storage-lab test=capability_runs_in_the_private_storage_lab artifacts=target/storage-lab-artifacts'
+    @echo 'storage-lab suite=bridge (including LUKS) artifacts=target/storage-lab-artifacts'
     cargo nextest run --locked --profile storage-lab -p storage-lab-tests --features outer-bridge --test bridge --run-ignored ignored-only
 
 ui-scenario-check:

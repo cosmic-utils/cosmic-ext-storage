@@ -10,12 +10,17 @@ mkdir -p /dev/mapper
 if [ ! -e /dev/mapper/control ]; then
     mknod /dev/mapper/control c 10 236
 fi
-for index in $(seq 0 15); do
-    device="/dev/dm$index"
-    if [ ! -e "$device" ]; then
-        mknod "$device" b 253 "$index"
-    fi
-done
+# Block major numbers are assigned by the running kernel. In a VM, hardcoding
+# 253 can alias a different driver (including the guest's boot disk).
+dm_major=$(awk '$2 == "device-mapper" { print $1 }' /proc/devices)
+if [ -n "$dm_major" ]; then
+    for index in $(seq 0 15); do
+        device="/dev/dm-$index"
+        if [ ! -e "$device" ]; then
+            mknod "$device" b "$dm_major" "$index"
+        fi
+    done
+fi
 
 dbus-daemon --system --fork --nopidfile
 
