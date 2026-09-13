@@ -106,6 +106,33 @@ jobs:
       - run: cargo test -p test-backend --locked
       - run: cargo test -p cosmic-ext-storage --features test-backend --locked --test ui_scenario_contract
 
+  storage-lab:
+    name: Storage lab
+    if: github.event.pull_request.draft == false
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+      - run: rustup update
+      - uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: storage-lab-${{ runner.os }}
+      - uses: taiki-e/install-action@nextest
+      - run: sudo apt-get update && sudo apt-get install -y just libbtrfsutil-dev libclang-dev
+      - name: Build and run private storage lab
+        env:
+          STORAGE_LAB: "1"
+        run: just test-lab
+      - name: Upload storage lab evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: storage-lab-artifacts
+          path: |
+            target/storage-lab-artifacts
+            target/nextest/storage-lab/junit.xml
+          if-no-files-found: warn
+
   ui-e2e:
     name: UI E2E capability
     if: github.event.pull_request.draft == false

@@ -36,10 +36,20 @@ async fn capability_starts_private_dbus_udisks_and_sftp() -> Result<()> {
             .await
             .map_err(|error| error.to_string())?,
     ));
-    let discovered = backend
-        .list_disks()
-        .await
-        .map_err(|error| error.to_string())?;
+    let mut discovered = Vec::new();
+    for _ in 0..100 {
+        discovered = backend
+            .list_disks()
+            .await
+            .map_err(|error| error.to_string())?;
+        if discovered
+            .iter()
+            .any(|disk| disk.device == loop_path.to_string_lossy())
+        {
+            break;
+        }
+        tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+    }
     assert!(
         discovered
             .iter()

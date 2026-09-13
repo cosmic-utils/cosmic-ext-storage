@@ -1,0 +1,123 @@
+//! The host-side Testcontainers bridge for the private storage lab.
+//!
+//! Assertions about storage behaviour run in the baked Rust binary inside the
+//! lab. This outer test owns only the container lifecycle and evidence capture.
+
+#![cfg(feature = "outer-bridge")]
+
+use std::{
+    error::Error,
+    fs,
+    path::{Path, PathBuf},
+    time::{SystemTime, UNIX_EPOCH},
+};
+
+use testcontainers::{
+    GenericImage, ImageExt,
+    core::{ExecCommand, WaitFor},
+    runners::SyncRunner,
+};
+
+const IMAGE_NAME: &str = "cosmic-storage-lab";
+const IMAGE_TAG: &str = "local";
+const CAPABILITY_FILTER: &str = "capability_starts_private_dbus_udisks_and_sftp";
+
+#[test]
+#[ignore = "requires STORAGE_LAB=1 and the locally built privileged storage-lab image"]
+fn capability_runs_in_the_private_storage_lab() -> Result<(), Box<dyn Error>> {
+    if std::env::var("STORAGE_LAB").as_deref() != Ok("1") {
+        return Err("STORAGE_LAB=1 is required to execute the private storage lab".into());
+    }
+
+    let artifact_dir = unique_artifact_dir()?;
+    let image = GenericImage::new(IMAGE_NAME, IMAGE_TAG)
+        .with_wait_for(WaitFor::message_on_stdout("STORAGE_LAB_READY"))
+        .with_network("none")
+        .with_privileged(true)
+        .with_label("com.cosmic.storage.lab", "testing-v2");
+    let container = image.start()?;
+
+    write_artifact(&artifact_dir, "container-id.txt", container.id())?;
+    let mut test = container.exec(
+        ExecCommand::new(["/usr/local/bin/storage-lab-run-tests"])
+            .with_env_vars([("STORAGE_LAB_TEST_FILTER", CAPABILITY_FILTER)]),
+    )?;
+    let test_stdout = String::from_utf8(test.stdout_to_vec()?)?;
+    let test_stderr = String::from_utf8(test.stderr_to_vec()?)?;
+    let test_exit = test.exit_code()?;
+    write_artifact(&artifact_dir, "inner-test.stdout.log", &test_stdout)?;
+    write_artifact(&artifact_dir, "inner-test.stderr.log", &test_stderr)?;
+
+    let (service_stdout, service_stderr, service_exit) = execute(
+        &container,
+        [
+            "sh",
+            "-ec",
+            "cat /tmp/storage-lab/polkitd.log /tmp/storage-lab/udisksd.log /tmp/storage-lab/sshd.log 2>/dev/null || true",
+        ],
+    )?;
+    write_artifact(&artifact_dir, "services.stdout.log", &service_stdout)?;
+    write_artifact(&artifact_dir, "services.stderr.log", &service_stderr)?;
+    write_artifact(
+        &artifact_dir,
+        "services.exit-code.txt",
+        &format!("{service_exit:?}\n"),
+    )?;
+
+    let (loops_stdout, loops_stderr, loops_exit) = execute(
+        &container,
+        ["losetup", "--list", "--noheadings", "--output", "BACK-FILE"],
+    )?;
+    write_artifact(&artifact_dir, "post-test-loops.stdout.log", &loops_stdout)?;
+    write_artifact(&artifact_dir, "post-test-loops.stderr.log", &loops_stderr)?;
+    write_artifact(
+        &artifact_dir,
+        "post-test-loops.exit-code.txt",
+        &format!("{loops_exit:?}\n"),
+    )?;
+
+    assert_eq!(
+        test_exit,
+        Some(0),
+        "the inner Rust test failed; inspect {}",
+        artifact_dir.display()
+    );
+    assert!(
+        !loops_stdout.contains("/tmp/storage-lab/capability-"),
+        "a lab-backed loop survived the inner test; inspect {}",
+        artifact_dir.display()
+    );
+    Ok(())
+}
+
+fn execute<I>(
+    container: &testcontainers::Container<GenericImage>,
+    command: I,
+) -> Result<(String, String, Option<i64>), Box<dyn Error>>
+where
+    I: IntoIterator<Item = &'static str>,
+{
+    let mut result = container.exec(ExecCommand::new(command))?;
+    let stdout = String::from_utf8(result.stdout_to_vec()?)?;
+    let stderr = String::from_utf8(result.stderr_to_vec()?)?;
+    let exit_code = result.exit_code()?;
+    Ok((stdout, stderr, exit_code))
+}
+
+fn unique_artifact_dir() -> Result<PathBuf, Box<dyn Error>> {
+    let nonce = SystemTime::now().duration_since(UNIX_EPOCH)?.as_nanos();
+    let directory = workspace_target_dir()
+        .join("storage-lab-artifacts")
+        .join(format!("run-{nonce}"));
+    fs::create_dir_all(&directory)?;
+    Ok(directory)
+}
+
+fn workspace_target_dir() -> PathBuf {
+    Path::new(env!("CARGO_MANIFEST_DIR")).join("../../target")
+}
+
+fn write_artifact(directory: &Path, name: &str, contents: &str) -> Result<(), Box<dyn Error>> {
+    fs::write(directory.join(name), contents)?;
+    Ok(())
+}

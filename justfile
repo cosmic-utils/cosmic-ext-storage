@@ -43,6 +43,15 @@ app-workflow-check:
     just ui-assert-tests phase='workflow-v2'
     cargo test -p cosmic-ext-storage --features test-backend --locked --test application_workflows
 
+# Build and execute the same isolated Testcontainers storage lab used by CI.
+# The private lab, rather than the host, owns every loop-backed mutation.
+test-lab:
+    @test "${STORAGE_LAB:-}" = "1" || { echo "STORAGE_LAB=1 is required to run the privileged disposable storage lab" >&2; exit 1; }
+    docker build --tag cosmic-storage-lab:local --file tools/storage-lab/Containerfile .
+    @docker image inspect --format 'storage-lab image={{"{{"}}.Id{{"}}"}}' cosmic-storage-lab:local
+    @echo 'storage-lab test=capability_runs_in_the_private_storage_lab artifacts=target/storage-lab-artifacts'
+    cargo nextest run --locked --profile storage-lab -p storage-lab-tests --features outer-bridge --test bridge --run-ignored ignored-only
+
 ui-scenario-check:
     python3 tools/ui-testing/assert_tests.py --plan-only
     @find tests/ui/scenarios -name '*.toml' -print0 | sort -z | xargs -0 -n1 cargo run -p test-backend --locked --bin ui-scenario -- validate

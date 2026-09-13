@@ -6,8 +6,12 @@ publish = false
 license = "GPL-3.0-only"
 description = "Private Testcontainers storage-lab fixtures and integration tests"
 
+[features]
+outer-bridge = ["dep:testcontainers"]
+
 [dependencies]
 storage-contracts.workspace = true
 storage-udisks.workspace = true
+testcontainers = { version = "0.28.0", features = ["blocking"], optional = true }
 tokio.workspace = true
 zbus.workspace = true
