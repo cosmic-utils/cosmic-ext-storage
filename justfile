@@ -76,27 +76,6 @@ package-check:
     cargo build --release --locked
     @output=$(target/release/cosmic-ext-storage --help 2>&1 || true); if printf '%s\n' "$output" | rg -Fq 'scenario'; then echo 'release binary exposes scenario mode' >&2; exit 1; fi
 
-# Run all safe, required-execution harness scenarios. The helper creates a
-# marker-bearing artifact directory; the runner refuses an arbitrary directory.
-harness-nondestructive:
-    @artifact_dir=$(cargo run --quiet -p storage-testing --bin lab -- create-artifact --label harness-nondestructive); STORAGE_TESTING_ARTIFACT_DIR="$artifact_dir" cargo run --quiet -p storage-testing --bin harness -- --profile nondestructive --require-executed
-
-# Full fixture mutation is intentionally available only to the disposable lab.
-harness:
-    @test "${STORAGE_TESTING_ENABLE_DESTRUCTIVE:-}" = "1" || { echo "STORAGE_TESTING_ENABLE_DESTRUCTIVE=1 is required in the disposable fixture VM" >&2; exit 1; }
-    @artifact_dir=$(cargo run --quiet -p storage-testing --bin lab -- create-artifact --label harness); STORAGE_TESTING_ARTIFACT_DIR="$artifact_dir" cargo run --quiet -p storage-testing --bin harness -- --profile full-lab --require-executed
-
-# Execute every logical-storage scenario in the disposable fixture VM.  The
-# profile gate deliberately remains explicit so this recipe cannot touch host
-# disks by accident.
-harness-logical:
-    @test "${STORAGE_TESTING_ENABLE_DESTRUCTIVE:-}" = "1" || { echo "STORAGE_TESTING_ENABLE_DESTRUCTIVE=1 is required in the disposable fixture VM" >&2; exit 1; }
-    @artifact_dir=$(cargo run --quiet -p storage-testing --bin lab -- create-artifact --label harness-logical); STORAGE_TESTING_ARTIFACT_DIR="$artifact_dir" cargo run --quiet -p storage-testing --bin harness -- --profile full-lab --suite logical --require-executed
-
-lab:
-    @test "${STORAGE_TESTING_ENABLE_DESTRUCTIVE:-}" = "1" || { echo "STORAGE_TESTING_ENABLE_DESTRUCTIVE=1 is required in the disposable fixture VM" >&2; exit 1; }
-    @artifact_dir=$(cargo run --quiet -p storage-testing --bin lab -- create-artifact --label lab); STORAGE_TESTING_ARTIFACT_DIR="$artifact_dir" cargo run --quiet -p storage-testing --bin harness -- --profile full-lab --require-executed
-
 run *args:
     env RUST_BACKTRACE=full cargo run --locked {{ args }}
 

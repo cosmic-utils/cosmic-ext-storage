@@ -74,7 +74,7 @@ code-review artifact, not a substitute for the automated tests.
 | 4 | `3d0070c` | Application operations/state | app composition | `logical_state_contract`, `logical_operations_contract` | Ordered source merge and generation guards | pass | Codex |
 | 5 | `6654517`, `24e9d64` | Logical sidebar/detail/action confirmation | UI/transport | `logical_ui_contract` and `cargo check -p cosmic-ext-storage --locked` | Typed action confirmation, blocked input-taking actions, and post-action refresh | pass | Codex |
 | 6 | `28d3e1f` | Concurrent incremental sidebar loading | async lifecycle | `sidebar_async_contract` | Physical, network, and logical loads are independent | pass | Codex |
-| 7 | `34c39c0` | Harness catalog/report/fixture boundary | fixture-boundary/harness-execution | `harness_execution_contract`; `just harness-nondestructive` | Required safe profile writes report and ledger; full profile rejects an ungated host | pass (safe profile) | Codex |
+| 7 | `34c39c0` | Harness catalog/report/fixture boundary | fixture-boundary/harness-execution | Superseded: [original record](../5-testing-v2/legacy-harness-history.md#h015) | Required safe profile writes report and ledger; full profile rejects an ungated host | pass (safe profile) | Codex |
 | 8 | documentation acceptance commit | Final documentation and repository evidence | root/docs | workspace tests, fmt, clippy, metadata, release build | Native destructive VM remains explicitly unclaimed | pass (repository gates) | Codex |
 
 The Task 7 full-lab record additionally links the versioned runner JSON report,
@@ -89,13 +89,13 @@ unset RUSTC_WRAPPER first.
 
 | Check | Required result |
 | --- | --- |
-| cargo metadata --no-deps --format-version=1 | Seven workspace packages: root app, five published libraries, and non-published tools/storage-testing; no service package. |
+| cargo metadata --no-deps --format-version=1 | Superseded: [original record](../5-testing-v2/legacy-harness-history.md#h016) |
 | cargo fmt --all -- --check | Pass. |
 | cargo test --workspace --all-features --locked | Pass, including types, contracts, adapter, app state/view, and harness-runner contract tests; disposable fixture execution is exercised only through the explicit harness profiles. |
 | cargo clippy --workspace --all-features --locked | Pass without new diagnostics. |
 | cargo build --workspace --release --locked | Pass and emits no storage-service binary. |
 | Named phase test targets | Every Task 1–7 target/name check and full target execution specified by the implementation plan passes; the test target cannot be empty or missing. |
-| just harness-nondestructive | Invokes the runner's `nondestructive` profile with `--require-executed`; its report contains exactly one Passed result for every selected non-destructive case. |
+| Superseded: [original record](../5-testing-v2/legacy-harness-history.md#h017) | Invokes the runner's `nondestructive` profile with `--require-executed`; its report contains exactly one Passed result for every selected non-destructive case. |
 | just harness | Runs only in the gated disposable fixture environment with `STORAGE_TESTING_ENABLE_DESTRUCTIVE=1`; invokes `full-lab` with `--require-executed`; every selected case executes and passes. |
 | just lab | Runs only in the gated disposable VM, records cleanup, and attaches the versioned execution report. |
 
@@ -103,47 +103,7 @@ unset RUSTC_WRAPPER first.
 
 Review the accepted diff and mark every item pass/fail.
 
-- The application calls logical discovery/actions only through
-  src/operations/logical.rs and storage-contracts traits.
-- BackendRegistry owns separate `logical_topology_sources` and
-  `logical_operations`; neither logical trait is a BlockStorageBackend
-  supertrait. The one UdisksBackend instance is registered as the UDisks source
-  and executor, and storage-sys is registered only as the local source.
-- UdisksBackend is created once at the composition root and reuses its existing
-  DiskManager connection for logical calls. Its object-manager epoch advances
-  only after an applied native add/remove event; cached reads do not fabricate a
-  new generation.
-- The only concrete LVM, LogicalVolume, Btrfs, MDRaid, and Manager proxy use is
-  inside crates/storage-udisks.
-- Logical IDs are stable domain IDs. `BlockDeviceId` is an opaque live
-  `block:<major>:<minor>` lookup key, not a D-Bus path. Every block mutation
-  carries `BlockDeviceRef` with an immutable fingerprint and observed
-  object-manager generation; the adapter rechecks both immediately before the
-  native call and returns Conflict if a device-number reuse is detected. Object
-  paths and raw option maps do not cross into contracts, state, messages,
-  dialogs, views, or tests above the adapter boundary.
-- `LogicalTopology` rejects duplicate entity/source IDs, emits source statuses
-  in discriminant order and entities in case-sensitive name-then-ID order. The
-  façade's UDisks-over-local merge never overwrites an empty-but-present UDisks
-  value or grants a LocalTools-only entity mutation capability.
-- Only one logical action is pending. Operation generation and logical-load
-  generation independently prevent late progress/completion or load results
-  from changing state, closing a dialog, or scheduling a refresh.
-- storage-sys only performs allow-listed read-only discovery. It has no
-  state-changing command invocation, shell invocation, privilege elevation, or
-  sysfs write.
-- The application and production crates have no project service package,
-  project D-Bus client/proxy, system unit, policy XML, project D-Bus signal,
-  service launch recipe, sudo, pkexec, or privilege fallback. The only
-  test-tool process spawner is the reviewed ledger-validated fixture executor.
-- The UDisks error bridge preserves NotFound, InvalidInput, Unsupported,
-  Unavailable, PermissionDenied, Busy, Conflict, and Other through the UI;
-  `StorageErrorKind::Other` and the matching OperationError variants have
-  focused mapping/presentation tests.
-- The default app/package publishing flow still names only the app and five
-  published libraries; storage-testing is not published.
-- Cargo.lock preserves main's package upgrades except reviewed additions
-  required by the new workspace test member.
+> Historical testing-infrastructure note superseded by [Testing V2](../5-testing-v2/spec.md); [original record](../5-testing-v2/legacy-harness-history.md#h018).
 
 ## Literal source-fidelity gate
 
@@ -187,10 +147,7 @@ is a merge blocker.
 
 Use these audit searches and review each match:
 
-~~~sh
-rg -n -i 'storage-service|org\.cosmic\.ext\.Storage\.Service|LogicalClient|sudo|pkexec|vgcreate|vgremove|vgextend|vgreduce|lvcreate|lvremove|lvresize|lvchange|mdadm' src crates resources .github Cargo.toml justfile
-rg -n 'Command::new|std::process::Command' tools/storage-testing
-~~~
+> Historical command/diagram block retired by [Testing V2](../5-testing-v2/spec.md); [original record](../5-testing-v2/legacy-harness-history.md#h019).
 
 The first command may match the storage-sys read-only discovery allow-list but
 never a production mutation path. The second must identify only
@@ -265,7 +222,7 @@ prevents later groups from being accepted.
 
 ## Harness and lab parity
 
-Port and execute every historical storage-testing family:
+> Historical testing-infrastructure note superseded by [Testing V2](../5-testing-v2/spec.md); [original record](../5-testing-v2/legacy-harness-history.md#h020).
 
 | Suite | Required evidence |
 | --- | --- |

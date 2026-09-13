@@ -13,11 +13,10 @@ testing. A versioned scenario file describes the application-visible storage
 world; the application is then launched against that world instead of UDisks,
 local Btrfs tooling, rclone, or host filesystems.
 
-The new layer complements, and deliberately does not replace,
-[`storage-testing`](../../../tools/storage-testing/README.md). The existing
-harness remains the only place where disposable loop devices and real backend
-adapters are exercised. The scenario backend makes UI state, failure paths,
-and mutation flows repeatable without touching the host.
+The scenario layer complements the [Testcontainers lab](../../../tools/storage-lab/README.md),
+which exercises real adapters; simulated UI tests do not replace it.
+
+> Historical testing-infrastructure note superseded by [Testing V2](../5-testing-v2/spec.md); [original record](../5-testing-v2/legacy-harness-history.md#h027).
 
 ## Decisions
 

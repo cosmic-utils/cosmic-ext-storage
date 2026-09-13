@@ -35,10 +35,8 @@ jobs:
       - name: Run tests
         run: cargo test --workspace --all-features --locked
 
-      - name: Run required safe harness profile
-        run: |
-          cargo install just --locked
-          just harness-nondestructive
+      - name: Check test execution and coverage contracts
+        run: python3 -m unittest discover -s tools/testing -p 'test_*.py'
 
   clippy:
     name: Clippy on ${{ matrix.os }}

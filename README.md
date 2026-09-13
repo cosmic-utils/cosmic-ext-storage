@@ -48,16 +48,24 @@ just check              # Run fmt, clippy, and tests
 just run                # Build and run the app
 just install            # Install the app binary and desktop assets
 just uninstall          # Remove installed app files
-just harness-nondestructive # Run required safe harness scenarios
+STORAGE_LAB=1 just test-lab # Run real storage tests in private Testcontainers
+just app-workflow-check    # Run deterministic application workflow tests
+just ui-e2e                # Prove the headless UI/accessibility environment
+just coverage              # Collect coverage; currently fails incomplete acceptance
 ```
 
 `just install` installs the application binary, desktop entry, metainfo, and icon. It does not install service, policy, or socket files.
 
-The full disposable-fixture suite is intentionally gated: run
-`STORAGE_TESTING_ENABLE_DESTRUCTIVE=1 just harness` only in a dedicated VM
-with loop-backed fixture media and the UDisks2 LVM2, MD RAID, and Btrfs
-plugins available. Both harness profiles write a versioned `run-report.json`
-and fixture ledger below their fresh run-artifact directory.
+The storage suite uses the same Testcontainers lifecycle locally and in CI.
+Its pinned private image provides UDisks, D-Bus, Polkit, filesystem/LVM/MD/Btrfs
+tools, and local SFTP; mutations are restricted to ledger-owned file-backed
+loops. No host storage or D-Bus mounts and no VM are required. See the
+[lab contract](tools/storage-lab/README.md) for prerequisites and artifacts.
+
+Scenario workflow tests remain a separate deterministic layer. `just ui-e2e`
+currently proves capability only; the eight interactive cases are still
+planned, not executed. [Coverage tooling](tools/testing/README.md) collects
+real host/container profiles but does not yet meet Testing V2 acceptance.
 
 ## Logging
 

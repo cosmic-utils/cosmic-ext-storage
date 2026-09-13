@@ -71,7 +71,7 @@ the current-main file merely to establish a source-first starting point.
 | storage-contracts/{Cargo.toml,src/lib.rs} | crates/storage-contracts/{Cargo.toml,src/lib.rs} | Port only the current-main-compatible contract/export additions; never revive client dependencies. |
 | storage-udisks/src/{lib.rs,logical/**} | crates/storage-udisks/src/{lib.rs,logical/**} | Use the source discovery fields/mappers as an inventory. The native adapter is a required replacement implementation; ledger every source display field and prove it via discovery/action fixtures. |
 | storage-sys/src/{lib.rs,logical/**} | crates/storage-sys/src/{lib.rs,logical/**} | Copy read-only parser behaviour behind an injected runner. No source mutating handler/tool code is eligible for this destination. |
-| storage-testing/** | tools/storage-testing/** | Copy every harness, lab, ledger, binary, test registration, and test case first. Service/client calls become typed setup; fixture-only commands move to the ledger-validated executor without changing lifecycle/test intent. |
+| Superseded: [original record](../5-testing-v2/legacy-harness-history.md#h010) | Superseded: [original record](../5-testing-v2/legacy-harness-history.md#h010) | Copy every harness, lab, ledger, binary, test registration, and test case first. Service/client calls become typed setup; fixture-only commands move to the ledger-validated executor without changing lifecycle/test intent. |
 | {justfile,resources/lab-specs/**,.github/workflows/ci.yml} | Same root-relative path | Preserve public harness/lab/CI entry-point semantics while removing service lifecycle steps and recording the explicit fixture privilege boundary. |
 | storage-service/**, resources/systemd/org.cosmic.ext.storage.service.policy | _No destination_ | Removed architecture. Preserve only its public logical action/error semantics through the typed action matrix; do not copy its process, policy, signal, or privilege implementation. |
 | {Cargo.toml,Cargo.lock,README.md,.dockerignore} and historical docs/plans/** | Current-main root files and this plan set | Resolve workspace/lockfile from main, retain only compatible test-tool membership, and rewrite documentation for the serviceless result. Do not copy source-era dependency, service-installation, or historical-plan assumptions. |
@@ -91,28 +91,7 @@ Perform these steps for each mapped file before refactoring it:
    from both commit ranges and reconcile every overlap under
    `reconciliation.md` before starting a task:
 
-   ~~~sh
-   git diff --name-only 3f8c340..origin/079-lvm-support -- \
-     storage-app storage-types storage-udisks storage-sys storage-contracts \
-     storage-testing justfile resources .github
-   git diff --name-only 3f8c340..origin/main -- \
-     storage-app storage-types storage-udisks storage-sys storage-contracts \
-     storage-testing justfile resources .github
-   ~~~
-2. For a feature-only range, create the mapped target from feature-branch
-   content, preserving comments, helper boundaries, function names, message
-   names, enum variants, field names, rendering composition, tests, and
-   ordering. For an overlap, use the completed reconciliation classification;
-   do not overwrite a main-only range as a preliminary transplant step.
-3. Apply only the smallest compiling modifications allowed by the Rule.
-4. Add a ledger row below for every changed contiguous source range. A moved
-   range is recorded once, with source and target paths/line ranges. An overlap
-   also cites its `reconciliation.md` row.
-5. Add or retain a test proving the source behaviour at that range. Visual UI
-   changes require a screenshot/recording reference in validation.md.
-6. During review, compare the source and target with whitespace ignored only
-   for path/import formatting. Any unexplained behavioral or layout divergence
-   blocks the commit.
+> Historical testing-infrastructure note superseded by [Testing V2](../5-testing-v2/spec.md); [original record](../5-testing-v2/legacy-harness-history.md#h011).
 
 Do not replace an entire source file with a fresh implementation merely because
 a few calls need transport adaptation. Isolate replacement calls in the
@@ -129,7 +108,7 @@ rather than the smallest contiguous range is rejected.
 | `storage-types/src/logical.rs` source logical IDs | `crates/storage-types/src/logical.rs` | identity | n/a | Raw source device/path values become canonical opaque IDs and fingerprinted live references. | `logical_domain_contract` | Codex |
 | `storage-app/src/update/logical.rs` client calls | `src/operations/logical.rs`, `src/update/mod.rs` | transport | operations façade | Removed LogicalClient calls become typed operations façade requests with generation guards. | `logical_operations_contract`, `logical_state_contract` | Codex |
 | `storage-app/src/views/{logical.rs,dialogs/logical.rs}` | `src/views/{logical.rs,dialogs/logical.rs}` | transport / native-semantics | app/view overlap | Action buttons construct only complete typed actions; actions needing a fresh device reference remain visibly blocked rather than accepting a raw path. | `logical_ui_contract`, `cargo check -p cosmic-ext-storage --locked` | Codex |
-| `storage-testing/src/{cmd,ledger,harness/**,lab/**}` | `tools/storage-testing/src/**` | fixture-boundary / harness-execution | root workspace row | Arbitrary command execution and skip outcomes are replaced by a closed fixture executor, marker-bearing artifact directory, and Passed/Failed/Blocked report model. | `harness_execution_contract`, `just harness-nondestructive` | Codex |
+| Superseded: [original record](../5-testing-v2/legacy-harness-history.md#h012) | Superseded: [original record](../5-testing-v2/legacy-harness-history.md#h012) | fixture-boundary / harness-execution | root workspace row | Arbitrary command execution and skip outcomes are replaced by a closed fixture executor, marker-bearing artifact directory, and Passed/Failed/Blocked report model. | Superseded: [original record](../5-testing-v2/legacy-harness-history.md#h012) | Codex |
 | `storage-app/src/{app.rs,models/load.rs,state/sidebar.rs}` | corresponding `src/**` files | concurrency / main-preservation | async sidebar overlap | Current in-process operation ownership is retained while source startup loading is made independent and generation-safe. | `sidebar_async_contract` | Codex |
 
 ## Mandatory comparison review

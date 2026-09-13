@@ -19,38 +19,19 @@ Add named tests; do not rely on a broad Cargo filter that can select nothing.
 | Confirmation | Each action has the matrix's exact review classification. `ConfirmedLogicalAction` carries the full preflight key; execution captures one fresh completed snapshot, rejects an old key against its epoch, then revalidates from that same snapshot. Collateral scope is shown only where the typed action binds it, excludes the primary target, and is recomputed/reviewed after a conflict. Member-removal/subvolume reviews prove their required fresh ref and no-extra-collateral condition. |
 | Async state | `RefreshCoordinator` transition tests, not literal counters, assert clock values, barriers, run IDs, and cause sets. They prove that current action completion alone submits one logical plus one physical post-success request; failures retain the draft and topology. A manual/device-event run begun before success cannot satisfy that request, while a post-success request may coalesce with it exactly once per domain; two action causes may join only a successor that starts after both barriers; a stale completion cannot start or clear a run. |
 | Consolidation | No physical Btrfs mutation message reaches a separate `BtrfsClient` workflow; source search/test proves logical actions are the one mutation route. |
-| Fixture execution | `FullLabExecutor` executes—not blocks—`logical.list_entities.schema_integrity`, `logical.lvm.create_resize_delete_lv`, `logical.mdraid.create_start_stop_delete`, `logical.btrfs.add_remove_member`, `logical.btrfs.primary_ordering`, and `logical.btrfs.subvolume_ref_conflict` through a ledgered disposable fixture. The Btrfs cases use three marker-owned 1-GiB loops; only a fixed, ledger-validated fixture `mkfs.btrfs` command may format the first, subsequent topology actions use the typed UDisks test boundary, and successful unmount/detach/artifact cleanup is recorded before passing. |
+| Fixture execution | Superseded: [original record](../5-testing-v2/legacy-harness-history.md#h025) |
 
 Minimum commands after the tests exist:
 
-```text
-cargo test --locked --test logical_ui_contract --test logical_state_contract --test logical_operations_contract --test sidebar_async_contract
-cargo test -p storage-types --locked --test logical_domain_contract
-cargo test -p storage-udisks --locked --test logical_adapter_contract
-cargo test -p storage-contracts --locked --test logical_contract
-cargo test -p storage-testing --locked --test harness_execution_contract
-cargo fmt --all -- --check
-cargo clippy --workspace --all-targets --all-features --locked -- -D warnings
-```
+> Historical command/diagram block retired by [Testing V2](../5-testing-v2/spec.md); [original record](../5-testing-v2/legacy-harness-history.md#h026).
 
 ## Disposable fixture gate
 
-Add this `harness-logical` `justfile` recipe:
+Run `just test-lab`: its native LVM, MD, and Btrfs cases assert real adapter
+operations and owned-fixture cleanup in the same container locally and in CI.
+See [Testing V2 evidence](../5-testing-v2/execution-record.md).
 
-```text
-harness-logical:
-    @test "${STORAGE_TESTING_ENABLE_DESTRUCTIVE:-}" = "1" || { echo "STORAGE_TESTING_ENABLE_DESTRUCTIVE=1 is required in the disposable fixture VM" >&2; exit 1; }
-    @artifact_dir=$(cargo run --quiet -p storage-testing --bin lab -- create-artifact --label harness-logical); STORAGE_TESTING_ARTIFACT_DIR="$artifact_dir" cargo run --quiet -p storage-testing --bin harness -- --profile full-lab --suite logical --require-executed
-```
-
-It creates a marker-bearing artifact, requires
-`STORAGE_TESTING_ENABLE_DESTRUCTIVE=1`, and runs precisely the logical suite.
-The suite gains `logical.btrfs.primary_ordering` and
-`logical.btrfs.subvolume_ref_conflict` alongside the existing add/remove case.
-Every selected logical case must be `Passed`; `Blocked`, omitted, or optional
-is not acceptance evidence. The broad `just harness` command is not a gate for
-this UI plan until unrelated full-lab suites have executors. The desktop
-application itself must never require elevated shell commands.
+Historical instructions: [original record](../5-testing-v2/legacy-harness-history.md#h024).
 
 ## Manual desktop trace
 

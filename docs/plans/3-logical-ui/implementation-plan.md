@@ -212,34 +212,7 @@ empty state. Complete the automated and manual gates in
 [validation.md](validation.md), run formatting/clippy, and record any
 intentional UDisks data limitation in this plan's baseline or validation log.
 
-Implement the targeted disposable-fixture logical suite before claiming the
-manual or full-lab gate. Add a `harness-logical` recipe that invokes the
-existing `full-lab` profile with `--suite logical --require-executed`; it must
-exercise `logical.list_entities.schema_integrity`,
-`logical.lvm.create_resize_delete_lv`, `logical.mdraid.create_start_stop_delete`,
-`logical.btrfs.add_remove_member`, and new cases
-`logical.btrfs.primary_ordering` and
-`logical.btrfs.subvolume_ref_conflict`. Each Btrfs case uses the same
-three-loop-device fixture. Add a narrowly-whitelisted
-`FixtureCommand::FormatBtrfs { loop_device }`: it accepts only a ledger-owned
-loop device and executes one fixed `mkfs.btrfs` argument vector—never an
-arbitrary command or user argument. Setup creates marker-owned images, attaches
-three 1-GiB loops, formats the first loop through that fixture-only command,
-and adds the two additional members through the typed UDisks logical-operation
-test boundary. The conflict case obtains a ref through the adapter, performs
-an adapter-created temporary subvolume, deletes it through the out-of-band
-fixture Btrfs proxy, waits for the ObjectManager epoch to advance, and proves
-the stale ref is rejected by the next typed adapter action. Every
-target/command is recorded in the fixture ledger; teardown unmounts, detaches
-loops, removes marker-owned artifacts, and records successful cleanup before
-its result is `Passed`.
-`FullLabExecutor` must set up, execute, verify, and clean up those selected
-cases through the fixture ledger. Before setting up a logical fixture it checks
-for three attachable loops, the fixed `mkfs.btrfs` executable, and the UDisks
-Btrfs module; a missing prerequisite is a failed fixture-environment result,
-never a passing/optional or silently blocked logical case. Fixture setup may
-use the reviewed fixture command executor; desktop production code may not
-invoke it, `mkfs.btrfs`, or the `btrfs` CLI.
+> Historical testing-infrastructure note superseded by [Testing V2](../5-testing-v2/spec.md); [original record](../5-testing-v2/legacy-harness-history.md#h022).
 
 ## Expected change map
 
@@ -251,7 +224,7 @@ invoke it, `mkfs.btrfs`, or the `btrfs` CLI.
 | App state/routing/refresh | `src/state/{app,logical}.rs`, `src/state/dialogs.rs`, `src/message/app.rs`, `src/update/{mod,logical}.rs` |
 | UI | `src/views/logical.rs`, `src/controls/logical/*`, `src/controls/{actions,layout,usage_pie}.rs`, `src/views/dialogs/logical.rs`, `src/views/{app,disk,sidebar,btrfs}.rs` |
 | Legacy Btrfs handoff | `src/state/btrfs.rs`, `src/update/{btrfs,volumes/btrfs}.rs`, Btrfs volume/dialog message modules |
-| Verification | `tests/logical_*`, `crates/storage-{types,contracts,udisks}/tests/*`, `tools/storage-testing/{src,tests}/**`, `justfile`, required logical-suite multi-device Btrfs cases |
+| Verification | Superseded: [original record](../5-testing-v2/legacy-harness-history.md#h023) |
 
 ## Commit boundaries
 

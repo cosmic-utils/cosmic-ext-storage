@@ -74,7 +74,7 @@ each in the reconciliation record before it is changed.
 
 | Path/group | Current-main behaviour to preserve | Feature behaviour to preserve | Required treatment |
 | --- | --- | --- | --- |
-| `Cargo.toml`, `Cargo.lock` | Current workspace graph, package upgrades, and no service package. | Non-published `storage-testing` membership when its harness is restored. | Modify main's manifests minimally; retain current versions unless the new test member needs a reviewed additive resolution. Never copy the feature lockfile. |
+| `Cargo.toml`, `Cargo.lock` | Current workspace graph, package upgrades, and no service package. | Superseded: [original record](../5-testing-v2/legacy-harness-history.md#h007) | Modify main's manifests minimally; retain current versions unless the new test member needs a reviewed additive resolution. Never copy the feature lockfile. |
 | `README.md`, `docs/plans/**` | Main's serviceless install/runtime guidance. | Logical feature, lab, and validation guidance. | Compose current documentation; historical service instructions remain absent. |
 | `justfile`, `.github/workflows/**`, `resources/lab-specs/**` | Main's normal checks and no service lifecycle. | Harness/lab entry points and CI coverage. | Preserve main checks and add the required-execution harness profiles; no service start, policy installation, or skipped selected test. |
 | `storage-app/src/client/**`, `storage-contracts/src/client/**`, `storage-service/**`, policy/systemd resources | Deliberate removal of project transport, privilege, and process boundaries. | Public logical action/error behaviour formerly reached through that transport. | Keep these paths absent. Reproduce public behaviour only through typed contracts, the app façade, and UDisks-native adapter tests. |
@@ -99,11 +99,11 @@ evidence for both.
 
 | Base path/range | Current-main delta and retained behaviour | Feature delta and retained behaviour | Classification | Target path/range | Main evidence | Feature evidence | Reviewer |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| `Cargo.toml` workspace members | Main keeps six publishable app/library packages without a service. | Feature adds a non-published harness package. | Independent overlap | `Cargo.toml` workspace members; `Cargo.lock` storage-testing entry | `cargo metadata --no-deps --format-version=1` | `harness_execution_contract` | Codex |
+| `Cargo.toml` workspace members | Main keeps six publishable app/library packages without a service. | Feature adds a non-published harness package. | Independent overlap | Superseded: [original record](../5-testing-v2/legacy-harness-history.md#h008) | `cargo metadata --no-deps --format-version=1` | `harness_execution_contract` | Codex |
 | `src/app.rs` startup task batch | Main owns in-process application composition. | Feature loads logical/physical/network sections asynchronously. | Independent overlap | `src/app.rs`, `src/update/mod.rs`, `src/state/sidebar.rs` | `sidebar_async_contract` | `sidebar_async_contract` | Codex |
 | `src/update/mod.rs` logical actions | Main has no project client/service transport. | Feature has logical action completion and refresh semantics. | Direct contradiction | `src/operations/logical.rs`, `src/update/mod.rs` | `logical_operations_contract` | `logical_state_contract` | Codex |
 | `src/views/{logical.rs,dialogs/**}` | Main dialog host and controls remain authoritative. | Feature supplies logical operation affordances and review flow. | Independent overlap | `src/views/logical.rs`, `src/views/dialogs/logical.rs`, `src/views/app.rs` | `cargo check -p cosmic-ext-storage --locked` | `logical_ui_contract` | Codex |
-| `justfile`, CI and root documentation | Main retains normal workspace checks and no service lifecycle. | Feature adds harness entry points and safe CI execution. | Independent overlap | `justfile`, `.github/workflows/ci.yml`, `README.md` | `cargo test --workspace --all-features --locked` | `just harness-nondestructive` | Codex |
+| `justfile`, CI and root documentation | Main retains normal workspace checks and no service lifecycle. | Feature adds harness entry points and safe CI execution. | Independent overlap | `justfile`, `.github/workflows/ci.yml`, `README.md` | `cargo test --workspace --all-features --locked` | Superseded: [original record](../5-testing-v2/legacy-harness-history.md#h009) | Codex |
 
 ## Reconciliation acceptance gate
 

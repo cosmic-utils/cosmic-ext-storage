@@ -2,12 +2,28 @@
 
 ## Current status (2026-09-13)
 
-Implementation is **not acceptance-complete**. Phase 0 is proven; the transport
-seam and expanding real-adapter suite are implemented. Do not infer completion
-of phases 4–7 from the test count below. In particular, legacy-harness deletion,
+Implementation is **not acceptance-complete**. The transport seam and all
+native real-adapter families pass hosted CI. The old harness is retired;
 merged host/lab/UI coverage at the specified thresholds, eight executed UI
-cases, forced-failure PR evidence, and final required-check administration
+cases, forced-failure PR evidence, and the final required coverage check
 remain gated work.
+
+## Harness retirement and hosted evidence
+
+All seven jobs passed on commit `a11dfb32b4f4452a94316b31b4fa81b4c9d3a67e`
+in [hosted run 34775793563](https://github.com/cosmic-utils/cosmic-ext-storage/actions/runs/34775793563),
+including all 16 selected Storage lab cases. Following that green run, the
+separate repository-administration change added `Storage lab` (GitHub App
+integration 15368) to main ruleset 6374955, preserving its existing checks,
+conditions, review requirements, and bypass actors. Coverage is not yet green
+or required; no merge was performed.
+
+The Phase-4 migration removes the old 17-file tool, workspace membership,
+four recipes, and CI step together. Historical instructions and observations
+are preserved verbatim in [the retirement archive](legacy-harness-history.md),
+not relabelled as current execution. The 15 Python collector/lab-contract tests
+pass and replace the obsolete safe-harness step in ordinary CI. Deleted source
+remains recoverable from Git history.
 
 ## Executed local evidence
 

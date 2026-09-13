@@ -132,11 +132,7 @@ capability/confirmation invariants, but do not render the page or exercise any
 input-taking operation. The plan adds behaviour-focused coverage rather than
 treating the current green suite as UI acceptance.
 
-The current full-lab command is intentionally not a baseline gate for this
-plan: `FullLabExecutor` blocks every selected case until a fixture scenario is
-registered. The targeted logical-suite gate described in
-[validation.md](validation.md#disposable-fixture-gate) replaces that impossible
-claim and must be implemented before final acceptance.
+> Historical testing-infrastructure note superseded by [Testing V2](../5-testing-v2/spec.md); [original record](../5-testing-v2/legacy-harness-history.md#h021).
 
 ## Scope boundary
 

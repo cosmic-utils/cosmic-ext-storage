@@ -665,19 +665,7 @@ code, lock, CI, or Justfile result.
 
 ## 10. Review rules and non-goals
 
-- This remains a scenario test system: it must not access UDisks, host disks,
-  host mounts, rclone configuration, a host browser, or the system D-Bus.
-- It complements, never replaces, `storage-testing` and the disposable
-  real-backend harness.
-- Do not reintroduce a test-only coordinate click, sleep-based wait, mock
-  accessibility tree, semantic-only “visual” baseline, or implicit golden
-  update as a shortcut around a failing case.
-- A broad command that does not select the named capability/case target is not
-  evidence. `ui-assert-tests` must verify names before each target executes.
-- Any change to the environment lock, capture helper, fonts, renderer,
-  selector schema, image threshold, or fixture schema is a reviewed E2E
-  contract change and must update tests, baseline evidence, and this plan in
-  the same pull request.
+> Historical testing-infrastructure note superseded by [Testing V2](../5-testing-v2/spec.md); [original record](../5-testing-v2/legacy-harness-history.md#h029).
 
 ## 11. R3 compositor capability determination — 2026-08-01
 

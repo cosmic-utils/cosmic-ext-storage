@@ -198,13 +198,7 @@ UDisks2/Polkit authorization flow. The application and production crates must
 not add a project helper, root process, project policy, `sudo`, or `pkexec`
 fallback.
 
-The separate host-only test lab is not a production privilege path. Its
-fixture setup and cleanup may use only the audited, ledger-validated command
-executor in `tools/storage-testing`, running in an explicitly disposable VM or
-CI runner with the privileges supplied by that environment. It may never
-elevate itself, target an unallocated device, or be called by application code.
-Logical actions under test still go through typed UDisks contracts; direct
-fixture commands are limited to allocation, teardown, and reset.
+> Historical testing-infrastructure note superseded by [Testing V2](../5-testing-v2/spec.md); [original record](../5-testing-v2/legacy-harness-history.md#h013).
 
 For destructive operations, the typed native call and its side effects are the
 public contract. The implementation plan records the source command behaviour,
@@ -225,18 +219,7 @@ restore obsolete service installation instructions.
 
 ## Harness boundary
 
-Recreate the historical `storage-testing` package as a non-published workspace
-member at `tools/storage-testing/`, preserving its `harness`, `lab`, fixture,
-ledger, and integration-suite entry points. Test cases call typed adapters and
-operations directly—never a project D-Bus service—and destructive cases remain
-explicitly opt-in disposable-fixture tests. The lab's constrained fixture
-executor is the only test-only exception to the application's no-command
-mutation rule. Release packaging and publishing continue to select only the
-root application and five published libraries. The runner uses a static case
-catalog and a versioned report: profiles exclude cases before selection; every
-selected case reaches Passed, Failed, or Blocked; timeout is Failed; and
-`--require-executed` fails unless every selected case Passed. There is no
-success-like skipped result.
+> Historical testing-infrastructure note superseded by [Testing V2](../5-testing-v2/spec.md); [original record](../5-testing-v2/legacy-harness-history.md#h014).
 
 ## Verification contract
 

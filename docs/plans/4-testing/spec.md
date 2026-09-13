@@ -32,13 +32,7 @@ There are storage-adjacent UI paths that bypass the registry:
   `src/update/image/dialogs.rs`;
 - desktop file chooser and URL/path launchers are not injectable.
 
-The existing `tools/storage-testing::spec::LabSpec` is intentionally a
-loop-image fixture description. It describes image sizes, partition layout,
-and mounts for a destructive or nondestructive real-backend harness run. It
-cannot describe dialogs, logical preflights, network schemas, errors, delayed
-completions, or a mutable simulated system. Reusing it would couple UI tests to
-fixture commands and make the harness a dependency of the desktop application,
-which is prohibited.
+> Historical testing-infrastructure note superseded by [Testing V2](../5-testing-v2/spec.md); [original record](../5-testing-v2/legacy-harness-history.md#h038).
 
 The current GitHub CI runs Rust tests and the harness's safe profile. It has no
 desktop session, scenario fixture gate, accessibility interaction, screenshot
@@ -46,20 +40,7 @@ baseline, or UI-test artifacts.
 
 ## Required architecture
 
-~~~mermaid
-flowchart LR
-    Scenario[Versioned TOML scenario] --> Loader[test-backend]
-    Loader --> Fake[ScenarioBackend: Arc RwLock RuntimeState]
-    Real[Production factory: UDisks + local tools + rclone] --> Registry
-    Fake --> Registry[BackendRegistry + app services]
-    Registry --> Runtime[AppRuntime]
-    Runtime --> App[Normal COSMIC AppModel]
-    App --> A11y[AT-SPI UI runner]
-    App --> Manual[Manual COSMIC session]
-
-    Harness[storage-testing LabSpec] --> RealAdapters[Disposable loops + real adapters]
-    RealAdapters --> HarnessReport[Ledgered run report]
-~~~
+> Historical command/diagram block retired by [Testing V2](../5-testing-v2/spec.md); [original record](../5-testing-v2/legacy-harness-history.md#h039).
 
 The UI sees one `AppRuntime`, irrespective of mode. It never branches on a
 "mock" boolean and no view/update code imports the scenario crate. Only the
@@ -680,35 +661,24 @@ The initial required black-box cases are:
 
 ## Harness relationship
 
-The layers share `storage-types`, `storage-contracts`, action validation, and
-the application's operations facade. They do not share a fixture schema or
-execution engine:
+The scenario backend tests application behaviour against simulated contracts.
+The [Testcontainers lab](../../../tools/storage-lab/README.md) tests real native
+adapters against ledger-owned disposable devices. They share contracts, not a
+fixture schema or execution engine. Neither test-support crate is a production
+application dependency, and scenario results never prove native correctness.
 
-| Concern | UI scenario backend | `storage-testing` harness |
-| --- | --- | --- |
-| System under test | normal UI against simulated traits | real UDisks/local adapters against disposable loops |
-| State source | TOML typed application state + behaviour | `LabSpec` loop images/partitions/mounts |
-| Mutation | in-memory/optional overlay only | ledger-validated fixture commands plus typed real operations |
-| Safety | cannot open D-Bus, run commands, or touch host storage | fail-closed destructive profile in dedicated VM |
-| CI evidence | trace, a11y dump, screenshots/diffs | fixture ledger and run report |
-
-Do not make `storage-testing` a dependency of the app or scenario backend, and
-do not make the scenario backend a dependency of the destructive harness. The
-harness may record a scenario filename/hash in a future combined report, or a
-developer may manually derive a visual fixture from a known lab topology, but
-there is no automatic schema conversion and no claim that a scenario proves
-native backend correctness.
+Historical instructions: [original record](../5-testing-v2/legacy-harness-history.md#h037).
 
 ## CI and developer commands
 
-Retain current Rust and safe-harness jobs. Add these independent, required
+Retain current Rust and required Storage lab jobs. Add these independent, required
 pull-request checks once bootstrap fixtures are committed:
 
 | Job | Environment | Required work |
 | --- | --- | --- |
 | `ui-scenario-contract` | ordinary Ubuntu runner, no display | format/check scenario crate; schema/trait-completeness/mutation tests; application injection/in-process UI tests; validate every checked-in scenario |
 | `ui-e2e` | pinned container on Ubuntu runner with software rendering, nested Wayland compositor, D-Bus, AT-SPI, fixed fonts/theme | build with `test-backend`; execute accessibility/visual cases; upload artifacts; fail on semantic or approved pixel-baseline mismatch |
-| `harness-nondestructive` | existing Ubuntu job | continue `just harness-nondestructive`; it remains a real-adapter check |
+| Superseded: [original record](../5-testing-v2/legacy-harness-history.md#h040) | existing Ubuntu job | Superseded: [original record](../5-testing-v2/legacy-harness-history.md#h040) |
 
 The Phase-0a environment-lock format is defined in
 [e2e-environment-v1.md](e2e-environment-v1.md). Phase 8 materializes the

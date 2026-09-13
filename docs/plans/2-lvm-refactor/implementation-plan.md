@@ -35,14 +35,7 @@ named in source-fidelity.md.
 
 The final feature must retain all of the following old-branch behaviour:
 
-- Logical discovery and the entity hierarchy for LVM VG/LV/PV, MD RAID
-  array/member, Btrfs filesystem/device/subvolume.
-- Every action in the branch's LVM, MD RAID, and Btrfs dialogs and control
-  surface, including disabled/actionable reasons and post-operation refresh.
-- The logical detail tabs, overview/members/operations/Btrfs content, selection
-  persistence, member navigation, status reporting, and asynchronous sidebar.
-- The complete storage-testing harness, disposable lab, fixture ledger, and all
-  existing integration test families.
+> Historical testing-infrastructure note superseded by [Testing V2](../5-testing-v2/spec.md); [original record](../5-testing-v2/legacy-harness-history.md#h003).
 
 The feature has no silent read-only downgrade. An action which cannot be
 represented by the installed UDisks2 interfaces is rendered disabled with its
@@ -134,7 +127,7 @@ touch only the listed paths plus direct test files for those paths.
 | 4 | feat(logical): add operations and application state | src/operations/**, src/state/**, src/message/**, src/update/**, src/app.rs, src/subscriptions/** |
 | 5 | feat(logical): port logical controls dialogs and views | src/controls/**, src/views/**, i18n/en/cosmic_ext_storage.ftl |
 | 6 | feat(sidebar): port complete asynchronous sidebar loading | src/{app.rs,logging.rs,message/app.rs,models/{load.rs,mod.rs},state/{dialogs.rs,sidebar.rs},subscriptions/app.rs,update/{mod.rs,nav.rs,network.rs},views/{network.rs,sidebar.rs}}, focused tests |
-| 7 | test(harness): restore serviceless integration harness and lab | Cargo.toml, justfile, tools/storage-testing/**, resources/lab-specs/**, .github/** |
+| 7 | test(harness): restore serviceless integration harness and lab | Superseded: [original record](../5-testing-v2/legacy-harness-history.md#h004) |
 | 8 | docs: record logical storage support and validation | README.md, docs/plans/2-lvm-refactor/** |
 
 Use the old branch commits only as an ordered behaviour inventory:
@@ -172,7 +165,7 @@ finished.
 | 4 | `tests/logical_operations_contract.rs` and `tests/logical_state_contract.rs` | `topology_merge_has_stable_precedence`; `operation_generation_ignores_late_completion`; `logical_refresh_preserves_selection`; `failed_action_preserves_form_and_topology` |
 | 5 | `tests/logical_ui_contract.rs` | `logical_dialogs_preserve_source_defaults`; `blocked_action_is_visible_and_inert`; `confirmation_binds_current_device_reference`; `confirmation_rejects_changed_destructive_scope` |
 | 6 | `tests/sidebar_async_contract.rs` | `newer_load_wins`; `event_and_action_refresh_coalesce`; `physical_network_and_logical_loading_do_not_block_startup` |
-| 7 | `tools/storage-testing/tests/harness_execution_contract.rs` | `selected_cases_cannot_be_skipped`; `timeout_is_failed`; `fixture_target_and_cleanup_are_enforced` |
+| 7 | Superseded: [original record](../5-testing-v2/legacy-harness-history.md#h005) | `selected_cases_cannot_be_skipped`; `timeout_is_failed`; `fixture_target_and_cleanup_are_enforced` |
 
 Use this portable non-empty-target pattern, substituting the phase package,
 target, and required names from the table:
@@ -1304,136 +1297,13 @@ physical/network spinner and ordering branches remain present beside the new
 logical branch. Compare every touched overlap to its reconciliation/source
 fidelity rows and record the evidence in the Task 6 phase record.
 
-## Task 7 — restore the full serviceless test harness and lab
+## Task 7 — testing infrastructure (superseded)
 
-Create tools/storage-testing as a non-published root-workspace member named
-storage-testing. Add it to workspace.members; retain the root application as a
-default member so ordinary app commands remain scoped as today. The final
-workspace has seven packages: the root app, five published libraries, and this
-non-published test tool. Release/publish commands continue to name only the
-root app and five published library manifests.
+Testing V2 replaces this historical restoration task with native Rust tests,
+Testcontainers-owned fixtures, and Nextest. Use `just test-lab` and the
+[current implementation plan](../5-testing-v2/implementation-plan.md).
 
-Copy the entire old storage-testing tree into tools/storage-testing first,
-retaining its directory/file topology, before changing any code:
-
-~~~text
-tools/storage-testing/
-  Cargo.toml
-  src/
-  tests/
-  resources/ (if introduced only for current-main-relative lab paths)
-~~~
-
-Preserve its fixture ledger, loop-device allocation/cleanup protocol,
-disposable-media confirmation, test isolation, result reporting, and all test
-families: Btrfs, disk, filesystem, image, logical, LUKS, partition, and rclone.
-Keep every old test body, test name, fixture, assertion, ledger check, and lab
-step verbatim wherever possible. Replace service/client setup so the same test
-invokes typed LogicalTopologySource/LogicalOperations through UdisksBackend and
-the app operations façade, never LogicalClient or the removed project D-Bus
-name. Record every changed test range in the source-fidelity ledger.
-
-Create one internal `FixtureCommandExecutor` for the source lab's unavoidable
-privileged fixture lifecycle. It is the only location in the test tool allowed
-to spawn a process. Its allow-list is the reviewed source lab allocation/reset/
-teardown set (for example loop attach/detach, partition rescan, mount cleanup,
-and the source's LVM/Btrfs signature reset); every argument must resolve to a
-currently allocated ledger target or a run artifact path. It may not run a
-shell, accept a free-form command, use `sudo`/`pkexec`, or be linked by an
-application crate. Tests move direct source cleanup calls into this executor
-without changing their ordering, cleanup result, or failure reporting. The
-logical mutation that a test is asserting must still go through the typed
-native adapter. Replace the source harness `id -u` process preflight with a
-process-free effective-UID check; do not add it to the fixture command
-allow-list.
-
-Recreate the old public entry points in justfile:
-
-~~~text
-just harness
-just harness-nondestructive
-just lab
-~~~
-
-They construct/use a disposable fixture environment, verify UDisks2/plugin
-prerequisites, and fail closed if a target is not an allocated loop-backed
-fixture. `just harness` is the full destructive suite: it must run only in the
-gated disposable VM with `STORAGE_TESTING_ENABLE_DESTRUCTIVE=1` and invoke the
-runner with `--profile full-lab --require-executed`. The runner has a static,
-validated case catalog: every case has one unique ID, suite, ordered fixture
-requirements, and `NonDestructive` or `Destructive` safety class. An unknown
-suite/ID/profile, duplicate ID, or empty selection is a CLI error. The
-`nondestructive` profile excludes destructive cases while constructing the
-selection; it is not a run-time skip.
-
-The execution report is a versioned JSON artifact at
-`$STORAGE_TESTING_ARTIFACT_DIR/run-report.json`. Each harness recipe creates a
-fresh ledger-owned run-artifact directory and passes that variable to the
-runner; a direct runner invocation fails before selection if it is unset,
-inaccessible, or not a run-artifact directory. Write the report atomically and
-include the sorted selected case IDs, per-case result, setup/teardown result,
-fixture ledger references, and summary counts. A selected case outcome is only
-`Passed`, `Failed`, or
-`Blocked { reason }`; `Skipped` is removed from the runner model. A preflight,
-fixture setup, missing required plugin, or unavailable authorization path that
-prevents a selected case from running is `Blocked` and gives a non-zero exit.
-A timeout is `Failed`, never `Blocked`. `--require-executed` gives a non-zero
-exit unless every selected case ran and passed, and it verifies that the report
-contains exactly one result for every selected ID. Cleanup always runs after a
-started group; a cleanup failure fails the group and report.
-
-Convert each source `support::skip` path by its cause: destructive opt-out is
-profile exclusion; missing fixture or unavailable service/plugin is a failed or
-blocked setup/preflight; a timeout is failed; and plugin-absence behaviour is a
-separate deterministic adapter/UI blocked-capability test. No source test may
-return a success-like omission. Non-destructive CI invokes
-`just harness-nondestructive`; that recipe passes `--profile nondestructive
---require-executed` to the runner. `just harness` passes `--profile full-lab
---require-executed`, and full-lab is the only profile permitted to select
-destructive cases. The runner receives any required host privilege from its
-disposable VM or gated CI environment; it must not start a project service,
-install a policy, invoke sudo, self-elevate, or mutate a non-fixture disk.
-
-Add CI jobs that compile, format, lint, and run `just harness-nondestructive`.
-Run `just harness` and destructive lab suites only in an explicitly gated
-disposable VM job with required UDisks2 LVM2/Btrfs plugins, the required
-API-version preflight, `--require-executed`, and logged fixture
-cleanup/command ledger. Preserve existing main CI checks; no service
-start/healthcheck remains.
-
-Do not add a tool-local lockfile. Generate/update the root Cargo.lock only if
-the workspace member introduces an unavoidable new resolved dependency. Any
-such delta must be reviewed as an upgrade-preserving addition, never a
-downgrade to branch-era packages.
-
-**Gate**
-
-~~~sh
-cargo fmt --all -- --check
-cargo test -p storage-testing --locked --test harness_execution_contract -- --list | rg -F 'selected_cases_cannot_be_skipped: test'
-cargo test -p storage-testing --locked --test harness_execution_contract -- --list | rg -F 'timeout_is_failed: test'
-cargo test -p storage-testing --locked --test harness_execution_contract -- --list | rg -F 'fixture_target_and_cleanup_are_enforced: test'
-cargo test -p storage-testing --locked --test harness_execution_contract
-cargo test --workspace --all-features --locked
-cargo clippy --workspace --all-features --locked
-just harness-nondestructive
-# Gated disposable VM only.
-STORAGE_TESTING_ENABLE_DESTRUCTIVE=1 just harness
-~~~
-
-Run `just lab` only in the documented disposable environment. The full-lab
-command must attach its report and fail unless every selected case executed and
-passed; no selected case may be omitted, blocked, or skipped.
-
-**Manual plan-to-code review**
-
-Inspect the catalog/selection code, JSON report schema, fixture executor
-allow-list, and cleanup `finally` path. Deliberately run the reusable runner
-tests for an empty selection, a missing prerequisite, a timeout, a non-fixture
-target, and a cleanup failure; verify their report outcome and non-zero exit.
-Then compare each ported source harness family to its source-fidelity row and
-record command output, report artifacts, and reviewed ranges in the Task 7
-phase record.
+Historical instructions: [original record](../5-testing-v2/legacy-harness-history.md#h002).
 
 ## Task 8 — documentation and final acceptance record
 
@@ -1451,16 +1321,7 @@ action test is not accepted if it is omitted, blocked, or silently skipped.
 
 Before handoff, inspect the whole diff for forbidden artifacts:
 
-~~~sh
-rg -n -i 'storage-service|org\.cosmic\.ext\.Storage\.Service|LogicalClient|sudo|pkexec|vgcreate|vgremove|vgextend|vgreduce|lvcreate|lvremove|lvresize|lvchange|mdadm|btrfs .*device (add|remove)' src crates resources .github Cargo.toml justfile
-rg -n 'Command::new|std::process::Command' tools/storage-testing
-git diff --check
-cargo metadata --no-deps --format-version=1
-cargo fmt --all -- --check
-cargo test --workspace --all-features --locked
-cargo clippy --workspace --all-features --locked
-cargo build --workspace --release --locked
-~~~
+> Historical command/diagram block retired by [Testing V2](../5-testing-v2/spec.md); [original record](../5-testing-v2/legacy-harness-history.md#h006).
 
 The production search may match the read-only storage-sys parser allow-list but
 must find no production logical mutation implementation outside the native

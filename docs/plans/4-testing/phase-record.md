@@ -6,45 +6,7 @@ record explaining why the requirement moved to a later phase.
 
 ## Phase 0 — pre-implementation baseline
 
-- Commit SHA: `37302df` (`feat(logical): complete logical storage UI`)
-- Implementer and reviewer: planning worktree / Codex review
-- Scope and reviewed file ranges: root `Cargo.toml`; `justfile`;
-  `.github/workflows/ci.yml`; `src/main.rs`; `src/app.rs`;
-  `src/operations/{mod,filesystems,image}.rs`; `src/update/**`;
-  `src/subscriptions/app.rs`; `crates/storage-contracts/src/**`; and
-  `tools/storage-testing/**` boundary documentation.
-- Contract/schema/traceability rows changed: none; the Phase-0a lock follows
-  this record and is not retroactively treated as baseline code.
-- Required named tests listed before execution (command and output artifact):
-  `cargo test --workspace --all-features --locked -- --list`; the captured list
-  covered 33 root unit tests, 16 root integration tests, 10 `storage-sys` unit
-  tests, 4 `storage-contracts` unit tests, and all then-existing crate and
-  harness contract targets.
-- Commands executed and exit status: `git status --short` (0); `cargo metadata
-  --no-deps --format-version=1` (0); `cargo test --workspace --all-features
-  --locked -- --list` (0); `git diff --check` (0).
-- Generated artifacts and stable locations: this baseline summary; cargo target
-  inventory at the command above. Workspace members were root,
-  `storage-{btrfs,contracts,sys,types,udisks}`, and `tools/storage-testing`.
-- Manual review observations: the root has a process-global
-  `SHARED_OPERATIONS` in `src/operations/mod.rs`; `AppModel::init` uses `()`
-  flags; operations, models, update paths, and subscriptions call `shared()` or
-  `*Client::new()`; host usage/image work remains in
-  `src/operations/filesystems.rs`, `src/operations/image.rs`, and
-  `src/update/image/dialogs.rs`. `storage-testing` is a non-published workspace
-  tool, is not an app dependency, and is invoked by `just harness-nondestructive`.
-  CI currently ignores Markdown paths and has build, clippy, fmt, and safe
-  harness coverage only.
-- Deviations/decisions (links): the Phase-0a bootstrap comprises the
-  [schema descriptor](schema-v1.json),
-  [contract inventory](contract-surface-v1.toml), and
-  [test manifest](../../../tests/ui/required-tests.toml). It is not immutable
-  or sign-off ready until the closed DTO/transition catalog completion gate in
-  [scenario-schema-v1.md](scenario-schema-v1.md) passes. The concrete E2E
-  image lock is intentionally created at the start of Phase 8 according to the
-  [environment-lock contract](e2e-environment-v1.md), before any golden exists.
-- Result: pass
-- Date: 2026-07-31
+> Historical testing-infrastructure note superseded by [Testing V2](../5-testing-v2/spec.md); [original record](../5-testing-v2/legacy-harness-history.md#h036).
 
 ## Phase <number> — <title>
 

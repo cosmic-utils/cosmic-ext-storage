@@ -129,18 +129,7 @@ toolkit decision below.
 
 ### Explicitly out of scope
 
-- Widgets, render output, fonts, viewport sizing, screenshot goldens, Sway,
-  Wayland, AT-SPI, keyboard navigation, mouse coordinates, and accessibility
-  IDs/actions.
-- Replacing the Rust AT-SPI runner, its capability gate, or its future v2 case
-  executor.
-- A generic event-sourcing framework, a global `Effect` enum for all 91
-  `ScenarioOperation`s, or a second app state model.
-- A production feature flag, test-only CLI subcommand, test server, shell,
-  Python runtime, mocked backend, direct UDisks/rclone/host-filesystem access,
-  or a real storage-testing harness invocation.
-- Testing the `keyboard_accessibility` flow here. That flow is intentionally
-  owned by accessibility E2E.
+> Historical testing-infrastructure note superseded by [Testing V2](../5-testing-v2/spec.md); [original record](../5-testing-v2/legacy-harness-history.md#h028).
 
 ## 5. Fixed terminology and contracts
 

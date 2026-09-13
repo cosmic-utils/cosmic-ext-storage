@@ -92,7 +92,6 @@ members = [
     "crates/storage-sys",
     "crates/storage-lab-tests",
     "crates/ui-e2e-runner",
-    "tools/storage-testing",
 ]
 default-members = ["."]
 resolver = "2"

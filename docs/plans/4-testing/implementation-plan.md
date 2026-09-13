@@ -64,9 +64,7 @@ direct tests/fixtures for those paths.
 | 10 | `ci(ui): gate scenario and Wayland UI tests` | `.github/**`, `justfile`, CI/image support files |
 | 11 | `docs(testing): record validation and developer workflow` | `README.md`, `docs/**` |
 
-No implementation commit may modify `tools/storage-testing/**` unless a
-separate real-harness change is explicitly requested. The existing harness is
-not a staging area for test-backend code.
+> Historical testing-infrastructure note superseded by [Testing V2](../5-testing-v2/spec.md); [original record](../5-testing-v2/legacy-harness-history.md#h030).
 
 ## Phase-gate matrix
 
@@ -88,20 +86,7 @@ list before the phase is considered complete.
 
 ## Phase 0 — record the pre-implementation baseline
 
-1. Record the current commit SHA, workspace members, root package targets,
-   feature list, existing test target list, and CI workflow jobs in the phase
-   record.
-2. Capture the exact locations of `shared()`, every `*Client::new()` call,
-   direct `storage_sys`/`std::fs`/`which` storage workflow call, and the
-   existing `LabSpec` schema. Classify each call as: production composition,
-   app storage path to inject, app-local desktop service, or harness-only.
-3. Confirm that `tools/storage-testing` remains non-published, is not an app
-   dependency, and is invoked by `just harness-nondestructive`.
-4. Confirm the checked-in UI test fixture root is absent or empty before
-   creating it; do not repurpose `resources/lab-specs`.
-5. Complete Phase 0a before creating a feature code commit. The phase record
-   links the frozen schema descriptor, bootstrap contract inventory,
-   traceability matrix, required-test manifest, and E2E environment lock.
+> Historical testing-infrastructure note superseded by [Testing V2](../5-testing-v2/spec.md); [original record](../5-testing-v2/legacy-harness-history.md#h031).
 
 **Gate**
 
@@ -598,28 +583,7 @@ application window, not the desktop.
 
 ## Phase 9 — make CI gates enforce the layer
 
-1. Add required `ui-scenario-contract` job to `.github/workflows/ci.yml`. It
-   runs `just ui-assert-tests phase=all`, fixed contract/runtime/scenario tests,
-   validates every recursive fixture, and does not need a display.
-2. Add required `ui-e2e` job using the pinned image. It builds with
-   `test-backend`, creates private runtime/D-Bus/AT-SPI/Wayland session,
-   executes all named cases, and uploads `ui-artifacts/` on success and
-   failure.
-3. Preserve existing build, clippy, fmt, and `harness-nondestructive` jobs.
-   Do not add the destructive harness to a normal GitHub-hosted runner.
-4. Make test reports visible in the GitHub summary and fail the job on a
-   missing case, missing baseline, semantic failure, pixel mismatch, leaked
-   process, or missing required artifact. Do not hide failures behind retries
-   or `continue-on-error`.
-5. Remove the broad `paths-ignore: "**/*.md"` policy, or replace it with an
-   equivalent include policy, so changes to `docs/plans/4-testing/{spec,
-   scenario-schema-v1,traceability,validation}.md`, scenario fixtures, runner,
-   manifest, and CI files trigger `ui-scenario-contract`. Unrelated prose may
-   remain exempt only through an explicit, tested filter.
-6. A repository administrator applies branch protection requiring
-   `ui-scenario-contract` and `ui-e2e`, then records the rule, owner, and run
-   URLs in `phase-record.md`. This is an external acceptance task, not a YAML
-   side effect.
+> Historical testing-infrastructure note superseded by [Testing V2](../5-testing-v2/spec.md); [original record](../5-testing-v2/legacy-harness-history.md#h032).
 
 ### Gate
 
@@ -651,34 +615,12 @@ run URLs.
 
 ## Phase 10 — final acceptance and documentation
 
-1. Update README and developer documentation with supported scenario commands,
-   feature boundary, fixture/overlay safety, E2E requirements, artifact
-   location, and the explicit distinction from `storage-testing`.
-2. Cross-check every specification acceptance criterion, every phase gate, and
-   every required validation test against the implemented diff. Remove stale
-   planned test names or add their missing implementation; do not mark an
-   unimplemented case as optional.
-3. Run final focused gates plus workspace format/clippy/test and the existing
-   safe harness. The real destructive harness remains a separate disposable
-   VM acceptance activity.
+> Historical testing-infrastructure note superseded by [Testing V2](../5-testing-v2/spec.md); [original record](../5-testing-v2/legacy-harness-history.md#h033).
 
 ### Gate
 
-~~~sh
-cargo fmt --all -- --check
-cargo clippy --workspace --all-targets --all-features --locked -- -D warnings
-cargo test --workspace --all-features --locked
-just ui-scenario-check
-just harness-nondestructive
-just ui-e2e
-just package-check
-git diff --check
-~~~
+> Historical command/diagram block retired by [Testing V2](../5-testing-v2/spec.md); [original record](../5-testing-v2/legacy-harness-history.md#h034).
 
 **Manual plan-to-code review**
 
-Review the final diff against `spec.md` and `validation.md` phase by phase.
-Confirm package path/name is `crates/test-backend`/`test-backend` everywhere;
-release/package commands omit the optional feature; no app/scenario dependency
-reaches `tools/storage-testing`; and all required artifacts exist. Resolve
-every unmet criterion before accepting the work.
+> Historical testing-infrastructure note superseded by [Testing V2](../5-testing-v2/spec.md); [original record](../5-testing-v2/legacy-harness-history.md#h035).

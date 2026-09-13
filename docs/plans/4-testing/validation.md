@@ -44,24 +44,7 @@ operation model exists; Phase 5 covers only serialized clock control.
 
 Minimum commands after implementation:
 
-~~~text
-just ui-plan-check
-python3 tools/ui-testing/assert_tests.py --plan-only
-just ui-assert-tests phase=all
-cargo test -p storage-contracts --locked --test ui_workflow_contract
-cargo test -p test-backend --locked
-cargo test -p cosmic-ext-storage --locked --features test-backend --test ui_runtime_contract
-cargo test -p cosmic-ext-storage --locked --test scenario_feature_disabled_contract
-cargo test -p cosmic-ext-storage --locked --features test-backend --test ui_scenario_contract
-cargo test -p cosmic-ext-storage --locked --features test-backend --test application_workflows
-cargo test --workspace --all-features --locked
-cargo fmt --all -- --check
-cargo clippy --workspace --all-targets --all-features --locked -- -D warnings
-just ui-scenario-check
-just harness-nondestructive
-just ui-e2e
-just package-check
-~~~
+> Historical command/diagram block retired by [Testing V2](../5-testing-v2/spec.md); [original record](../5-testing-v2/legacy-harness-history.md#h041).
 
 `just ui-scenario-check` validates every
 `tests/ui/scenarios/**/*.toml`, checks the frozen schema descriptor and
@@ -82,15 +65,7 @@ failure, `ui-e2e` uploads one `ui-artifacts/` directory containing:
   checkpoint;
 - JUnit result and a human-readable per-case summary.
 
-The E2E capability job starts with a private user runtime directory and D-Bus
-session, must not connect to the system bus, and builds the binary inside the
-locked image with `test-backend` before launching it using `--backend scenario`.
-It records the Containerfile base-image digest, package/font lock, Sway command,
-capture/input helpers, viewport, and image-comparison settings in its evidence.
-A successful capability run proves no real device is needed and that the
-compositor prerequisites work; it does not yet substitute for the per-case
-semantic and golden comparisons, `harness-nondestructive`, or a disposable
-full-lab run.
+> Historical testing-infrastructure note superseded by [Testing V2](../5-testing-v2/spec.md); [original record](../5-testing-v2/legacy-harness-history.md#h042).
 
 ## Manual test trace
 

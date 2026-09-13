@@ -10,25 +10,7 @@
 
 ## Current-main facts
 
-- The root package is `cosmic-ext-storage`; the retained libraries are under
-  `crates/`. Before this graft, `cargo metadata` reports the root package plus
-  `storage-udisks`, `storage-btrfs`, `storage-types`, `storage-contracts`, and
-  `cosmic-ext-storage-storage-sys`. The completed graft additionally restores the
-  non-published `tools/storage-testing` workspace member while leaving the six
-  release/publish packages unchanged.
-- `storage-service`, `storage-macros`, project systemd/D-Bus/Polkit resources,
-  and all application client proxies were deliberately deleted.
-- The application constructs `StorageOperations` once. Its `BackendRegistry`
-  exposes typed `storage-contracts` traits; `UdisksBackend` is constructed only
-  at the composition root.
-- The workspace already has upgraded pins, including `toml = "1.0"`,
-  `zbus = "5.15.0"`, `vergen-git2 = "10"`, and libcosmic revision
-  `ef162b8e16ba4493e05c169cd56c7b9f77f0fda5`. The current `Cargo.lock` is the
-  only dependency baseline to retain.
-- A small, older LVM read path already exists in
-  `crates/storage-types/src/lvm.rs` and `crates/storage-udisks/src/lvm/`. It
-  lists LVs for a physical volume; it is not the first-class logical-topology
-  feature intended by #79.
+> Historical testing-infrastructure note superseded by [Testing V2](../5-testing-v2/spec.md); [original record](../5-testing-v2/legacy-harness-history.md#h001).
 
 ## Feature-branch contents
 
