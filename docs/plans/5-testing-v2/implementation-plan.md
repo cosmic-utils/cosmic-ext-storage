@@ -1,9 +1,11 @@
 # Testing V2 implementation plan
 
-This plan implements [the Testing V2 specification](spec.md) in strictly
-ordered phases. A phase may not be folded into the next one merely because the
-workspace compiles: its named tests, cleanup evidence, coverage gate, and
-review conditions must pass first.
+This plan implements [the Testing V2 specification](spec.md) in dependency
+order. Phases 0–4 retain their ordered safety and migration gates. Phase 5's
+coverage collection/checker tooling precedes Phase 6's executed UI cases;
+Phase 5's final combined coverage gate necessarily follows those UI cases.
+Neither phase is complete until that combined gate passes. A passing build
+cannot substitute for named tests, cleanup evidence, coverage, or review.
 
 ## Execution rules
 
@@ -354,6 +356,14 @@ The final command must have no output.
 
 ## Phase 5 — Coverage to near 100%
 
+### Dependency clarification
+
+Prepare the collector, checker, and real-adapter/host gap tests here, then
+implement Phase 6's interactive UI execution before closing this phase's
+combined coverage gate. Requiring executed UI profiles before implementing
+their tests would be a circular dependency. This changes sequencing only:
+missing UI profiles remain a hard failure and no threshold is relaxed.
+
 ### Files
 
 ```text
@@ -400,7 +410,7 @@ crates/**
 
 ```sh
 just coverage
-python3 tools/testing/coverage.py --base origin/4-ui-testing --summary target/coverage/summary.json
+python3 tools/testing/coverage.py --base origin/main --summary target/coverage/summary.json
 ```
 
 ## Phase 6 — Honest UI E2E execution and documentation

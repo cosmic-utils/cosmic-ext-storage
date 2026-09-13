@@ -108,6 +108,29 @@ iteration. Subsequent changes need their own final run and hosted evidence.
 
 ## Coverage honesty
 
+The instrumented host/bridge/inner pipeline passed all 16 selected lab cases
+in 176.616 seconds (Nextest `71690e39-62ca-4a68-a5b6-4f9bfc55a17b`). Its
+coverage acceptance still fails: interactive UI profiles are absent, coverage
+is far below the required thresholds, and later source edits invalidate that
+run for final acceptance. The collector preserves matching ELFs/raw profiles,
+exports independent build groups before unioning coverage, and hashes source,
+profile, executable, and report evidence. Nextest stores JUnit relative to the
+workspace's `target/nextest`, independently of Cargo's instrumented build path.
+
+Running the required whole-workspace Nextest gate also exposed a pre-existing
+cross-process temporary-directory collision in usage-scanner tests. Replacing
+their process-local counter/custom cleanup with the existing `tempfile` crate
+made all **205 selected workspace tests pass** with normal parallelism; 32
+explicitly ignored storage targets remain the separate container suite, not
+claims of host execution. Keep this multiprocess gate: ordinary `cargo test`
+had not exposed the collision.
+
+The currently reported raw counts still include inline unit-test source in
+production `.rs` files. They must not be described as final production-only
+coverage; the final reporting boundary must exclude test source without
+excluding production or test-support implementation. Non-Rust test-support
+coverage also remains outstanding.
+
 The intermediate **host-only** workspace report was 18.95% lines and 21.69%
 functions; the root-only report was 10.63% lines and 11.93% functions. These
 precede subsequent edits and omit real inner-lab/UI execution; they are not

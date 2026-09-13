@@ -5,10 +5,39 @@ from pathlib import Path
 import tempfile
 import unittest
 
-import coverage as gate
+from run_coverage import gate
 
 
 class CoverageGateTests(unittest.TestCase):
+    def test_source_and_executable_changes_invalidate_the_report(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / "Cargo.toml").write_text('[workspace]\nmembers = ["."]\n')
+            source = root / "src/lib.rs"
+            source.parent.mkdir()
+            source.write_text("pub fn f() {}")
+            executable = root / "target/coverage/run-1/test"
+            executable.parent.mkdir(parents=True)
+            executable.write_bytes(b"instrumented-elf")
+            evidence = dict(host_exit=0, lab_exit=0,
+                            source_sha256={"src/lib.rs": hashlib.sha256(source.read_bytes()).hexdigest()},
+                            objects=[dict(path=str(executable.relative_to(root)), sha256=hashlib.sha256(executable.read_bytes()).hexdigest())])
+            gate.validate_provenance(evidence, root)
+            extra = root / "src/new.rs"
+            extra.write_text("pub fn untested() {}")
+            with self.assertRaisesRegex(ValueError, "inventory changed"):
+                gate.validate_provenance(evidence, root)
+            extra.unlink()
+            with self.assertRaisesRegex(ValueError, "exit status"):
+                gate.validate_provenance(evidence | {"lab_exit": 1}, root)
+            source.write_text("pub fn changed() {}")
+            with self.assertRaisesRegex(ValueError, "source changed"):
+                gate.validate_provenance(evidence, root)
+            source.write_text("pub fn f() {}")
+            executable.write_bytes(b"different-build")
+            with self.assertRaisesRegex(ValueError, "executable hash mismatch"):
+                gate.validate_provenance(evidence, root)
+
     def test_changed_uncovered_line_fails(self):
         lines = {"src/app.rs": {line: int(line != 5) for line in range(1, 101)}}
         functions = {"src/app.rs": {(1, 100, "main"): 1}}

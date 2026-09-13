@@ -47,10 +47,15 @@ app-workflow-check:
 # The private lab, rather than the host, owns every loop-backed mutation.
 test-lab:
     @test "${STORAGE_LAB:-}" = "1" || { echo "STORAGE_LAB=1 is required to run the privileged disposable storage lab" >&2; exit 1; }
-    docker build --build-arg "VERGEN_GIT_SHA=$(git rev-parse HEAD)" --build-arg "VERGEN_GIT_COMMIT_DATE=$(git show -s --format=%cI HEAD)" --tag cosmic-storage-lab:local --file tools/storage-lab/Containerfile .
+    docker build --build-arg "VERGEN_GIT_SHA=$(git rev-parse HEAD)" --build-arg "VERGEN_GIT_COMMIT_DATE=$(git show -s --format=%cI HEAD)" --build-arg "STORAGE_LAB_COVERAGE=${STORAGE_LAB_COVERAGE:-0}" --tag cosmic-storage-lab:local --file tools/storage-lab/Containerfile .
     @docker image inspect --format 'storage-lab image={{"{{"}}.Id{{"}}"}}' cosmic-storage-lab:local
     @echo 'storage-lab suite=bridge (including LUKS) artifacts=target/storage-lab-artifacts'
     cargo nextest run --locked --profile storage-lab -p storage-lab-tests --features outer-bridge --test bridge --run-ignored ignored-only
+
+# Produces an explicitly incomplete report until every acceptance source and
+# threshold passes. A host-only or host+lab-only result is never green.
+coverage base='origin/main':
+    python3 tools/testing/run_coverage.py --base {{ quote(base) }}
 
 ui-scenario-check:
     python3 tools/ui-testing/assert_tests.py --plan-only

@@ -51,6 +51,23 @@ def scope(path: str) -> str:
     return "application" if path.startswith("src/") else "/".join(path.split("/")[:2])
 
 
+def workspace_sources(root: Path) -> dict[str, Path]:
+    manifest = tomllib.loads((root / "Cargo.toml").read_text())
+    result = {}
+    for member in manifest.get("workspace", {}).get("members", ["."]):
+        if any(char in member for char in "*?[]"):
+            raise ValueError("workspace source inventory requires explicit member paths")
+        directory = (root / member / "src").resolve()
+        if not directory.is_relative_to(root) or not directory.is_dir():
+            raise ValueError("workspace member lacks an in-repository source directory")
+        for path in directory.rglob("*.rs"):
+            relative = path.relative_to(root).as_posix()
+            if source_path(relative, root) != relative:
+                raise ValueError("workspace source is outside the audited path boundary")
+            result[relative] = path
+    return result
+
+
 def threshold(name: str) -> int:
     return 100 if name in {
         "crates/storage-lab-tests", "crates/test-backend", "crates/ui-e2e-runner",
@@ -145,6 +162,30 @@ def validate_evidence(document: dict, root: Path) -> set[str]:
     return tests
 
 
+def validate_provenance(document: dict, root: Path) -> None:
+    if document.get("host_exit") != 0 or document.get("lab_exit") != 0:
+        raise ValueError("failed or missing test-run exit status")
+    hashes = document.get("source_sha256", {})
+    if not hashes:
+        raise ValueError("missing source revision hashes")
+    if set(hashes) != set(workspace_sources(root)):
+        raise ValueError("workspace source inventory changed or was omitted")
+    for path, expected in hashes.items():
+        if source_path(path, root) != path:
+            raise ValueError("unexpected source revision path")
+        if hashlib.sha256((root / path).read_bytes()).hexdigest() != expected:
+            raise ValueError(f"source changed after instrumentation: {path}")
+    objects = document.get("objects", [])
+    if not objects:
+        raise ValueError("matching instrumented executables are required")
+    for entry in objects:
+        path = (root / entry["path"]).resolve()
+        if not path.is_relative_to(root / "target/coverage"):
+            raise ValueError("coverage executable must belong to this run")
+        if hashlib.sha256(path.read_bytes()).hexdigest() != entry["sha256"]:
+            raise ValueError("instrumented executable hash mismatch")
+
+
 def exceptions(document: dict, lines: dict, functions: dict, tests: set[str], today: dt.date) -> dict[str, set[int]]:
     if set(document) != {"exceptions"} or not isinstance(document["exceptions"], list):
         raise ValueError("exception manifest must contain only an exceptions list")
@@ -174,7 +215,10 @@ def exceptions(document: dict, lines: dict, functions: dict, tests: set[str], to
             executable = {line for line in lines[path] if start <= line <= end}
             if executable and executable <= selected:
                 raise ValueError("exception may not cover an entire function")
-    if sum(map(len, result.values())) * 100 >= sum(map(len, lines.values())) * 2:
+    production = sum(len(entries) for path, entries in lines.items()
+                     if not path.startswith("tools/") and scope(path) not in {
+                         "crates/storage-lab-tests", "crates/test-backend", "crates/ui-e2e-runner"})
+    if result and sum(map(len, result.values())) * 100 >= production * 2:
         raise ValueError("excepted lines must remain below 2%")
     return dict(result)
 
@@ -220,9 +264,25 @@ def main() -> int:
     functions = read_functions(json.loads(args.summary.read_text()), root)
     if set(lines) != set(functions):
         raise ValueError("LLVM and LCOV source inventories differ")
-    tests = validate_evidence(json.loads(args.evidence.read_text()), root)
+    evidence = json.loads(args.evidence.read_text())
+    evidence_failures = []
+    for name, path in (("summary.json", args.summary), ("lcov.info", args.lcov)):
+        if evidence.get("reports", {}).get(name) != hashlib.sha256(path.read_bytes()).hexdigest():
+            evidence_failures.append(f"report hash missing or stale: {name}")
+    tests = set()
+    for check in (validate_provenance, validate_evidence):
+        try:
+            result = check(evidence, root)
+            if result is not None:
+                tests = result
+        except (KeyError, ValueError, OSError) as error:
+            evidence_failures.append(str(error))
     exempt = exceptions(tomllib.loads(args.exceptions.read_text()), lines, functions, tests, dt.date.today())
-    report, failures = evaluate(lines, functions, changed_lines(root, args.base), exempt)
+    report, failures = evaluate(lines, functions, changed_lines(root, args.base), exempt if not evidence_failures else {})
+    expected_scopes = {scope(path) for path in workspace_sources(root)}
+    for missing in sorted(expected_scopes - report.keys()):
+        failures.append(f"missing workspace package coverage: {missing}")
+    failures = evidence_failures + failures
     print(json.dumps({"scopes": report, "failures": failures}, indent=2))
     return bool(failures)
 
@@ -231,5 +291,6 @@ if __name__ == "__main__":
     try:
         sys.exit(main())
     except (KeyError, ValueError, OSError, subprocess.CalledProcessError) as error:
+        print(json.dumps({"scopes": {}, "failures": [str(error)]}, indent=2))
         print(f"coverage gate failed: {error}", file=sys.stderr)
         sys.exit(1)
