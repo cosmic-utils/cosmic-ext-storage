@@ -382,41 +382,18 @@ fn scan_single_root(
 mod tests {
     use std::fs;
     use std::os::unix::fs::PermissionsExt;
-    use std::path::PathBuf;
-    use std::sync::atomic::{AtomicU64, Ordering};
     use std::sync::mpsc;
 
     use super::*;
 
-    static COUNTER: AtomicU64 = AtomicU64::new(1);
-
-    struct TempDir {
-        path: PathBuf,
-    }
-
-    impl TempDir {
-        fn new() -> Self {
-            let unique = COUNTER.fetch_add(1, Ordering::Relaxed);
-            let path = std::env::temp_dir().join(format!("storage-sys-usage-scan-{unique}"));
-            fs::create_dir_all(&path).expect("create temp dir");
-            Self { path }
-        }
-    }
-
-    impl Drop for TempDir {
-        fn drop(&mut self) {
-            let _ = fs::remove_dir_all(&self.path);
-        }
-    }
-
     #[test]
     fn aggregates_category_bytes_over_tree() {
-        let temp = TempDir::new();
-        fs::write(temp.path.join("main.rs"), vec![b'a'; 10]).expect("write rs file");
-        fs::write(temp.path.join("pic.png"), vec![b'a'; 20]).expect("write image file");
-        fs::write(temp.path.join("note.txt"), vec![b'a'; 30]).expect("write document file");
+        let temp = tempfile::tempdir().expect("private test directory");
+        fs::write(temp.path().join("main.rs"), vec![b'a'; 10]).expect("write rs file");
+        fs::write(temp.path().join("pic.png"), vec![b'a'; 20]).expect("write image file");
+        fs::write(temp.path().join("note.txt"), vec![b'a'; 30]).expect("write document file");
 
-        let result = scan_paths(std::slice::from_ref(&temp.path), &ScanConfig::default())
+        let result = scan_paths(&[temp.path().to_path_buf()], &ScanConfig::default())
             .expect("scan should succeed");
 
         let code = result
@@ -454,15 +431,15 @@ mod tests {
 
     #[test]
     fn keeps_only_top_twenty_per_category() {
-        let temp = TempDir::new();
+        let temp = tempfile::tempdir().expect("private test directory");
 
         for size in 1_u8..=25 {
-            let path = temp.path.join(format!("f{size:02}.rs"));
+            let path = temp.path().join(format!("f{size:02}.rs"));
             fs::write(path, vec![b'a'; size as usize]).expect("write file");
         }
 
         let result = scan_paths(
-            std::slice::from_ref(&temp.path),
+            &[temp.path().to_path_buf()],
             &ScanConfig {
                 threads: None,
                 top_files_per_category: 20,
@@ -486,15 +463,15 @@ mod tests {
 
     #[test]
     fn top_files_limit_is_configurable() {
-        let temp = TempDir::new();
+        let temp = tempfile::tempdir().expect("private test directory");
 
         for size in 1_u8..=8 {
-            let path = temp.path.join(format!("f{size:02}.rs"));
+            let path = temp.path().join(format!("f{size:02}.rs"));
             fs::write(path, vec![b'a'; size as usize]).expect("write file");
         }
 
         let result = scan_paths(
-            std::slice::from_ref(&temp.path),
+            &[temp.path().to_path_buf()],
             &ScanConfig {
                 threads: None,
                 top_files_per_category: 3,
@@ -519,13 +496,13 @@ mod tests {
 
     #[test]
     fn top_files_sorted_desc_then_path_for_ties() {
-        let temp = TempDir::new();
+        let temp = tempfile::tempdir().expect("private test directory");
 
-        fs::write(temp.path.join("a.rs"), vec![b'a'; 10]).expect("write file a");
-        fs::write(temp.path.join("b.rs"), vec![b'a'; 10]).expect("write file b");
-        fs::write(temp.path.join("z.rs"), vec![b'a'; 12]).expect("write file z");
+        fs::write(temp.path().join("a.rs"), vec![b'a'; 10]).expect("write file a");
+        fs::write(temp.path().join("b.rs"), vec![b'a'; 10]).expect("write file b");
+        fs::write(temp.path().join("z.rs"), vec![b'a'; 12]).expect("write file z");
 
-        let result = scan_paths(std::slice::from_ref(&temp.path), &ScanConfig::default())
+        let result = scan_paths(&[temp.path().to_path_buf()], &ScanConfig::default())
             .expect("scan should succeed");
 
         let code_top = result
@@ -541,14 +518,14 @@ mod tests {
 
     #[test]
     fn scanner_emits_progress_deltas_for_processed_bytes() {
-        let temp = TempDir::new();
-        fs::write(temp.path.join("a.rs"), vec![b'a'; 10]).expect("write file");
-        fs::write(temp.path.join("b.rs"), vec![b'a'; 20]).expect("write file");
-        fs::write(temp.path.join("c.rs"), vec![b'a'; 30]).expect("write file");
+        let temp = tempfile::tempdir().expect("private test directory");
+        fs::write(temp.path().join("a.rs"), vec![b'a'; 10]).expect("write file");
+        fs::write(temp.path().join("b.rs"), vec![b'a'; 20]).expect("write file");
+        fs::write(temp.path().join("c.rs"), vec![b'a'; 30]).expect("write file");
 
         let (tx, rx) = mpsc::channel();
         let result = scan_paths_with_progress(
-            std::slice::from_ref(&temp.path),
+            &[temp.path().to_path_buf()],
             &ScanConfig::default(),
             Some(tx),
         )
@@ -560,9 +537,9 @@ mod tests {
 
     #[test]
     fn default_scan_includes_caller_owned_files_even_without_owner_read_bit() {
-        let temp = TempDir::new();
-        let readable = temp.path.join("readable.rs");
-        let unreadable = temp.path.join("unreadable.rs");
+        let temp = tempfile::tempdir().expect("private test directory");
+        let readable = temp.path().join("readable.rs");
+        let unreadable = temp.path().join("unreadable.rs");
 
         fs::write(&readable, vec![b'a'; 10]).expect("write readable file");
         fs::write(&unreadable, vec![b'a'; 20]).expect("write unreadable file");
@@ -570,14 +547,14 @@ mod tests {
         fs::set_permissions(&unreadable, fs::Permissions::from_mode(0o000))
             .expect("make file unreadable");
 
-        let result = scan_paths(std::slice::from_ref(&temp.path), &ScanConfig::default())
+        let result = scan_paths(&[temp.path().to_path_buf()], &ScanConfig::default())
             .expect("scan should succeed");
 
         assert_eq!(result.total_bytes, 30);
         assert_eq!(result.files_scanned, 2);
 
         let include_all = scan_paths(
-            std::slice::from_ref(&temp.path),
+            &[temp.path().to_path_buf()],
             &ScanConfig {
                 threads: None,
                 top_files_per_category: 20,
