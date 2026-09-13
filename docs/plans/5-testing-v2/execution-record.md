@@ -77,6 +77,11 @@ iteration. Subsequent changes need their own final run and hosted evidence.
   targets (including dangling links), tolerate only the exact expected target,
   and never overwrite an existing conflicting alias or regular file. A native
   host unit test injects both same-target and conflicting-target races.
+  Follow-up execution also demonstrated udev's relative `../md127` spelling:
+  compare resolved targets, not the raw symlink text. A separate regression
+  covers relative/dangling aliases and rejects a different device. MD sysfs
+  entries can disappear during successful stop; a missing entry is not a
+  node-worker failure and must never trigger an unverified mutation.
 - An LVM object-manager snapshot may outlive a volume group deleted during
   discovery. On a property failure, query a fresh snapshot on the selected
   connection and skip only confirmed-absent groups. Preserve failures for

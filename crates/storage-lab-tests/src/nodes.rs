@@ -80,7 +80,12 @@ impl PartitionNodes {
                         continue;
                     }
                     let array_sys = PathBuf::from("/sys/class/block").join(&name);
-                    let mut members = fs::read_dir(array_sys.join("slaves"))?
+                    let entries = match fs::read_dir(array_sys.join("slaves")) {
+                        Ok(entries) => entries,
+                        Err(error) if error.kind() == std::io::ErrorKind::NotFound => continue,
+                        Err(error) => return Err(error.into()),
+                    };
+                    let mut members = entries
                         .map(|entry| {
                             entry.map(|entry| PathBuf::from("/dev").join(entry.file_name()))
                         })
@@ -104,7 +109,11 @@ impl PartitionNodes {
                     }
                     let node = PathBuf::from("/dev").join(&name);
                     if !node.exists() {
-                        let numbers = fs::read_to_string(array_sys.join("dev"))?;
+                        let numbers = match fs::read_to_string(array_sys.join("dev")) {
+                            Ok(numbers) => numbers,
+                            Err(error) if error.kind() == std::io::ErrorKind::NotFound => continue,
+                            Err(error) => return Err(error.into()),
+                        };
                         let (major, minor) = numbers
                             .trim()
                             .split_once(':')
@@ -203,7 +212,7 @@ fn ensure_array_alias(
     before_create: impl FnOnce() -> Result<()>,
 ) -> Result<bool> {
     match fs::read_link(link) {
-        Ok(existing) if existing == node => return Ok(false),
+        Ok(existing) if alias_target_matches(link, node, &existing) => return Ok(false),
         Ok(_) => return Err(LabError::new("array alias points to a different device")),
         Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
         Err(error) => return Err(error.into()),
@@ -214,7 +223,7 @@ fn ensure_array_alias(
         // udev or the other owned member's worker can publish the same alias
         // between observation and creation. Never replace an existing entry.
         Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => {
-            if fs::read_link(link)? == node {
+            if alias_target_matches(link, node, &fs::read_link(link)?) {
                 Ok(false)
             } else {
                 Err(LabError::new("array alias changed during creation"))
@@ -222,6 +231,30 @@ fn ensure_array_alias(
         }
         Err(error) => Err(error.into()),
     }
+}
+
+fn alias_target_matches(link: &Path, node: &Path, target: &Path) -> bool {
+    let absolute = if target.is_absolute() {
+        target.to_owned()
+    } else {
+        let Some(parent) = link.parent() else {
+            return false;
+        };
+        parent.join(target)
+    };
+    let mut normalized = PathBuf::new();
+    for component in absolute.components() {
+        match component {
+            std::path::Component::CurDir => {}
+            std::path::Component::ParentDir => {
+                if !normalized.pop() {
+                    return false;
+                }
+            }
+            other => normalized.push(other.as_os_str()),
+        }
+    }
+    normalized == node
 }
 
 impl Drop for PartitionNodes {
@@ -268,5 +301,23 @@ mod tests {
         fs::write(&link, b"not an alias").unwrap();
         assert!(ensure_array_alias(&link, &target, || Ok(())).is_err());
         assert_eq!(fs::read(&link).unwrap(), b"not an alias");
+    }
+
+    #[test]
+    fn relative_udev_aliases_must_resolve_to_the_exact_owned_node() {
+        let fixture = crate::LabFixture::create("relative-alias").unwrap();
+        let root = fixture.root().unwrap().path();
+        fs::create_dir(root.join("md")).unwrap();
+        let link = root.join("md/fixture");
+        let node = root.join("md127");
+        std::os::unix::fs::symlink("../md127", &link).unwrap();
+        assert!(!ensure_array_alias(&link, &node, || panic!("must preserve udev alias")).unwrap());
+        assert!(!alias_target_matches(&link, &node, Path::new("../md126")));
+        assert!(!alias_target_matches(&link, &node, Path::new("/dev/sda")));
+        assert!(!alias_target_matches(
+            Path::new("/alias"),
+            Path::new("/node"),
+            Path::new("../../node")
+        ));
     }
 }

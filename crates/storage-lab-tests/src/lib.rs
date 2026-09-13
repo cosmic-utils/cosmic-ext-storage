@@ -99,9 +99,15 @@ impl LabRoot {
     }
 
     pub fn sparse_file(&self, name: &str, bytes: u64) -> Result<LabBackingFile> {
-        if name.contains('/') || name.is_empty() || name == "." || name == ".." {
+        if name.is_empty()
+            || name == "."
+            || name == ".."
+            || !name
+                .bytes()
+                .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'.' | b'_' | b'-'))
+        {
             return Err(LabError::new(
-                "backing file name must be a single path component",
+                "backing file name must be a single safe ASCII path component",
             ));
         }
         let path = self.path.join(name);
@@ -541,6 +547,19 @@ mod tests {
         assert!(root.sparse_file("../outside.img", 1).is_err());
         assert!(root.sparse_file("..", 1).is_err());
         assert!(root.sparse_file(".", 1).is_err());
+        for name in [
+            "",
+            " disk.img",
+            "disk\nloop\t/dev/sda",
+            "disk\t.img",
+            "disk\r.img",
+            "disk\\img",
+        ] {
+            assert!(
+                root.sparse_file(name, 1).is_err(),
+                "must reject ledger-ambiguous name {name:?}"
+            );
+        }
         root.sparse_file("unique.img", 1).expect("first allocation");
         assert!(root.sparse_file("unique.img", 2).is_err());
         root.remove().expect("remove lab root");
