@@ -33,15 +33,6 @@ pub enum BtrfsError {
 /// Result type alias for BTRFS operations
 pub type Result<T> = std::result::Result<T, BtrfsError>;
 
+#[path = "../tests/unit/error_tests.rs"]
 #[cfg(test)]
-mod tests {
-    use super::BtrfsError;
-
-    #[test]
-    fn command_error_preserves_the_native_message() {
-        assert_eq!(
-            BtrfsError::CommandFailed("Operation not permitted".into()).to_string(),
-            "Operation not permitted"
-        );
-    }
-}
+mod tests;

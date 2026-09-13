@@ -300,7 +300,8 @@ impl State {
 pub struct ScenarioBackend {
     spec: Mutex<ScenarioSpec>,
     fixture_sha256: String,
-    state: Mutex<State>,
+    state: Arc<Mutex<State>>,
+    event_changed: tokio::sync::watch::Sender<u64>,
     secrets: BTreeMap<String, String>,
     store: ScenarioStore,
 }
@@ -325,7 +326,8 @@ impl ScenarioBackend {
         let bytes = store.read_fixture()?;
         let (spec, fixture_sha256) = parse_fixture(&bytes)?;
         Ok(Arc::new(Self {
-            state: Mutex::new(State::from_spec(&spec)),
+            state: Arc::new(Mutex::new(State::from_spec(&spec))),
+            event_changed: tokio::sync::watch::channel(0).0,
             spec: Mutex::new(spec),
             fixture_sha256,
             secrets,
@@ -633,8 +635,25 @@ impl DeviceEventSource for ScenarioBackend {
         &self,
     ) -> Result<Pin<Box<dyn Stream<Item = Result<DeviceEvent, StorageError>> + Send>>, StorageError>
     {
-        let events = std::mem::take(&mut self.state.lock().await.events);
-        Ok(Box::pin(stream::iter(events.into_iter().map(Ok))))
+        let changed = self.event_changed.subscribe();
+        let state = self.state.clone();
+        // Every subscriber owns a cursor. Register before reading the log so
+        // mutations between the initial snapshot and waiting cannot be lost.
+        Ok(Box::pin(stream::unfold(
+            (state, changed, 0usize),
+            |(state, mut changed, mut cursor)| async move {
+                loop {
+                    let event = state.lock().await.events.get(cursor).cloned();
+                    if let Some(event) = event {
+                        cursor += 1;
+                        return Some((Ok(event), (state, changed, cursor)));
+                    }
+                    if changed.changed().await.is_err() {
+                        return None;
+                    }
+                }
+            },
+        )))
     }
 }
 
@@ -735,6 +754,7 @@ impl PartitionOperations for ScenarioBackend {
             usage: None,
         });
         state.events.push(DeviceEvent::Added(device.clone()));
+        self.event_changed.send_modify(|version| *version += 1);
         state.sequence += 1;
         state.generation += 1;
         Ok(device)
@@ -820,6 +840,7 @@ impl FilesystemOperations for ScenarioBackend {
             .filesystems
             .sort_by(|left, right| left.device.cmp(&right.device));
         state.events.push(DeviceEvent::Added(device.into()));
+        self.event_changed.send_modify(|version| *version += 1);
         state.sequence += 1;
         state.generation += 1;
         Ok(())
@@ -1632,9 +1653,25 @@ impl ScenarioControl for ScenarioBackend {
         };
         match parse_fixture(&bytes) {
             Ok((spec, _)) => {
-                *self.spec.lock().await = spec.clone();
-                *self.state.lock().await = State::from_spec(&spec);
-                Ok(ScenarioReload::Applied(self.next_receipt(true).await))
+                let mut state = self.state.lock().await;
+                let mut current_spec = self.spec.lock().await;
+                let mut replacement = State::from_spec(&spec);
+                // Overlay revisions are data, never authority to roll back or
+                // double-increment the live generation and event sequence.
+                replacement.generation = state.generation + 1;
+                replacement.sequence = state.sequence + 1;
+                replacement.tick = state.tick;
+                replacement.events = std::mem::take(&mut state.events);
+                replacement.events.push(DeviceEvent::Refresh);
+                let receipt = ScenarioReceipt {
+                    sequence: replacement.sequence,
+                    generation: replacement.generation,
+                    virtual_tick: replacement.tick,
+                };
+                *current_spec = spec;
+                *state = replacement;
+                self.event_changed.send_modify(|version| *version += 1);
+                Ok(ScenarioReload::Applied(receipt))
             }
             Err(error) => Ok(ScenarioReload::Rejected {
                 reason: error.message,

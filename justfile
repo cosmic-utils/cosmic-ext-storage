@@ -72,6 +72,12 @@ ui-e2e-update:
     @echo "PNG golden updates stay disabled until the Rust case runner is implemented after this capability gate." >&2
     @exit 1
 
+# Execute semantic actions/assertions from a v2 case. Pixel acceptance remains
+# a separate reviewed gate; this command cannot approve its own screenshots.
+ui-e2e-case case:
+    docker build --build-arg "VERGEN_GIT_SHA=$(git rev-parse HEAD)" --build-arg "VERGEN_GIT_COMMIT_DATE=$(git show -s --format=%cI HEAD)" --file tools/ui-testing/Containerfile --tag cosmic-storage-ui-e2e:local .
+    bash tools/ui-testing/run-case.sh {{ quote(case) }}
+
 package-check:
     cargo build --release --locked
     @output=$(target/release/cosmic-ext-storage --help 2>&1 || true); if printf '%s\n' "$output" | rg -Fq 'scenario'; then echo 'release binary exposes scenario mode' >&2; exit 1; fi

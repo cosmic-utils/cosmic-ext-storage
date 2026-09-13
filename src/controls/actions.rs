@@ -29,8 +29,9 @@ pub(crate) fn icon_tooltip_action_toned<Message: Clone + 'static>(
     enabled: bool,
     tone: IconActionTone,
 ) -> Element<'static, Message> {
-    let mut button =
-        widget::button::icon(icon::from_name(icon_name).size(16)).class(icon_action_class(tone));
+    let mut button = widget::button::icon(icon::from_name(icon_name).size(16))
+        .name(label)
+        .class(icon_action_class(tone));
     if enabled && let Some(message) = message {
         button = button.on_press(message);
     }

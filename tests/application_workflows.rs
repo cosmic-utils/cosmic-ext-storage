@@ -429,7 +429,9 @@ async fn scenario_reload_is_atomic_and_generation_checked_by_the_application() {
         .await
         .expect("valid reload completion");
     assert_eq!(harness.reload_snapshot().phase, ReloadPhase::Reloaded);
-    assert_eq!(harness.reload_snapshot().generation, 2);
+    // The live generation advances once; the overlay's revision is not added
+    // a second time or allowed to roll the application's clock backwards.
+    assert_eq!(harness.reload_snapshot().generation, 1);
 
     harness
         .stage_overlay_from_fixture(
@@ -445,7 +447,7 @@ async fn scenario_reload_is_atomic_and_generation_checked_by_the_application() {
         .await
         .expect("invalid reload completion");
     assert_eq!(harness.reload_snapshot().phase, ReloadPhase::ReloadRejected);
-    assert_eq!(harness.reload_snapshot().generation, 2);
+    assert_eq!(harness.reload_snapshot().generation, 1);
 }
 
 #[tokio::test(flavor = "current_thread")]

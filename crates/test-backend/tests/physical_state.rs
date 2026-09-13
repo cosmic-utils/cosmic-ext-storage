@@ -29,6 +29,39 @@ async fn partition_transition_emits_ordered_device_event() {
 }
 
 #[tokio::test]
+async fn device_subscriptions_remain_live_and_do_not_steal_each_others_events() {
+    let runtime = ScenarioRuntime::load(fixture("physical/partition-format.toml"), None, None)
+        .expect("runtime");
+    let backend = runtime.backend();
+    let mut first = backend.device_events().await.expect("first subscription");
+    let mut second = backend.device_events().await.expect("second subscription");
+    assert!(
+        tokio::time::timeout(std::time::Duration::from_millis(10), first.next())
+            .await
+            .is_err()
+    );
+    backend
+        .create_partition("/dev/ui-disk0", 1048576, 536870912, "linux")
+        .await
+        .expect("partition");
+    for stream in [&mut first, &mut second] {
+        assert_eq!(
+            tokio::time::timeout(std::time::Duration::from_secs(1), stream.next())
+                .await
+                .expect("live notification")
+                .expect("open stream")
+                .expect("event"),
+            storage_types::DeviceEvent::Added("/dev/ui-disk0p1".into())
+        );
+        assert!(
+            tokio::time::timeout(std::time::Duration::from_millis(10), stream.next())
+                .await
+                .is_err()
+        );
+    }
+}
+
+#[tokio::test]
 async fn busy_unmount_preserves_state() {
     let backend = ScenarioBackend::load(ScenarioStore::new(
         fixture("physical/busy-unmount.toml"),

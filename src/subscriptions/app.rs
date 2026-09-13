@@ -46,6 +46,7 @@ pub(crate) fn subscription(app: &AppModel) -> Subscription<Message> {
                             let message = match event {
                                 DeviceEvent::Added(device) => Message::DriveAdded(device),
                                 DeviceEvent::Removed(device) => Message::DriveRemoved(device),
+                                DeviceEvent::Refresh => Message::LoadDrivesIncremental,
                             };
                             _ = output.send(message).await;
                         }

@@ -8,6 +8,12 @@ merged host/lab/UI coverage at the specified thresholds, eight executed UI
 cases, forced-failure PR evidence, and the final required coverage check
 remain gated work.
 
+The first executed interactive case is now blocked by a reproduced dependency
+bug, not a missing display capability: the pinned COSMIC button handler ignores
+the AT-SPI event's target ID and activates unrelated buttons. See the
+[reproduction and required dependency decision](ui-action-routing-blocker.md).
+No interactive or coverage acceptance is claimed.
+
 ## Harness retirement and hosted evidence
 
 All seven jobs passed on commit `a11dfb32b4f4452a94316b31b4fa81b4c9d3a67e`
@@ -24,6 +30,43 @@ are preserved verbatim in [the retirement archive](legacy-harness-history.md),
 not relabelled as current execution. The 15 Python collector/lab-contract tests
 pass and replace the obsolete safe-harness step in ordinary CI. Deleted source
 remains recoverable from Git history.
+
+The retirement commit `b6b31b4612f631d02e6d529261aba764465386e8` also passed
+[all seven hosted jobs](https://github.com/cosmic-utils/cosmic-ext-storage/actions/runs/34776809016).
+Its local native suite passed 16 selected cases in 73.691 seconds with image
+`sha256:9a57a8cf63624423852f59d6d4bae0ccde3e53f36587e4d8865318e22f839eeb`.
+
+## Coverage boundary and executed-UI preparation
+
+- Moved 35 inline unit-test modules from 34 implementation files into each
+  package's `tests/unit` tree using Rust syntax spans, preserving their logical
+  modules/private access and every existing test name. The inventory comparison
+  removed no tests. This excludes test source by path without hiding production.
+- Moved the outer container lifecycle/evidence helpers from the integration
+  test target into `storage-lab-tests/src/outer_bridge.rs`. The helpers themselves
+  must remain in the 100% test-support denominator; only test bodies are excluded.
+- The resulting workspace run passes 204 selected Nextest tests; 32 explicitly
+  ignored targets still belong to the isolated lab. Strict all-targets/all-features
+  Clippy passes. Fifteen Python coverage/lab-contract tests pass.
+- Added a version-2 semantic case executor with real AT-SPI invoke/text actions,
+  exact unique selectors, event-driven assertions, authenticated scenario-control
+  calls, per-step trees/screenshots, a watchdog, and normal application shutdown
+  for eventual profile flushing. It cannot approve visual baselines. Only the
+  reload manifest has been migrated; the other seven cases remain planned.
+- The UI run exposed a debug-image packaging bug: dependency localizations lived
+  only in the build cache. `ui-test` now enables `rust-embed/debug-embed`, embedding
+  those resources into the actual image-built binary without a runtime cache mount.
+- Drain a signal-only accessibility stream concurrently with tree RPCs. An
+  undrained all-message stream fills zbus's bounded queue and deadlocks tree
+  queries. Re-rendering may retire nodes during observation: re-query only after
+  an object event and only for the exact UnknownObject error, with a deadline.
+  Never retry a UI action to hide a failure.
+- Scenario event subscriptions are now live, independently cursor-based streams.
+  Valid reload publishes one typed Refresh and advances the live generation once;
+  an overlay revision cannot cause a second increment or roll back the live clock.
+  Real backend and application-workflow regression tests cover these invariants.
+- New UI execution artifacts use fresh directories; an existing user-supplied
+  artifact path is no longer recursively deleted by the capability runner.
 
 ## Executed local evidence
 
@@ -141,11 +184,12 @@ explicitly ignored storage targets remain the separate container suite, not
 claims of host execution. Keep this multiprocess gate: ordinary `cargo test`
 had not exposed the collision.
 
-The currently reported raw counts still include inline unit-test source in
-production `.rs` files. They must not be described as final production-only
-coverage; the final reporting boundary must exclude test source without
-excluding production or test-support implementation. Non-Rust test-support
-coverage also remains outstanding.
+The previously reported raw counts included inline unit-test source in
+production `.rs` files. That source-layout problem is now corrected, but those
+old counts are stale and must not be described as final production-only coverage.
+The current source also adds previously excluded bridge implementation to the
+denominator. A fresh combined run and non-Rust test-support coverage remain
+outstanding.
 
 The intermediate **host-only** workspace report was 18.95% lines and 21.69%
 functions; the root-only report was 10.63% lines and 11.93% functions. These

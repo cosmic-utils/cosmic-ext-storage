@@ -265,6 +265,7 @@ pub(crate) struct TreeNode {
     pub(crate) has_children: bool,
     pub(crate) icon_name: &'static str,
     pub(crate) title: Element<'static, Message>,
+    pub(crate) accessible_name: String,
     pub(crate) depth: u16,
     /// A tree row may be structural: its expander and trailing actions still
     /// work, while clicking its label has no separate destination.
@@ -283,14 +284,19 @@ pub(crate) fn tree_node_row(
         has_children,
         icon_name,
         title,
+        accessible_name,
         depth,
         select_message,
         actions,
     } = node;
     let expanded = sidebar.is_expanded(&key);
     let expander = if has_children {
-        let mut button =
-            widget::button::custom(icon::from_name(expander_icon(expanded)).size(16)).padding(2);
+        let mut button = widget::button::custom(icon::from_name(expander_icon(expanded)).size(16))
+            .name(format!(
+                "{} {accessible_name}",
+                if expanded { "Collapse" } else { "Expand" }
+            ))
+            .padding(2);
         button = button.class(transparent_button_class(selected));
         if controls_enabled {
             button = button.on_press(Message::SidebarToggleExpanded(key.clone()));
@@ -309,6 +315,7 @@ pub(crate) fn tree_node_row(
             .width(Length::Fill);
     let select: Element<'static, Message> = if let Some(select_message) = select_message {
         let mut select_button = widget::button::custom(select_content)
+            .name(accessible_name)
             .padding(0)
             .width(Length::Fill)
             .class(transparent_button_class(selected));
@@ -378,6 +385,7 @@ fn drive_row(
             selected,
             has_children: !drive.volumes.is_empty(),
             icon_name,
+            accessible_name: drive_title(drive),
             title: widget::text::body(drive_title(drive))
                 .font(cosmic::font::semibold())
                 .into(),
@@ -436,6 +444,7 @@ fn volume_row(
             selected,
             has_children: !node.children.is_empty(),
             icon_name: volume_icon(&node.volume.kind),
+            accessible_name: title_text.clone(),
             title: widget::text::body(title_text)
                 .font(cosmic::font::semibold())
                 .into(),
@@ -585,6 +594,7 @@ fn logical_filesystem_row(
             selected,
             has_children: false,
             icon_name: logical_entity_icon(entity.kind),
+            accessible_name: logical_entity_title(entity),
             title: widget::text::body(logical_entity_title(entity))
                 .font(cosmic::font::semibold())
                 .into(),
@@ -635,6 +645,7 @@ fn logical_section(
                     selected,
                     has_children: false,
                     icon_name: candidate.kind.icon_name(),
+                    accessible_name: candidate.device_path.clone(),
                     title: logical_candidate_title(&candidate),
                     depth: 0,
                     select_message: Some(Message::LogicalViewRequested {

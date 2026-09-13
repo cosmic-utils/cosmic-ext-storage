@@ -1,16 +1,55 @@
-schema_version = 1
+schema_version = 2
 id = "live_scenario_reload"
 scenario = "tests/ui/scenarios/reload/live.toml"
+scenario_sha256 = "4db436fe63c0a5051841b3858df08662d50c6dbe7f3df3b101df9eace8d1eaec"
 
-[semantic_ready]
-role = "application"
-name = "COSMIC Storage"
+[ready]
+timeout_ms = 15000
+[[ready.assert]]
+kind = "unique"
+selector = { role = "button", name = "Before" }
 
 [[step]]
-action = "reload_scenario"
+id = "select_before"
+kind = "invoke"
+target = { role = "button", name = "Before" }
 
-[[checkpoint]]
-golden = "tests/ui/goldens/live_scenario_reload.json"
-[checkpoint.selector]
-role = "application"
-name = "COSMIC Storage"
+[[step]]
+id = "invalid_overlay"
+kind = "replace_overlay"
+fixture = "tests/ui/scenarios/reload/invalid.txt"
+expect_error = true
+
+[[step]]
+id = "invalid_does_not_advance"
+kind = "assert"
+assert = { kind = "state_equals", pointer = "/ok/generation", value = 0 }
+
+[[step]]
+id = "before_remains_visible"
+kind = "assert"
+assert = { kind = "unique", selector = { role = "button", name = "Before" } }
+
+[[step]]
+id = "replace_valid_overlay"
+kind = "replace_overlay"
+fixture = "tests/ui/scenarios/reload/after.toml"
+
+[[step]]
+id = "reload_valid_overlay"
+kind = "reload"
+
+[[step]]
+id = "after_is_visible"
+kind = "assert"
+assert = { kind = "unique", selector = { role = "button", name = "After" } }
+
+[[step]]
+id = "old_label_is_absent"
+kind = "assert"
+assert = { kind = "absent", selector = { role = "button", name = "Before" } }
+
+[[step]]
+id = "one_revision"
+kind = "assert"
+assert = { kind = "state_equals", pointer = "/ok/generation", value = 1 }

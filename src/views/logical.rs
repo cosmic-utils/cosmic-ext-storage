@@ -856,6 +856,7 @@ fn push_btrfs_subvolume_tree(
             selected: state.selected.as_ref() == Some(&subvolume_entity.id),
             has_children: !children.is_empty(),
             icon_name: "folder-symbolic",
+            accessible_name: subvolume_entity.display_name().to_owned(),
             title: widget::Column::with_children(title).spacing(2).into(),
             depth,
             select_message: None,

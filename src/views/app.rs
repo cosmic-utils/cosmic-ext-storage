@@ -1748,8 +1748,10 @@ fn build_free_space_info<'a>(
     // Action button for creating a partition in free space
     let filesystem_tools_clone = filesystem_tools.to_vec();
     let add_partition_button = widget::tooltip(
-        widget::button::icon(icon::from_name("list-add-symbolic")).on_press(Message::Dialog(
-            Box::new(ShowDialog::AddPartition(
+        widget::button::icon(icon::from_name("list-add-symbolic"))
+            .name(fl!("create-partition"))
+            .id("partition.create".into())
+            .on_press(Message::Dialog(Box::new(ShowDialog::AddPartition(
                 crate::state::dialogs::CreatePartitionDialog {
                     info: segment.get_create_info(),
                     step: crate::state::dialogs::CreatePartitionStep::Basics,
@@ -1757,8 +1759,7 @@ fn build_free_space_info<'a>(
                     error: None,
                     filesystem_tools: filesystem_tools_clone,
                 },
-            )),
-        )),
+            )))),
         widget::text(fl!("create-partition")),
         widget::tooltip::Position::Bottom,
     );
@@ -1783,46 +1784,6 @@ fn build_free_space_info<'a>(
         .into()
 }
 
+#[path = "../../tests/unit/views/app_tests.rs"]
 #[cfg(test)]
-mod tests {
-    use super::*;
-    use cosmic::iced::keyboard::Modifiers;
-
-    #[test]
-    fn usage_row_selection_message_defaults_to_single_click_selection() {
-        let message = usage_row_selection_message("/tmp/a".to_string(), 3, Modifiers::empty());
-
-        match message {
-            Message::UsageSelectionSingle { path, index } => {
-                assert_eq!(path, "/tmp/a");
-                assert_eq!(index, 3);
-            }
-            other => panic!("unexpected message: {other:?}"),
-        }
-    }
-
-    #[test]
-    fn usage_row_selection_message_uses_ctrl_for_toggle() {
-        let message = usage_row_selection_message("/tmp/b".to_string(), 5, Modifiers::CTRL);
-
-        match message {
-            Message::UsageSelectionCtrl { path, index } => {
-                assert_eq!(path, "/tmp/b");
-                assert_eq!(index, 5);
-            }
-            other => panic!("unexpected message: {other:?}"),
-        }
-    }
-
-    #[test]
-    fn usage_row_selection_message_uses_shift_for_range_selection() {
-        let message = usage_row_selection_message("/tmp/c".to_string(), 7, Modifiers::SHIFT);
-
-        match message {
-            Message::UsageSelectionShift { index } => {
-                assert_eq!(index, 7);
-            }
-            other => panic!("unexpected message: {other:?}"),
-        }
-    }
-}
+mod tests;

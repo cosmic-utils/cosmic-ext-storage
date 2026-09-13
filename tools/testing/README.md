@@ -39,6 +39,12 @@ union, not a single-build approximation. Third-party sources and test targets
 are excluded by explicit path boundaries; production source files are not
 blanket-excluded.
 
+Unit-test bodies live in package `tests/unit` paths and retain their original
+logical modules through `#[path]`. Fixture and outer-bridge implementations live
+under `src` and remain measured; moving those helpers under `tests` would
+incorrectly improve the denominator. Older reports from before this layout
+change are invalid for current acceptance.
+
 To regenerate reports without repeating a successful host/lab run:
 
 ```sh

@@ -21,6 +21,8 @@ use clap::{Parser, Subcommand};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 
+mod cases;
+
 const READY_TIMEOUT: Duration = Duration::from_secs(15);
 const PROBE_TIMEOUT: Duration = Duration::from_secs(10);
 
@@ -33,6 +35,8 @@ struct Arguments {
 
 #[derive(Debug, Subcommand)]
 enum RunnerCommand {
+    /// Execute one version-2 case through the running application's AT-SPI tree.
+    Execute(cases::ExecuteArguments),
     /// Prove that the pinned UI-test environment can run real E2E clients.
     Capability(CapabilityArguments),
     /// List legacy case IDs for the planning inventory only.
@@ -231,6 +235,7 @@ async fn main() {
 
 async fn run(arguments: Arguments) -> Result<()> {
     match arguments.command {
+        RunnerCommand::Execute(arguments) => cases::execute(arguments).await,
         RunnerCommand::Capability(arguments) => run_capability(arguments).await,
         RunnerCommand::ListCases(arguments) => {
             for identifier in list_case_ids(&arguments.root)? {
@@ -241,7 +246,7 @@ async fn run(arguments: Arguments) -> Result<()> {
     }
 }
 
-async fn run_capability(arguments: CapabilityArguments) -> Result<()> {
+async fn run_capability(mut arguments: CapabilityArguments) -> Result<()> {
     validate_input_file(&arguments.app, "application binary")?;
     validate_input_file(&arguments.scenario, "scenario")?;
     validate_input_file(&arguments.sway_config, "Sway configuration")?;
@@ -251,6 +256,9 @@ async fn run_capability(arguments: CapabilityArguments) -> Result<()> {
         base_image: environment_lock.base_image.clone(),
         apt_snapshot: environment_lock.apt_snapshot.clone(),
     };
+
+    fs::create_dir_all(&arguments.artifacts)?;
+    arguments.artifacts = fresh_artifact_path(&arguments.artifacts, "capability")?;
 
     let mut session = CapabilitySession::new(
         &arguments.artifacts,
@@ -432,13 +440,14 @@ fn list_case_ids(root: &Path) -> Result<Vec<String>> {
             fs::read_to_string(&path).with_context(|| format!("read {}", path.display()))?;
         let document: toml::Value =
             toml::from_str(&source).with_context(|| format!("parse {}", path.display()))?;
-        if document
-            .get("schema_version")
-            .and_then(toml::Value::as_integer)
-            != Some(1)
-        {
+        if !matches!(
+            document
+                .get("schema_version")
+                .and_then(toml::Value::as_integer),
+            Some(1 | 2)
+        ) {
             bail!(
-                "legacy case {} must declare schema_version = 1",
+                "case inventory {} must declare schema_version = 1 or 2",
                 path.display()
             );
         }
@@ -519,11 +528,12 @@ impl CapabilitySession {
         environment_lock: &EnvironmentLock,
         environment_evidence: EnvironmentEvidence,
     ) -> Result<Self> {
-        if artifacts.exists() {
-            fs::remove_dir_all(artifacts)
-                .with_context(|| format!("remove {}", artifacts.display()))?;
-        }
-        fs::create_dir_all(artifacts).with_context(|| format!("create {}", artifacts.display()))?;
+        fs::create_dir(artifacts).with_context(|| {
+            format!(
+                "create new evidence directory {} (existing paths are never removed)",
+                artifacts.display()
+            )
+        })?;
         ensure_private_directory(artifacts)?;
 
         let runtime = artifacts.join("runtime");
@@ -1056,6 +1066,16 @@ fn validate_input_file(path: &Path, description: &str) -> Result<()> {
     Ok(())
 }
 
+fn fresh_artifact_path(parent: &Path, label: &str) -> Result<PathBuf> {
+    Ok(parent.join(format!(
+        "{label}-{}-{}",
+        std::process::id(),
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)?
+            .as_nanos()
+    )))
+}
+
 fn ensure_private_directory(path: &Path) -> Result<()> {
     fs::set_permissions(path, fs::Permissions::from_mode(0o700))?;
     Ok(())
@@ -1149,64 +1169,6 @@ fn record_exit(_name: &str, _status: ExitStatus) {
     // already preserves each process log and always waits for the child here.
 }
 
+#[path = "../tests/unit/main_tests.rs"]
 #[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn png_signature_requires_all_eight_bytes() {
-        let directory = tempfile::tempdir().expect("temporary directory");
-        let path = directory.path().join("image.png");
-        fs::write(&path, b"\x89PNG\r\n\x1a\nbytes").expect("write PNG");
-        assert!(is_png(&path).expect("read PNG"));
-        fs::write(&path, b"PNG").expect("write non-PNG");
-        assert!(!is_png(&path).expect("read non-PNG"));
-    }
-
-    #[test]
-    fn legacy_case_inventory_is_sorted_and_rejects_duplicate_ids() {
-        let directory = tempfile::tempdir().expect("temporary directory");
-        fs::write(
-            directory.path().join("z.toml"),
-            "schema_version = 1\nid = \"z_case\"\n",
-        )
-        .expect("write case");
-        fs::write(
-            directory.path().join("a.toml"),
-            "schema_version = 1\nid = \"a_case\"\n",
-        )
-        .expect("write case");
-        assert_eq!(
-            list_case_ids(directory.path()).expect("list cases"),
-            ["a_case", "z_case"]
-        );
-
-        fs::write(
-            directory.path().join("duplicate.toml"),
-            "schema_version = 1\nid = \"a_case\"\n",
-        )
-        .expect("write duplicate case");
-        assert!(list_case_ids(directory.path()).is_err());
-    }
-
-    #[test]
-    fn interactive_role_gate_rejects_window_only_trees() {
-        assert!(is_interactive_role("button"));
-        assert!(is_interactive_role("scroll bar"));
-        assert!(!is_interactive_role("application"));
-        assert!(!is_interactive_role("frame"));
-        assert!(!is_interactive_role("paragraph"));
-    }
-
-    #[test]
-    fn scenario_marker_binds_the_fixture_id_and_hash() {
-        let directory = tempfile::tempdir().expect("temporary directory");
-        let path = directory.path().join("fixture.toml");
-        fs::write(&path, "schema_version = 2\nid = \"fixture-id\"\n")
-            .expect("write scenario fixture");
-
-        let marker = scenario_marker(&path).expect("build scenario marker");
-        assert!(marker.starts_with("Test scenario: fixture-id sha256:"));
-        assert_eq!(marker.len(), "Test scenario: fixture-id sha256:".len() + 64);
-    }
-}
+mod tests;

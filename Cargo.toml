@@ -34,7 +34,7 @@ fs-btrfs = []
 fs-vfat = []
 fs-ntfs = []
 fs-exfat = []
-ui-test = []
+ui-test = ["rust-embed/debug-embed"]
 test-backend = [
     "dep:test-backend",
     "dep:tempfile",

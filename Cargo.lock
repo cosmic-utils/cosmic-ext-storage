@@ -6308,6 +6308,7 @@ dependencies = [
  "sha2 0.10.9",
  "storage-contracts",
  "storage-types",
+ "tempfile",
  "tokio",
  "toml 1.1.3+spec-1.1.0",
  "tracing",
@@ -6851,7 +6852,9 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "atspi",
+ "base64 0.22.1",
  "clap",
+ "futures-util",
  "serde",
  "serde_json",
  "sha2 0.10.9",

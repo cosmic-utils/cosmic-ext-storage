@@ -111,11 +111,50 @@ async fn network_mutations_follow_declared_schema() {
 
 #[tokio::test]
 async fn scenario_reload_is_atomic_and_refreshes_once() {
-    let runtime = ScenarioRuntime::load(fixture("reload/live.toml"), None, None).expect("runtime");
+    use futures::StreamExt;
+    use storage_contracts::{DeviceEventSource, DiskDiscovery};
+    let temp = tempfile::tempdir().expect("temporary overlay");
+    let overlay = temp.path().join("overlay.toml");
+    let runtime = ScenarioRuntime::load(fixture("reload/live.toml"), Some(overlay.clone()), None)
+        .expect("runtime");
     let backend = runtime.backend();
+    let mut events = backend.device_events().await.expect("live events");
+    std::fs::write(&overlay, "schema_version = 2\ninvalid = true\n").expect("invalid overlay");
     let outcome = backend.reload_overlay().await.expect("reload receipt");
     assert!(matches!(
         outcome,
         storage_contracts::ScenarioReload::Rejected { .. }
     ));
+    assert_eq!(
+        backend.diagnostics().await.expect("diagnostics").generation,
+        0
+    );
+    assert_eq!(
+        backend.list_disks().await.expect("disks")[0].model,
+        "Before"
+    );
+    assert!(
+        tokio::time::timeout(std::time::Duration::from_millis(10), events.next())
+            .await
+            .is_err()
+    );
+    std::fs::copy(fixture("reload/after.toml"), &overlay).expect("valid overlay");
+    let receipt = backend.reload_overlay().await.expect("apply");
+    assert!(
+        matches!(receipt, storage_contracts::ScenarioReload::Applied(ref receipt) if receipt.generation == 1)
+    );
+    assert_eq!(backend.list_disks().await.expect("disks")[0].model, "After");
+    assert_eq!(
+        tokio::time::timeout(std::time::Duration::from_secs(1), events.next())
+            .await
+            .expect("refresh delivery")
+            .expect("stream")
+            .expect("event"),
+        storage_types::DeviceEvent::Refresh
+    );
+    assert!(
+        tokio::time::timeout(std::time::Duration::from_millis(10), events.next())
+            .await
+            .is_err()
+    );
 }
