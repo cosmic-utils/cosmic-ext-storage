@@ -141,6 +141,8 @@ jobs:
       - uses: actions/checkout@v4
       - run: sudo apt-get update && sudo apt-get install -y just
       - run: just ui-e2e
+      - name: Execute reload regression with separate shutdown evidence
+        run: bash tools/ui-testing/run-case.sh tests/ui/cases/live_scenario_reload.toml
       - name: Upload UI evidence
         if: always()
         uses: actions/upload-artifact@v4

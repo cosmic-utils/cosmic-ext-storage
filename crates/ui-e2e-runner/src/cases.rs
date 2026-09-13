@@ -7,6 +7,7 @@ use atspi::{AccessibilityConnection, ObjectRefOwned, events::ObjectEvents};
 use base64::{Engine, engine::general_purpose::STANDARD};
 use futures_util::StreamExt;
 use serde_json::{Value, json};
+use std::os::unix::process::CommandExt;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 
 #[derive(Debug, Parser)]
@@ -428,6 +429,9 @@ impl Control {
 }
 
 pub(super) async fn execute(arguments: ExecuteArguments) -> Result<()> {
+    // Hash the large debug ELF once, before launching the app. Avoid a long
+    // duplicate hash between functional completion and the close request.
+    let executable_sha256 = sha256_file(&arguments.app)?;
     let case = parse_case(&fs::read_to_string(&arguments.case)?)?;
     let scenario = checked_fixture(&arguments.root, &case.scenario)?;
     if sha256_file(&scenario)? != case.scenario_sha256 {
@@ -467,7 +471,7 @@ pub(super) async fn execute(arguments: ExecuteArguments) -> Result<()> {
         evidence: Vec::new(),
     };
     let mut completed = Vec::new();
-    let result = tokio::time::timeout(
+    let mut result = tokio::time::timeout(
         Duration::from_secs(180),
         run_case(
             &arguments,
@@ -482,28 +486,148 @@ pub(super) async fn execute(arguments: ExecuteArguments) -> Result<()> {
     .await
     .context("UI case watchdog expired")
     .and_then(|result| result);
-    let _ = tokio::time::timeout(READY_TIMEOUT, session.capture_atspi_tree()).await;
-    let _ = session.capture("HEADLESS-1", "final.png");
-    session.shutdown();
-    fs::remove_file(token_file)?;
+    // Evidence is a functional gate and is persisted while the application is
+    // still alive, before any close request or teardown race can occur.
+    let capture = tokio::time::timeout(READY_TIMEOUT, session.capture_atspi_tree()).await;
+    let screenshot = session.capture("HEADLESS-1", "final.png");
+    if result.is_ok() {
+        result = capture
+            .context("pre-close tree capture deadline")
+            .and_then(|r| r.map(|_| ()))
+            .and(screenshot.map(|_| ()))
+            .and_then(|_| {
+                CapabilitySession::ensure_running("application debugger", session.app.as_mut())
+            });
+    }
     write_json(&artifacts.join("control.json"), &control.evidence)?;
+    let functional_passed = result.is_ok();
+    write_json(
+        &artifacts.join("functional.json"),
+        &json!({
+            "schema_version":1,"case":case.id,"status":if functional_passed {"passed"} else {"failed"},
+            "completed_steps":completed,"error":result.as_ref().err().map(|e|format!("{e:#}")),
+            "scenario_sha256":case.scenario_sha256,
+            "case_sha256":sha256_file(&arguments.case)?,
+        "executable_sha256":executable_sha256,
+            "tree_sha256":sha256_file(&artifacts.join("atspi-tree.json")).ok(),
+            "screenshot_sha256":sha256_file(&artifacts.join("final.png")).ok()
+        }),
+    )?;
+    let mut outcome = shutdown::Outcome::NotAttempted;
+    let mut shutdown_error = None;
+    if functional_passed {
+        match close_application(&mut session, &arguments, &case).await {
+            Ok(value) => outcome = value,
+            Err(error) => {
+                outcome = shutdown::Outcome::Failed;
+                shutdown_error = Some(format!("{error:#}"));
+            }
+        }
+    }
+    write_json(
+        &artifacts.join("shutdown.json"),
+        &json!({
+            "schema_version":1,"status":outcome,"error":shutdown_error,
+            "quarantine":shutdown::policy_evidence()?,
+            "diagnostic_sha256":sha256_file(&artifacts.join("debugger.json")).ok()
+        }),
+    )?;
+    session.shutdown();
+    let status = shutdown::status(functional_passed, &outcome);
     write_json(
         &artifacts.join("execution.json"),
         &json!({
-            "schema_version":1,"case":case.id,"status":if result.is_ok(){"semantic_passed"}else{"failed"},
+            "schema_version":2,"case":case.id,"status":status,
+            "functional_status":if functional_passed {"passed"} else {"failed"},
+            "shutdown_status":outcome,"shutdown_error":shutdown_error,
             "completed_steps":completed,"scenario_sha256":case.scenario_sha256,
-            "executable_sha256":sha256_file(&arguments.app)?, "case_sha256":sha256_file(&arguments.case)?,
+            "executable_sha256":executable_sha256, "case_sha256":sha256_file(&arguments.case)?,
             "error":result.as_ref().err().map(|e|format!("{e:#}")),
-            "visual_baseline_status":"not_approved"
+            "visual_baseline_status":"not_approved",
+            "coverage_status":"not_verified; functional success is not profile evidence",
+            "environment_lock_sha256":sha256_file(&arguments.environment_lock)?,
+            "cargo_lock_sha256":sha256_file(&arguments.root.join("Cargo.lock"))?,
+            "debugger_script_sha256":sha256_file(&arguments.root.join("tools/ui-testing/debug-app.py"))?
         }),
     )?;
-    println!(
-        "UI case {}: {} ({})",
-        case.id,
-        if result.is_ok() { "passed" } else { "failed" },
-        artifacts.display()
-    );
-    result
+    println!("UI case {}: {} ({})", case.id, status, artifacts.display());
+    result?;
+    if status == "failed" {
+        bail!(
+            "shutdown failed (unrecognized, missing diagnostics, or timed out): see shutdown.json"
+        );
+    }
+    if outcome == shutdown::Outcome::KnownFailure {
+        eprintln!(
+            "WARNING: functional tests passed; known iced Wayland shutdown failure quarantined. Coverage is not verified."
+        );
+    }
+    Ok(())
+}
+
+async fn wait_child(child: &mut Child, timeout: Duration) -> Result<ExitStatus> {
+    tokio::time::timeout(timeout, async {
+        loop {
+            if let Some(status) = child.try_wait()? {
+                return Ok(status);
+            }
+            tokio::time::sleep(Duration::from_millis(25)).await;
+        }
+    })
+    .await
+    .context("process exit deadline")?
+}
+
+async fn close_application(
+    session: &mut CapabilitySession,
+    arguments: &ExecuteArguments,
+    case: &Case,
+) -> Result<shutdown::Outcome> {
+    CapabilitySession::ensure_running("application debugger", session.app.as_mut())?;
+    if session.artifacts.join("debugger.json").exists() {
+        bail!("application exited or stopped before the close request");
+    }
+    let (socket, _) = session.wait_for_sway()?;
+    fs::write(
+        session.artifacts.join("close-requested"),
+        "functional evidence saved\n",
+    )?;
+    let mut close = session
+        .command("swaymsg")
+        .args([
+            "-s",
+            socket.to_str().context("Sway socket path")?,
+            "[app_id=\"com.cosmic.ext.Storage\"] kill",
+        ])
+        .stdout(File::create(session.artifacts.join("close.stdout.log"))?)
+        .stderr(File::create(session.artifacts.join("close.stderr.log"))?)
+        .spawn()?;
+    let request_result = wait_child(&mut close, READY_TIMEOUT).await;
+    if request_result.is_err() {
+        let _ = close.kill();
+        let _ = close.wait();
+    }
+    if !request_result?.success() {
+        bail!("window close request failed");
+    }
+    let exit = wait_child(
+        session.app.as_mut().context("application debugger")?,
+        READY_TIMEOUT,
+    )
+    .await?;
+    let diagnostic: shutdown::Diagnostic =
+        serde_json::from_slice(&fs::read(session.artifacts.join("debugger.json"))?)?;
+    shutdown::classify(
+        &diagnostic,
+        exit.code(),
+        &case.id,
+        &sha256_file(&arguments.case)?,
+        &sha256_file(&arguments.environment_lock)?,
+        &sha256_file(&arguments.root.join("Cargo.lock"))?,
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)?
+            .as_secs(),
+    )
 }
 
 async fn run_case(
@@ -521,9 +645,34 @@ async fn run_case(
         .environment
         .insert("WAYLAND_DISPLAY".into(), display.into());
     let viewport = session.assert_viewport(&sway_socket)?;
+    session.app_process_group = true;
     session.app = Some(
         session
-            .command(&arguments.app)
+            .command("gdb")
+            .process_group(0)
+            .args([
+                "--batch",
+                "--nx",
+                "--return-child-result",
+                "-iex",
+                "set auto-load off",
+                "-iex",
+                "set debuginfod enabled off",
+                "-ex",
+                "set confirm off",
+                "-ex",
+                "set disable-randomization off",
+                "-ex",
+                "set print frame-arguments none",
+                "-ex",
+                "handle SIGPIPE nostop noprint pass",
+                "-x",
+            ])
+            .arg(arguments.root.join("tools/ui-testing/debug-app.py"))
+            .args(["-ex", "run", "--args"])
+            .arg(&arguments.app)
+            .env("UI_DEBUG_REPORT", session.artifacts.join("debugger.json"))
+            .env("UI_CLOSE_MARKER", session.artifacts.join("close-requested"))
             .args(["--backend", "scenario", "--scenario"])
             .arg(scenario)
             .arg("--scenario-state")
@@ -654,29 +803,6 @@ async fn run_case(
         completed.push(step.id.clone());
         session.capture(&viewport.output, &format!("{}.png", step.id))?;
     }
-    // A scenario-control Shutdown only closes its server. A normal Wayland
-    // application close is necessary for Rust/LLVM profile flushing.
-    session.run_checked(
-        "swaymsg",
-        [
-            "-s",
-            sway_socket.to_str().context("Sway socket path")?,
-            "[app_id=\"com.cosmic.ext.Storage\"] kill",
-        ],
-    )?;
-    wait_until(READY_TIMEOUT, || {
-        match session
-            .app
-            .as_mut()
-            .context("application process")?
-            .try_wait()?
-        {
-            Some(status) if status.success() => Ok(Some(())),
-            Some(status) => bail!("application exited unsuccessfully: {status}"),
-            None => Ok(None),
-        }
-    })
-    .context("normal application shutdown/profile flush")?;
     Ok(())
 }
 

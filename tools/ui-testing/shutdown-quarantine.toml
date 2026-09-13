@@ -1,0 +1,10 @@
+# Narrow, expiring allowance for the diagnosed pinned SCTK cleanup race.
+# Any dependency, case, or environment change requires explicit revalidation.
+id = "iced-pinned-wayland-proxy-teardown"
+owner = "cosmic-ext-storage maintainers"
+# 2026-10-13 00:00:00 UTC
+expires_unix = 1791849600
+case_id = "live_scenario_reload"
+case_sha256 = "a2233684796ffdff2a02e97e0f57bb48f857a1c01b0dceeef0e33d537407bd90"
+environment_sha256 = "c55fcd387588a5d5f6af10909678aa50239ad888ca61d0dc6785af697dac362a"
+cargo_lock_sha256 = "372458e8cba0455916ead9ff08f4a666d6c487ebb443b6da5729505f48ccee11"

@@ -337,6 +337,18 @@ fixture does not satisfy this table.
 
 ## 9. UI and scenario corrections
 
+User-approved adjustment (2026-09-13): executed UI cases report functional
+results and shutdown results separately. Save semantic evidence and final
+screenshots before requesting a bounded normal close. A known dependency
+shutdown defect may be non-blocking for functional acceptance only when an
+owned debugger captures the diagnosed stack after successful functional
+completion, matching an explicit dependency/environment/case scope with
+owner and expiry. Unknown failures, missing diagnostics, timeouts and crashes
+before completion remain failures. Report quarantined shutdown distinctly;
+never label it a clean run. This UI-only allowance does not change storage-lab
+failure propagation, visual approval, or coverage thresholds. Missing/empty
+LLVM profiles remain a hard coverage failure, regardless of UI exit status.
+
 Testing V2 does not replace the existing UI scenario architecture. It makes
 the following corrections while keeping UI case implementation as separately
 tracked work:

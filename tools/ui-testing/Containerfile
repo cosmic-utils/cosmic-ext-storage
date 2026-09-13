@@ -14,6 +14,7 @@ RUN rm -f /etc/apt/sources.list.d/debian.sources \
       dbus=1.14.10-1~deb12u1 \
       fonts-dejavu-core=2.37-6 \
       foot=1.13.1-2+deb12u1 \
+      gdb=13.1-3 \
       grim=1.4.0+ds-2 \
       libbtrfsutil-dev=6.2-1+deb12u1 \
       libclang-dev=1:14.0-55.7~deb12u1 \

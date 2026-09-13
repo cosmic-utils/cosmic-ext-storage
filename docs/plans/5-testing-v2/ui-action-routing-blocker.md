@@ -1,8 +1,8 @@
 # Interactive execution blocker: COSMIC action routing
 
-Status: button routing repaired on 2026-09-13; all nine real UI steps pass,
-but normal shutdown crashes in the pinned iced Wayland backend. Testing V2
-is not complete and the UI case correctly remains failed.
+Status: button routing repaired on 2026-09-13; all nine real UI steps pass.
+The intermittent pinned iced shutdown crash is now an explicit, narrow
+functional-test quarantine, approved by the user. Testing V2 remains incomplete.
 
 ## Reproduction
 
@@ -81,9 +81,9 @@ The actual UI rerun completed all nine steps, including `select_before`,
 Evidence is in
 `ui-artifacts/executed/live_scenario_reload-12-1789330715228357505/`, with image
 `sha256:067f7b52f13bdaed2ee973f8523996ca276524de9b3f4c3cafd6110eea5cae04`.
-It nevertheless exits failed: normal Wayland close causes SIGSEGV. Do not
-ignore this exit status or replace normal close with a kill; eventual LLVM
-profile flushing depends on successful shutdown.
+That pre-quarantine run nevertheless exits failed: normal Wayland close causes
+SIGSEGV. Do not blanket-ignore exit status or assume a crashed process flushed
+its LLVM counters. The subsequent user-approved treatment is recorded below.
 
 The matching core (host PID 1289160, 2026-09-13 21:18:41 BST) and image
 libraries resolve the crashing stack through `wl_proxy_destroy`,
@@ -100,8 +100,44 @@ hazards to address with coordinated worker shutdown and explicit drop order.
 A local attempt to move the owner into the worker was rejected by the
 compiler because `OwnedDisplayHandle` is not Send/Sync. That experiment is
 stashed, not shipped; do not add an unsafe Send implementation as a shortcut.
-The next repair requires thread-lifecycle work in the companion iced fork,
-on this exact base, followed by repeated successful normal-close UI runs.
+A direct repair would require thread-lifecycle work in the companion iced
+fork. The user instead chose to contain this failure in the testing layer;
+the iced pin and source remain unchanged.
+
+## Approved durable-test treatment (2026-09-13)
+
+The runner now saves functional results, control responses, the final tree
+and screenshot before requesting a normal close. The pinned container starts
+the owned app under GDB and captures a structured crash stack. It needs no
+host core collector, host display, extra ptrace capability, or action retry.
+Only the diagnosed ordered Wayland teardown stack after functional completion
+can match `tools/ui-testing/shutdown-quarantine.toml`: exact case, environment
+and Cargo.lock hashes, named owner, and expiry on 2026-10-13 UTC. Missing
+diagnostics, unknown stacks/signals, timeouts and earlier crashes still fail.
+An owned process group and container teardown clean up failure paths.
+
+Two real local runs exercised both outcomes:
+
+- `live_scenario_reload-12-1789332625613667692`: all nine steps passed; GDB
+  captured the actual `wl_proxy_destroy` / `ConnectionState` / SCTK calloop
+  destruction stack. Result: `semantic_passed_with_known_shutdown_failure`,
+  explicit warning and `shutdown_status: known_failure`.
+- `live_scenario_reload-12-1789332807186622317`: all nine steps passed and
+  the app exited zero normally. Result: `semantic_passed`, with
+  `shutdown_status: clean`. The race is intermittent; this is not a repair.
+
+Both directories are under `ui-artifacts/executed/`. The latter final-code
+image is `sha256:77f9d736aac1a90345ab6055fb0c7821e76ef0ed575c8452c3dd3c1cf630ca2b`.
+Functional and shutdown evidence are separate files; combined execution
+evidence uses schema 2. CI executes this regression after its capability
+check and uploads all evidence. This is not eight-case or visual acceptance.
+
+Coverage remains independent. A Rust 1.95 instrumented probe under this same
+container/debugger wrote a 456-byte profile on normal exit (LLVM successfully
+decoded its three functions), but left a zero-byte profile on SIGSEGV.
+Local probe evidence: `/tmp/ui-profile-probe.gtJUdI/`. This demonstrates the
+failure mode, not profile completeness for the actual app. No manual flush or
+coverage waiver was introduced. Missing/empty UI profiles remain a hard gate.
 
 Do not substitute coordinate clicks, simulated reducer calls, a passing
 inventory, or automatic golden acceptance for the required AT-SPI test.

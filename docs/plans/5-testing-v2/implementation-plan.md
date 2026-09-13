@@ -429,6 +429,13 @@ python3 tools/testing/coverage.py --base origin/main --summary target/coverage/s
    Do not substitute unvalidated upstream master. The user has prohibited a
    libcosmic PR; publish only the authorized fork branch and exact app pin.
    See [the button-routing evidence](ui-action-routing-blocker.md).
+   The user-approved shutdown adjustment separates functional acceptance from
+   clean exit. Save functional evidence before close; attempt bounded normal
+   shutdown; quarantine only the exact, expiring pinned Wayland teardown stack.
+   Early crashes, unknown failures, missing diagnostics and timeouts still
+   fail. Report the known defect explicitly, without treating it as a clean
+   run or as LLVM profile evidence. Do not expand into iced lifecycle repairs
+   for this pass. See `tools/ui-testing/shutdown-quarantine.toml`.
 4. Add the resulting UI paths to the coverage report and close their remaining
    application/view/update coverage gaps.
 5. Update README and plan documents to describe the three truthful layers:

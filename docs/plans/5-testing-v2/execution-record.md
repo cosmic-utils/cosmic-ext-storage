@@ -11,12 +11,21 @@ remain gated work.
 The COSMIC target-ID routing bug is repaired by a single fork commit on the
 project's existing pin, with no upstream-master or submodule upgrade. All
 three new dependency regressions and all 20 library tests pass; the app's
-204 selected workspace tests, strict Clippy, formatting, and 15 Python checks
-also pass. The real reload case now passes all nine semantic steps, but fails
-normal shutdown with a SIGSEGV in the pinned iced Wayland cleanup. See the
-[repair evidence and remaining lifecycle blocker](ui-action-routing-blocker.md).
+209 selected workspace tests, strict Clippy, formatting, and 19 Python checks
+now pass. The real reload case passes all nine semantic steps. The user chose
+to quarantine only the diagnosed iced shutdown stack for functional tests,
+rather than expand this pass into dependency lifecycle repairs. Both an actual
+quarantined crash and a clean exit have been observed with pre-close evidence.
+CI now runs this regression after its capability check. See the
+[repair and quarantine evidence](ui-action-routing-blocker.md).
 No full interactive or coverage acceptance is claimed. The user explicitly
 prohibits libcosmic PRs and unvalidated upgrades to master.
+
+The quarantine is scoped, owned and expiring, and never admits startup/action
+failures, unknown shutdown errors or timeouts. The companion iced fork remains
+unchanged. A debugger-supervised instrumented probe confirmed SIGSEGV can
+leave an empty LLVM profile; coverage acceptance still rejects missing/empty
+UI profiles. Functional success is not coverage evidence.
 
 ## Harness retirement and hosted evidence
 

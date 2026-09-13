@@ -22,6 +22,7 @@ use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 
 mod cases;
+mod shutdown;
 
 const READY_TIMEOUT: Duration = Duration::from_secs(15);
 const PROBE_TIMEOUT: Duration = Duration::from_secs(10);
@@ -512,6 +513,7 @@ fn scenario_marker(path: &Path) -> Result<String> {
 }
 
 struct CapabilitySession {
+    app_process_group: bool,
     artifacts: PathBuf,
     runtime: PathBuf,
     environment_evidence: EnvironmentEvidence,
@@ -579,6 +581,7 @@ impl CapabilitySession {
             sway: None,
             app: None,
             foot: None,
+            app_process_group: false,
         })
     }
 
@@ -1046,8 +1049,21 @@ impl CapabilitySession {
 
     fn shutdown(&mut self) {
         terminate("input probe", self.foot.take());
+        if self.app_process_group
+            && let Some(child) = self.app.as_mut()
+            && matches!(child.try_wait(), Ok(None))
+        {
+            // Executed cases launch their debugger and inferior in a new,
+            // owned process group. Kill both on failure/watchdog cancellation.
+            unsafe {
+                libc::kill(-(child.id() as i32), libc::SIGKILL);
+            }
+        }
         terminate("application", self.app.take());
         terminate("Sway", self.sway.take());
+        // The directory is freshly owned by this run. Remove the private
+        // control token even when evidence writing or a watchdog fails early.
+        let _ = fs::remove_file(self.artifacts.join("control.token"));
     }
 }
 

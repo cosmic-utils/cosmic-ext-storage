@@ -1,5 +1,25 @@
 use super::*;
 
+#[tokio::test]
+async fn shutdown_wait_preserves_nonzero_exit_and_times_out() {
+    let mut exited = Command::new("/bin/sh")
+        .args(["-c", "exit 7"])
+        .spawn()
+        .unwrap();
+    assert_eq!(
+        wait_child(&mut exited, Duration::from_secs(2))
+            .await
+            .unwrap()
+            .code(),
+        Some(7)
+    );
+    let mut running = Command::new("/bin/sleep").arg("2").spawn().unwrap();
+    let result = wait_child(&mut running, Duration::from_millis(25)).await;
+    running.kill().unwrap();
+    running.wait().unwrap();
+    assert!(result.unwrap_err().to_string().contains("deadline"));
+}
+
 fn selector(name: &str) -> Selector {
     Selector {
         role: "button".into(),

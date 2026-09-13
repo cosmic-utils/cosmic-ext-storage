@@ -6855,6 +6855,7 @@ dependencies = [
  "base64 0.22.1",
  "clap",
  "futures-util",
+ "libc",
  "serde",
  "serde_json",
  "sha2 0.10.9",

@@ -93,6 +93,28 @@ class CoverageGateTests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, "hash mismatch"):
                 gate.validate_evidence({"profiles": records}, root)
 
+    def test_shutdown_quarantine_cannot_substitute_for_ui_profiles(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            records = []
+            for source in ["host", "lab"]:
+                path = root / f"{source}.profraw"
+                path.write_bytes(source.encode())
+                records.append(dict(path=str(path), source=source,
+                                    sha256=hashlib.sha256(path.read_bytes()).hexdigest(), tests=[source]))
+            document = dict(profiles=records, ui_status="semantic_passed_with_known_shutdown_failure")
+            with self.assertRaisesRegex(ValueError, "executed UI profiles"):
+                gate.validate_evidence(document, root)
+            empty = root / "ui.profraw"
+            empty.touch()
+            records.append(dict(path=str(empty), source="ui", tests=sorted(gate.UI_CASES),
+                                sha256=hashlib.sha256(b"").hexdigest()))
+            with self.assertRaisesRegex(ValueError, "profile hash mismatch"):
+                gate.validate_evidence(document, root)
+            empty.unlink()
+            with self.assertRaisesRegex(ValueError, "missing or duplicate"):
+                gate.validate_evidence(document, root)
+
     def test_third_party_and_test_source_are_excluded_by_exact_path_rule(self):
         root = Path("/repo")
         for path in ["/repo/tests/example.rs", "/repo/target/build/vendor/src/lib.rs",
