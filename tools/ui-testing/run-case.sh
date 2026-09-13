@@ -5,6 +5,7 @@ repo_root=$(git rev-parse --show-toplevel)
 case_relative=$1
 case "$case_relative" in tests/ui/cases/*.toml) ;; *) echo "case must be under tests/ui/cases" >&2; exit 64 ;; esac
 test -f "$repo_root/$case_relative"
+case "${UI_COVERAGE:-0}" in 0) coverage=false ;; 1) coverage=true ;; *) exit 64 ;; esac
 mkdir -p "$repo_root/ui-artifacts"
 docker run --rm --network none \
   --mount "type=bind,src=$repo_root,dst=/workspace,readonly" \
@@ -21,5 +22,5 @@ docker run --rm --network none \
       --app /opt/ui-test/bin/cosmic-ext-storage --case "$1" --root /workspace \
       --sway-config /workspace/tools/ui-testing/sway.conf \
       --environment-lock /workspace/tools/ui-testing/environment.lock.toml \
-      --artifacts /workspace/ui-artifacts/executed
-  ' ui-case "$case_relative"
+      --artifacts /workspace/ui-artifacts/executed --coverage "$2"
+  ' ui-case "$case_relative" "$coverage"

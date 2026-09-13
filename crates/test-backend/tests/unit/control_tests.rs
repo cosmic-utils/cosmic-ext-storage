@@ -3,10 +3,57 @@ use std::{path::Path, time::Duration};
 use super::*;
 use crate::ScenarioRuntime;
 
+#[test]
+fn coverage_command_is_closed_and_uninstrumented_builds_reject_it() {
+    assert!(matches!(
+        serde_json::from_str::<ControlCommand>(r#"{"kind":"flush_coverage"}"#).unwrap(),
+        ControlCommand::FlushCoverage {}
+    ));
+    assert!(
+        serde_json::from_str::<ControlCommand>(r#"{"kind":"flush_coverage","path":"/tmp/other"}"#)
+            .is_err()
+    );
+    #[cfg(not(storage_ui_coverage))]
+    assert_eq!(
+        flush_coverage().unwrap_err().kind,
+        StorageErrorKind::Unsupported
+    );
+}
+
 fn fixture(name: &str) -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR"))
         .join("../../tests/ui/scenarios")
         .join(name)
+}
+
+#[tokio::test]
+async fn coverage_checkpoint_obeys_control_authentication() {
+    let runtime = ScenarioRuntime::load(fixture("empty.toml"), None, None).unwrap();
+    let request = ControlRequest {
+        protocol: 1,
+        sequence: 42,
+        token: "wrong".into(),
+        command: ControlCommand::FlushCoverage {},
+    };
+    let response = process_request(&runtime.backend(), "secret", request).await;
+    assert!(response.ok.is_none());
+    assert_eq!(response.sequence, 42);
+    assert_eq!(
+        response.error.unwrap().kind,
+        StorageErrorKind::PermissionDenied
+    );
+    #[cfg(not(storage_ui_coverage))]
+    {
+        let request = ControlRequest {
+            protocol: 1,
+            sequence: 43,
+            token: "secret".into(),
+            command: ControlCommand::FlushCoverage {},
+        };
+        let response = process_request(&runtime.backend(), "secret", request).await;
+        assert!(response.ok.is_none());
+        assert_eq!(response.error.unwrap().kind, StorageErrorKind::Unsupported);
+    }
 }
 
 #[tokio::test]

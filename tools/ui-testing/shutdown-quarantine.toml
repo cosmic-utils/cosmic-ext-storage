@@ -6,5 +6,7 @@ owner = "cosmic-ext-storage maintainers"
 expires_unix = 1791849600
 case_id = "live_scenario_reload"
 case_sha256 = "a2233684796ffdff2a02e97e0f57bb48f857a1c01b0dceeef0e33d537407bd90"
-environment_sha256 = "c55fcd387588a5d5f6af10909678aa50239ad888ca61d0dc6785af697dac362a"
+# Reviewed instrumentation-only Containerfile change: same pinned OS/GDB,
+# libcosmic/iced and stack signature. No dependency upgrade or expiry extension.
+environment_sha256 = "66c8e39ffdc0ab59f8c7741e8ea3f67b3b8e3d5adc58fc963eb1d28394484017"
 cargo_lock_sha256 = "372458e8cba0455916ead9ff08f4a666d6c487ebb443b6da5729505f48ccee11"

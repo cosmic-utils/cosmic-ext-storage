@@ -22,6 +22,7 @@ use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 
 mod cases;
+mod coverage;
 mod shutdown;
 
 const READY_TIMEOUT: Duration = Duration::from_secs(15);

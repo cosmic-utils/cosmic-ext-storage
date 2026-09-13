@@ -385,12 +385,31 @@ crates/**
    to first-party executable code, compares changed lines/functions with the
    PR base, validates the exception manifest, and enforces every section-10
    threshold.
+   Scope JSON function records per build group before combining/persisting
+   them: LLVM's `--sources` can leave dependency functions in its export.
+   Reuse the gate's exact source boundary, retain uncovered definitions and
+   macro file-ID mappings, and verify identical line/function counts and LCOV.
+   See the [measured refinement](coverage-report-refinement.md).
 3. Add `just coverage`; it builds the same lab runtime image with the inner
    binary LLVM-instrumented, instruments host tests, and has the outer bridge
    archive the container-only `.profraw` directory through Testcontainers even
    after an inner failure. It extracts and merges those profiles, writes
    JSON/LCOV/HTML, then runs the checker. It must not use a bind mount or
    Docker CLI copy for profile collection.
+   Instrument the UI app and runner from the same pinned image and collect
+   their exact ELFs together with each executed case's profiles. After the
+   final semantic assertion and pre-close captures, use the authenticated
+   test-backend control channel to request `__llvm_profile_write_file()`;
+   normal builds must reject this command. Keep normal exit flushing enabled
+   (no counter reset or dump-complete flag). This retains executed counters
+   across the quarantined teardown crash without pretending shutdown code
+   executed successfully. Require an acknowledged checkpoint, nonempty app
+   and runner profiles, matching ELF/case hashes, and every declared step.
+   Use a project-specific `storage_ui_coverage` cfg: globally passing generic
+   `--cfg coverage` activates nightly-only code in the pinned tiny-xlib.
+   Hash build inputs, tests, fixtures and collector tools as well as production
+   source; any change invalidates report-only acceptance. Never reuse an older
+   run after adding tests or merely count case inventory as execution.
 4. Add or refactor tests until every package and changed line/function meets
    the 100%/98% thresholds. Make UI/update/view code testable through reducer,
    semantic-view, and executed AT-SPI tests rather than excluding it.

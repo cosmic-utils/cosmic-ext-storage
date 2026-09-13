@@ -1,7 +1,7 @@
 schema_version = 1
 platform = "linux/amd64"
 base_image = "docker.io/library/rust@sha256:300ec56abce8cc9448ddea2172747d048ed902a3090e6b57babb2bf19f754081"
-containerfile_sha256 = "cc1ac96424414443ae16f636a88773a5fec11152b038a803abe7b5ff0856b549"
+containerfile_sha256 = "66990c29f62fd1099f1afbc546b65e70ebd85f9023ecee91c9520962ec075bde"
 apt_snapshot = "https://snapshot.debian.org/archive/debian/20250701T000000Z/"
 packages = [
   { name = "at-spi2-core", version = "2.46.0-5" },

@@ -33,9 +33,13 @@ def source_path(value: str, root: Path) -> str | None:
             path = path.relative_to(root)
         except ValueError:
             # The baked image's fixed build root is a documented equivalence.
-            try:
-                path = path.relative_to("/workspace")
-            except ValueError:
+            for build_root in ("/workspace", "/opt/ui-test/source"):
+                try:
+                    path = path.relative_to(build_root)
+                    break
+                except ValueError:
+                    continue
+            else:
                 return None
     parts = path.parts
     if ".." in parts or not parts or path.suffix != ".rs":
@@ -73,6 +77,15 @@ def threshold(name: str) -> int:
         "crates/storage-lab-tests", "crates/test-backend", "crates/ui-e2e-runner",
         "crates/storage-contracts", "crates/storage-types", "crates/storage-sys",
     } else 98
+
+
+def workspace_inputs(root: Path) -> dict[str, str]:
+    """Build/test inputs, not just production Rust, invalidate saved evidence."""
+    paths = {root / name for name in ("Cargo.toml", "Cargo.lock", "rust-toolchain.toml", "build.rs", "justfile", ".dockerignore")}
+    for name in ("src", "crates", "tools", "tests", "resources", "i18n", ".github", ".config"):
+        paths.update(path for path in (root / name).rglob("*") if not {"target", "__pycache__", ".git"} & set(path.relative_to(root).parts))
+    return {path.relative_to(root).as_posix(): hashlib.sha256(path.read_bytes()).hexdigest()
+            for path in sorted(paths) if path.is_file()}
 
 
 def read_lcov(text: str, root: Path) -> dict[str, dict[int, int]]:
@@ -154,6 +167,20 @@ def validate_evidence(document: dict, root: Path) -> set[str]:
         sources.add(source)
         tests.update(profile["tests"])
         if source == "ui":
+            proof = profile.get("execution", {})
+            report_path = root / proof.get("path", "")
+            if not report_path.is_file() or hashlib.sha256(report_path.read_bytes()).hexdigest() != proof.get("sha256"):
+                raise ValueError("missing or changed executed UI report")
+            report = json.loads(report_path.read_text())
+            case = report.get("case", "")
+            if case not in UI_CASES or profile["tests"] != [case]:
+                raise ValueError("UI profile must name exactly its executed case")
+            manifest = root / "tests/ui/cases" / f"{case}.toml"
+            program = tomllib.loads(manifest.read_text())
+            if not report.get("coverage_enabled") or report.get("functional_status") != "passed" or report.get("status") not in {"semantic_passed", "semantic_passed_with_known_shutdown_failure"}:
+                raise ValueError("UI report is not an instrumented semantic pass")
+            if report.get("case_sha256") != hashlib.sha256(manifest.read_bytes()).hexdigest() or report.get("completed_steps") != [step["id"] for step in program["step"]]:
+                raise ValueError("UI report case changed or steps were not executed")
             ui.update(profile["tests"])
     if sources != {"host", "lab", "ui"}:
         raise ValueError("host, lab and executed UI profiles are required for the final report")
@@ -165,6 +192,10 @@ def validate_evidence(document: dict, root: Path) -> set[str]:
 def validate_provenance(document: dict, root: Path) -> None:
     if document.get("host_exit") != 0 or document.get("lab_exit") != 0:
         raise ValueError("failed or missing test-run exit status")
+    if document.get("ui_exit") != 0:
+        raise ValueError("failed or missing interactive UI run exit status")
+    if document.get("input_sha256") != workspace_inputs(root):
+        raise ValueError("build/test inputs changed or were omitted after instrumentation")
     hashes = document.get("source_sha256", {})
     if not hashes:
         raise ValueError("missing source revision hashes")

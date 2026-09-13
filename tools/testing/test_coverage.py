@@ -1,6 +1,7 @@
 """Regression tests for the acceptance checker (no Docker or LLVM required)."""
 import datetime as dt
 import hashlib
+import json
 from pathlib import Path
 import tempfile
 import unittest
@@ -19,21 +20,27 @@ class CoverageGateTests(unittest.TestCase):
             executable = root / "target/coverage/run-1/test"
             executable.parent.mkdir(parents=True)
             executable.write_bytes(b"instrumented-elf")
-            evidence = dict(host_exit=0, lab_exit=0,
+            evidence = dict(host_exit=0, lab_exit=0, ui_exit=0, input_sha256=gate.workspace_inputs(root),
                             source_sha256={"src/lib.rs": hashlib.sha256(source.read_bytes()).hexdigest()},
                             objects=[dict(path=str(executable.relative_to(root)), sha256=hashlib.sha256(executable.read_bytes()).hexdigest())])
             gate.validate_provenance(evidence, root)
             extra = root / "src/new.rs"
             extra.write_text("pub fn untested() {}")
-            with self.assertRaisesRegex(ValueError, "inventory changed"):
+            with self.assertRaisesRegex(ValueError, "inputs changed"):
                 gate.validate_provenance(evidence, root)
             extra.unlink()
             with self.assertRaisesRegex(ValueError, "exit status"):
                 gate.validate_provenance(evidence | {"lab_exit": 1}, root)
             source.write_text("pub fn changed() {}")
-            with self.assertRaisesRegex(ValueError, "source changed"):
+            with self.assertRaisesRegex(ValueError, "inputs changed"):
                 gate.validate_provenance(evidence, root)
             source.write_text("pub fn f() {}")
+            fixture = root / "tests/fixture.toml"
+            fixture.parent.mkdir()
+            fixture.write_text("changed = true")
+            with self.assertRaisesRegex(ValueError, "inputs changed"):
+                gate.validate_provenance(evidence, root)
+            fixture.unlink()
             executable.write_bytes(b"different-build")
             with self.assertRaisesRegex(ValueError, "executable hash mismatch"):
                 gate.validate_provenance(evidence, root)
@@ -80,15 +87,28 @@ class CoverageGateTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             records = []
-            for source in ["host", "ui", "lab"]:
+            for source in ["host", "lab"]:
                 path = root / f"{source}.profraw"
                 path.write_bytes(source.encode())
                 records.append(dict(path=str(path), source=source,
                                     sha256=hashlib.sha256(path.read_bytes()).hexdigest(),
-                                    tests=sorted(gate.UI_CASES) if source == "ui" else [f"{source}_test"]))
+                                    tests=[f"{source}_test"]))
             with self.assertRaisesRegex(ValueError, "host, lab and executed UI"):
                 gate.validate_evidence({"profiles": records[:2]}, root)
+            for case in sorted(gate.UI_CASES):
+                manifest = root / "tests/ui/cases" / f"{case}.toml"
+                manifest.parent.mkdir(parents=True, exist_ok=True)
+                manifest.write_text('[[step]]\nid = "assertion"\n')
+                report = root / f"{case}.json"
+                report.write_text(json.dumps(dict(case=case, coverage_enabled=True, functional_status="passed", status="semantic_passed", completed_steps=["assertion"], case_sha256=hashlib.sha256(manifest.read_bytes()).hexdigest())))
+                profile = root / f"{case}.profraw"
+                profile.write_bytes(b"ui")
+                records.append(dict(path=str(profile), source="ui", tests=[case], sha256=hashlib.sha256(profile.read_bytes()).hexdigest(), execution=dict(path=str(report), sha256=hashlib.sha256(report.read_bytes()).hexdigest())))
             self.assertIn("lab_test", gate.validate_evidence({"profiles": records}, root))
+            proof = records[-1].pop("execution")
+            with self.assertRaisesRegex(ValueError, "executed UI report"):
+                gate.validate_evidence({"profiles": records}, root)
+            records[-1]["execution"] = proof
             records[-1]["sha256"] = "wrong"
             with self.assertRaisesRegex(ValueError, "hash mismatch"):
                 gate.validate_evidence({"profiles": records}, root)

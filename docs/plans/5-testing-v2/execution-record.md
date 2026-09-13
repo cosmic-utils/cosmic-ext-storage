@@ -11,7 +11,7 @@ remain gated work.
 The COSMIC target-ID routing bug is repaired by a single fork commit on the
 project's existing pin, with no upstream-master or submodule upgrade. All
 three new dependency regressions and all 20 library tests pass; the app's
-209 selected workspace tests, strict Clippy, formatting, and 19 Python checks
+213 selected workspace tests, strict Clippy, formatting, and 23 Python checks
 now pass. The real reload case passes all nine semantic steps. The user chose
 to quarantine only the diagnosed iced shutdown stack for functional tests,
 rather than expand this pass into dependency lifecycle repairs. Both an actual
@@ -50,6 +50,51 @@ Its local native suite passed 16 selected cases in 73.691 seconds with image
 `sha256:9a57a8cf63624423852f59d6d4bae0ccde3e53f36587e4d8865318e22f839eeb`.
 
 ## Coverage boundary and executed-UI preparation
+
+### UI checkpoint collection (2026-09-13)
+
+The subsequent [report-scope refinement](coverage-report-refinement.md)
+preserves every measured count while reducing the combined JSON from 757 MB
+to 28.9 MB. A controlled same-profile replay measures 364 s to 71 s for export
+plus analysis. This performance result does not close the coverage gates.
+Fresh integrated run `run-zuv3m23j` then passed host/lab/UI collection, including
+profile survival across the quarantined shutdown crash, and wrote a 28.9 MB
+report with valid input/ELF/report hashes. Workspace coverage is 39.37% lines
+and 38.51% functions; the command correctly still fails final acceptance for
+the seven missing UI cases and the existing coverage gaps.
+
+The combined collector now builds the app and runner with LLVM instrumentation
+in the same pinned UI image and executes available version-2 case programs.
+After successful semantic assertions and pre-close captures, an authenticated
+test-only `flush_coverage` request invokes LLVM's write-file API. A normal build
+returns Unsupported, an invalid token is rejected, and unexpected command
+fields are rejected. The runner checkpoints independently. Neither path resets
+counters or suppresses normal exit flushing. This is a coverage durability
+change, not an iced shutdown fix or a quarantine expansion.
+
+The collector requires both nonempty raw profiles, exact matching app/runner
+ELFs, completed declared steps, checkpoint acknowledgement and current case,
+dependency and environment hashes. Report provenance now includes tests,
+fixtures and collector/build inputs, not only production Rust source. A single
+reload profile cannot satisfy the seven other required UI cases.
+
+The first fresh combined run `run-ss7vwdom` passed 213 host tests, all 16 selected
+native lab tests (Nextest `719c448b-a6f8-45b3-98ec-dc69b5da8caa`), and all nine
+reload UI steps with a clean exit. Its UI image is
+`sha256:5fd8d160720aaab8d65944973fffcb5043143eb9ec0da8efee72c4b89c3c6b68`;
+the per-case artifacts are in
+`ui-artifacts/executed/live_scenario_reload-12-1789334383305764711`.
+The pipeline collected 80 raw profiles across host, lab and UI sources.
+Collection success does not establish threshold or full case-matrix acceptance.
+
+- Do not globally pass `--cfg coverage` to the UI build: pinned tiny-xlib
+  conditionally enables nightly-only `coverage_attribute` under that name.
+  The project-specific `storage_ui_coverage` cfg works on pinned Rust 1.95.
+- Serde internally tagged **unit** variants can ignore extra fields even with
+  `deny_unknown_fields`. The checkpoint command uses an empty struct variant,
+  and its regression verifies an injected `path` is rejected.
+- Keep source/test inputs frozen during a combined run. New tests invalidate
+  old provenance even if production code itself did not change.
 
 - Moved 35 inline unit-test modules from 34 implementation files into each
   package's `tests/unit` tree using Rust syntax spans, preserving their logical

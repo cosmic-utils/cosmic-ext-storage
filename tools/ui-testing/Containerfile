@@ -34,11 +34,13 @@ COPY . /opt/ui-test/source
 WORKDIR /opt/ui-test/source
 ARG VERGEN_GIT_SHA
 ARG VERGEN_GIT_COMMIT_DATE
+ARG UI_COVERAGE=0
 ENV VERGEN_GIT_SHA=${VERGEN_GIT_SHA} VERGEN_GIT_COMMIT_DATE=${VERGEN_GIT_COMMIT_DATE}
 RUN --mount=type=cache,target=/usr/local/cargo/registry \
     --mount=type=cache,target=/usr/local/cargo/git \
     --mount=type=cache,target=/opt/ui-test/target \
     test -n "$VERGEN_GIT_SHA" && test -n "$VERGEN_GIT_COMMIT_DATE" \
+ && case "$UI_COVERAGE" in 0) ;; 1) export RUSTFLAGS='-C instrument-coverage --cfg storage_ui_coverage' ;; *) exit 64 ;; esac \
  && CARGO_TARGET_DIR=/opt/ui-test/target cargo build --locked --features test-backend --bin cosmic-ext-storage \
  && CARGO_TARGET_DIR=/opt/ui-test/target cargo build --locked -p ui-e2e-runner --bin ui-e2e-runner \
  && install -D -m 0755 /opt/ui-test/target/debug/cosmic-ext-storage /opt/ui-test/bin/cosmic-ext-storage \

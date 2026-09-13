@@ -20,7 +20,9 @@ import shutil
 import subprocess
 import tarfile
 import tempfile
+import tomllib
 import xml.etree.ElementTree as ET
+from functools import lru_cache
 
 ROOT = Path(__file__).resolve().parents[2]
 _gate_spec = importlib.util.spec_from_file_location("storage_coverage_gate", Path(__file__).with_name("coverage.py"))
@@ -97,6 +99,26 @@ def write_html(output: Path, lines: dict, functions: dict) -> None:
     (directory / "index.html").write_text("<!doctype html><meta charset=utf-8>" + style + "<title>Executed coverage</title><h1>Executed coverage</h1><p>Raw union of executed profiles, before exceptions. Acceptance also requires every test source and all thresholds; see acceptance.json.</p><table><tr><th>Scope</th><th>Lines</th><th>Functions</th></tr>" + "".join(rows) + "</table><ul>" + "".join(links) + "</ul>")
 
 
+def scope_export(document: dict, root: Path) -> dict:
+    """Keep the gate's exact source boundary, including uncovered definitions.
+
+    LLVM's --sources filters file records but can leave dependency functions
+    in the JSON. Filter each build group before retaining or persisting it.
+    Do not filter by hit count, symbol spelling, or the first filename: macro
+    mappings identify their defining file through the first region's file ID.
+    Leave retained mappings intact, including their filename tables/indices.
+    """
+    @lru_cache(maxsize=None)
+    def owned(filename: str) -> bool:
+        return gate.source_path(filename, root) is not None
+
+    return document | {"data": [unit | {
+        "files": [entry for entry in unit.get("files", []) if owned(entry["filename"])],
+        "functions": [entry for entry in unit.get("functions", [])
+                      if entry["regions"] and owned(entry["filenames"][entry["regions"][0][5]])],
+    } for unit in document["data"]]}
+
+
 def export_reports(output: Path, run: Path, llvm: Path, groups: list[dict]) -> None:
     # Different feature/build roots can use the same symbol with different
     # coverage mappings. Feeding all ELFs to one llvm-cov invocation silently
@@ -110,12 +132,16 @@ def export_reports(output: Path, run: Path, llvm: Path, groups: list[dict]) -> N
         profile_list.write_text("\n".join(map(str, group["profiles"])) + "\n")
         profdata = run / f"group-{number}.profdata"
         command([llvm / "llvm-profdata", "merge", "-sparse", "--failure-mode=any", "-f", profile_list, "-o", profdata])
-        common = [f"-path-equivalence=/workspace,{ROOT}", f"-instr-profile={profdata}", *[f"-object={path}" for path in group["objects"]]]
+        common = [f"-path-equivalence=/workspace,{ROOT}", f"-path-equivalence=/opt/ui-test/source,{ROOT}", f"-instr-profile={profdata}", *[f"-object={path}" for path in group["objects"]]]
         summary = run / f"group-{number}.json"
         trace = run / f"group-{number}.lcov"
         command([llvm / "llvm-cov", "export", *common, "--sources", *sources], output=summary)
         command([llvm / "llvm-cov", "export", "-format=lcov", *common, "--sources", *sources], output=trace)
-        document["data"].extend(json.loads(summary.read_text())["data"])
+        scoped = scope_export(json.loads(summary.read_text()), ROOT)
+        # Replace the temporary raw export immediately; dependency function
+        # records do not accumulate across groups or enter the final report.
+        summary.write_text(json.dumps(scoped))
+        document["data"].extend(scoped["data"])
         lcov.append(trace.read_text())
     (output / "summary.json").write_text(json.dumps(document))
     (output / "lcov.info").write_text("\n".join(lcov))
@@ -130,7 +156,7 @@ def finish_report(output: Path, run: Path, llvm: Path, groups: list[dict], evide
     (output / "evidence.json").write_text(json.dumps(evidence, indent=2) + "\n")
     acceptance = command(["python3", "tools/testing/coverage.py", "--base", base], output=output / "acceptance.json", check=False)
     print(f"Reports: {output}. Host exit={evidence['host_exit']}; lab exit={evidence['lab_exit']}; acceptance={acceptance}")
-    return int(bool(evidence["host_exit"] or evidence["lab_exit"] or acceptance))
+    return int(bool(evidence["host_exit"] or evidence["lab_exit"] or evidence["ui_exit"] or acceptance))
 
 
 def llvm_directory() -> Path:
@@ -138,6 +164,78 @@ def llvm_directory() -> Path:
     version = subprocess.check_output(["rustc", "-vV"], cwd=ROOT, text=True)
     host = next(line.split(": ", 1)[1] for line in version.splitlines() if line.startswith("host: "))
     return sysroot / "lib/rustlib" / host / "bin"
+
+
+def collect_ui(directory: Path, destination: Path, case: Path) -> tuple[dict, list[dict]]:
+    """Accept executed, checkpointed case evidence with both exact image ELFs."""
+    result = json.loads((directory / "execution.json").read_text())
+    program = tomllib.loads(case.read_text())
+    if result.get("schema_version") != 2 or result.get("functional_status") != "passed" or result.get("status") not in {"semantic_passed", "semantic_passed_with_known_shutdown_failure"}:
+        raise ValueError("UI case did not pass its functional and shutdown policy gates")
+    if not result.get("coverage_enabled") or result.get("case") != program["id"] or result.get("case_sha256") != digest(case):
+        raise ValueError("UI coverage mode/case provenance mismatch")
+    if result.get("completed_steps") != [step["id"] for step in program["step"]]:
+        raise ValueError("UI case did not execute every declared step")
+    control = json.loads((directory / "control.json").read_text())
+    if not any(entry.get("command") == "flush_coverage" and entry.get("response", {}).get("ok", {}).get("kind") == "coverage_flushed" for entry in control):
+        raise ValueError("UI app has no acknowledged pre-close coverage checkpoint")
+    profiles = sorted((directory / "profiles").glob("*.profraw"))
+    if not profiles or not any(p.name.startswith("app-") for p in profiles) or not any(p.name.startswith("runner-") for p in profiles):
+        raise ValueError("UI requires both app and runner raw profiles")
+    objects = [directory / "objects" / name for name in ("application", "runner")]
+    for path in profiles + objects:
+        if path.is_symlink() or not path.is_file() or path.stat().st_size == 0:
+            raise ValueError("missing, empty or linked UI profile/ELF")
+    if digest(objects[0]) != result.get("executable_sha256"):
+        raise ValueError("UI profile application ELF does not match executed app")
+    if digest(objects[1]) != result.get("runner_executable_sha256"):
+        raise ValueError("UI profile runner ELF does not match executed runner")
+    for field, path in [("cargo_lock_sha256", ROOT / "Cargo.lock"),
+                        ("environment_lock_sha256", ROOT / "tools/ui-testing/environment.lock.toml"),
+                        ("debugger_script_sha256", ROOT / "tools/ui-testing/debug-app.py")]:
+        if result.get(field) != digest(path):
+            raise ValueError("UI execution inputs have changed")
+    destination.mkdir(parents=True, exist_ok=False)
+    copies = {path: destination / path.name for path in profiles + objects}
+    for original, copy in copies.items():
+        shutil.copyfile(original, copy)
+    shutil.copytree(directory, destination / "execution", ignore=shutil.ignore_patterns("objects", "profiles", "runtime", "cache", "home", "config"))
+    group = dict(profiles=[copies[p] for p in profiles], objects=[copies[p] for p in objects])
+    report = destination / "execution/execution.json"
+    records = [dict(path=str(copies[p].relative_to(ROOT)), sha256=digest(copies[p]), source="ui", tests=[program["id"]],
+                    execution=dict(path=str(report.relative_to(ROOT)), sha256=digest(report))) for p in profiles]
+    return group, records
+
+
+def run_ui(run: Path) -> tuple[int, list[dict], list[dict]]:
+    code = command(["docker", "build", "--build-arg", "UI_COVERAGE=1",
+                    "--build-arg", "VERGEN_GIT_SHA=" + subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=ROOT, text=True).strip(),
+                    "--build-arg", "VERGEN_GIT_COMMIT_DATE=" + subprocess.check_output(["git", "show", "-s", "--format=%cI", "HEAD"], cwd=ROOT, text=True).strip(),
+                    "--file", "tools/ui-testing/Containerfile", "--tag", "cosmic-storage-ui-e2e:local", "."],
+                   output=run / "ui-build.log", check=False)
+    groups, records = [], []
+    if code:
+        return code, groups, records
+    cases = [path for path in sorted((ROOT / "tests/ui/cases").glob("*.toml")) if tomllib.loads(path.read_text()).get("schema_version") == 2]
+    if not cases:
+        return 1, groups, records
+    for case in cases:
+        before = set((ROOT / "ui-artifacts/executed").glob("*"))
+        exit_code = command(["bash", "tools/ui-testing/run-case.sh", case.relative_to(ROOT)], env=os.environ | {"UI_COVERAGE": "1"}, output=run / f"ui-{case.stem}.log", check=False)
+        code = code or exit_code
+        after = set((ROOT / "ui-artifacts/executed").glob("*"))
+        created = after - before
+        if exit_code or len(created) != 1:
+            code = code or 1
+            continue
+        try:
+            group, evidence = collect_ui(created.pop(), run / "ui" / case.stem, case)
+            groups.append(group)
+            records.extend(evidence)
+        except (ValueError, OSError, KeyError) as error:
+            print(f"UI evidence rejected: {case.name}: {error}", flush=True)
+            code = code or 1
+    return code, groups, records
 
 
 def main() -> int:
@@ -163,6 +261,7 @@ def main() -> int:
     run = Path(tempfile.mkdtemp(prefix="run-", dir=output))
     (output / "acceptance.json").write_text(json.dumps({"run": run.name, "scopes": {}, "failures": ["coverage run has not finished"]}) + "\n")
     source_hashes = {relative: digest(path) for relative, path in gate.workspace_sources(ROOT).items()}
+    input_hashes = gate.workspace_inputs(ROOT)
     host_profiles = run / "host-profiles"
     host_profiles.mkdir()
     # Reuse compilation cache, but never reuse raw profiles from an earlier run.
@@ -234,11 +333,20 @@ def main() -> int:
     evidence["rustc"] = rust_version
     evidence["run"] = run.name
     evidence["source_sha256"] = source_hashes
+    evidence["input_sha256"] = input_hashes
     evidence["host_exit"] = host_code
     evidence["lab_exit"] = lab_code
     groups.extend(lab_groups.values())
     evidence["groups"] = [{key: [str(path.relative_to(ROOT)) for path in paths] for key, paths in group.items()} for group in groups]
-    evidence["ui_status"] = "missing executed interactive cases; capability inventory is not coverage"
+    ui_code, ui_groups, ui_profiles = run_ui(run)
+    evidence["ui_exit"] = ui_code
+    evidence["ui_status"] = "executed available v2 cases; required case/profile inventory is enforced by acceptance"
+    evidence["profiles"].extend(ui_profiles)
+    groups.extend(ui_groups)
+    for group in ui_groups:
+        profiles.extend(group["profiles"])
+        evidence["objects"].extend(dict(path=str(path.relative_to(ROOT)), sha256=digest(path)) for path in group["objects"])
+    evidence["groups"] = [{key: [str(path.relative_to(ROOT)) for path in paths] for key, paths in group.items()} for group in groups]
     (output / "evidence.json").write_text(json.dumps(evidence, indent=2) + "\n")
     profile_list = run / "profiles.txt"
     profile_list.write_text("\n".join(map(str, profiles)) + "\n")

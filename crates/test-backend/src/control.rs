@@ -38,6 +38,7 @@ pub enum ControlCommand {
         milliseconds: u64,
     },
     Snapshot,
+    FlushCoverage {},
     ReplaceOverlay {
         sha256: String,
         bytes_base64: String,
@@ -53,6 +54,7 @@ pub enum ControlOk {
     Diagnostics(storage_contracts::ScenarioDiagnostics),
     Reload(storage_contracts::ScenarioReload),
     ReplacedOverlay,
+    CoverageFlushed,
     Shutdown,
 }
 
@@ -235,6 +237,9 @@ async fn process_request(
                 backend.advance_to(tick).await.map(ControlOk::Receipt)
             }
             ControlCommand::Snapshot => backend.diagnostics().await.map(ControlOk::Diagnostics),
+            ControlCommand::FlushCoverage {} => {
+                flush_coverage().map(|()| ControlOk::CoverageFlushed)
+            }
             ControlCommand::ReplaceOverlay {
                 sha256,
                 bytes_base64,
@@ -267,6 +272,29 @@ async fn process_request(
         Err(error) => response.error = Some(error),
     }
     response
+}
+
+fn flush_coverage() -> Result<(), StorageError> {
+    #[cfg(storage_ui_coverage)]
+    {
+        unsafe extern "C" {
+            fn __llvm_profile_write_file() -> std::ffi::c_int;
+        }
+        // LLVM's public checkpoint API retains normal exit-time writing. Never
+        // reset counters or mark the profile dumped: later paths still count.
+        if unsafe { __llvm_profile_write_file() } != 0 {
+            return Err(StorageError::new(
+                StorageErrorKind::Unavailable,
+                "LLVM profile checkpoint failed",
+            ));
+        }
+        Ok(())
+    }
+    #[cfg(not(storage_ui_coverage))]
+    Err(StorageError::new(
+        StorageErrorKind::Unsupported,
+        "coverage instrumentation is not enabled",
+    ))
 }
 
 async fn read_frame<T: for<'de> Deserialize<'de>>(

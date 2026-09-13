@@ -24,6 +24,8 @@ pub(super) struct ExecuteArguments {
     artifacts: PathBuf,
     #[arg(long)]
     environment_lock: PathBuf,
+    #[arg(long, action = clap::ArgAction::Set, default_value = "false")]
+    coverage: bool,
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
@@ -455,6 +457,14 @@ pub(super) async fn execute(arguments: ExecuteArguments) -> Result<()> {
             .as_nanos()
     ));
     let mut session = CapabilitySession::new(&artifacts, &lock, evidence)?;
+    if arguments.coverage {
+        let profiles = coverage::prepare(&artifacts)?;
+        session.environment.insert(
+            "LLVM_PROFILE_FILE".into(),
+            profiles.join("app-%m-%p.profraw").into_os_string(),
+        );
+        coverage::save_objects(&artifacts, &arguments.app)?;
+    }
     let token = {
         use std::io::Read;
         let mut bytes = [0u8; 32];
@@ -497,6 +507,18 @@ pub(super) async fn execute(arguments: ExecuteArguments) -> Result<()> {
             .and(screenshot.map(|_| ()))
             .and_then(|_| {
                 CapabilitySession::ensure_running("application debugger", session.app.as_mut())
+            });
+    }
+    if result.is_ok() && arguments.coverage {
+        result = control
+            .request(json!({"kind":"flush_coverage"}), false)
+            .await
+            .and_then(|response| {
+                if response.pointer("/ok/kind").and_then(Value::as_str) != Some("coverage_flushed")
+                {
+                    bail!("missing authenticated app coverage checkpoint acknowledgement");
+                }
+                coverage::checkpoint()
             });
     }
     write_json(&artifacts.join("control.json"), &control.evidence)?;
@@ -542,9 +564,11 @@ pub(super) async fn execute(arguments: ExecuteArguments) -> Result<()> {
             "shutdown_status":outcome,"shutdown_error":shutdown_error,
             "completed_steps":completed,"scenario_sha256":case.scenario_sha256,
             "executable_sha256":executable_sha256, "case_sha256":sha256_file(&arguments.case)?,
+            "runner_executable_sha256":sha256_file(&std::env::current_exe()?)?,
             "error":result.as_ref().err().map(|e|format!("{e:#}")),
             "visual_baseline_status":"not_approved",
-            "coverage_status":"not_verified; functional success is not profile evidence",
+            "coverage_status":if arguments.coverage {"checkpoint_requested; collector must validate profiles and ELFs"} else {"not_instrumented"},
+            "coverage_enabled":arguments.coverage,
             "environment_lock_sha256":sha256_file(&arguments.environment_lock)?,
             "cargo_lock_sha256":sha256_file(&arguments.root.join("Cargo.lock"))?,
             "debugger_script_sha256":sha256_file(&arguments.root.join("tools/ui-testing/debug-app.py"))?
@@ -561,6 +585,9 @@ pub(super) async fn execute(arguments: ExecuteArguments) -> Result<()> {
         eprintln!(
             "WARNING: functional tests passed; known iced Wayland shutdown failure quarantined. Coverage is not verified."
         );
+    }
+    if arguments.coverage {
+        coverage::checkpoint()?;
     }
     Ok(())
 }
