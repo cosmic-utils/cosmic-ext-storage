@@ -142,10 +142,11 @@ version = "0.16"
 features = ["fluent-system", "desktop-requester"]
 
 [workspace.dependencies.libcosmic]
-# Temporary maintained accessibility bridge. Remove this override once the
-# AccessKit widget-tree forwarding fix lands in upstream libcosmic.
+# Temporary maintained accessibility bridge and button-action routing fix.
+# Based on our existing 3d5fdb08 pin, not unvalidated upstream master.
+# Remove this override when a validated upstream version includes both fixes.
 git = "https://github.com/stoorps/libcosmic.git"
-rev = "3d5fdb087534fb4944e64da2346f3bb673cc0215"
+rev = "ab3a7b9c58a632eb64f4478d1c95bf8764e1c9aa"
 features = [
     # Accessibility support
     "a11y",

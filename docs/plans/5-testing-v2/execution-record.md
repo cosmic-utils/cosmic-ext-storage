@@ -8,11 +8,15 @@ merged host/lab/UI coverage at the specified thresholds, eight executed UI
 cases, forced-failure PR evidence, and the final required coverage check
 remain gated work.
 
-The first executed interactive case is now blocked by a reproduced dependency
-bug, not a missing display capability: the pinned COSMIC button handler ignores
-the AT-SPI event's target ID and activates unrelated buttons. See the
-[reproduction and required dependency decision](ui-action-routing-blocker.md).
-No interactive or coverage acceptance is claimed.
+The COSMIC target-ID routing bug is repaired by a single fork commit on the
+project's existing pin, with no upstream-master or submodule upgrade. All
+three new dependency regressions and all 20 library tests pass; the app's
+204 selected workspace tests, strict Clippy, formatting, and 15 Python checks
+also pass. The real reload case now passes all nine semantic steps, but fails
+normal shutdown with a SIGSEGV in the pinned iced Wayland cleanup. See the
+[repair evidence and remaining lifecycle blocker](ui-action-routing-blocker.md).
+No full interactive or coverage acceptance is claimed. The user explicitly
+prohibits libcosmic PRs and unvalidated upgrades to master.
 
 ## Harness retirement and hosted evidence
 

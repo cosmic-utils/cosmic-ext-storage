@@ -423,6 +423,12 @@ python3 tools/testing/coverage.py --base origin/main --summary target/coverage/s
    cases as executed while they are only inventory entries.
 3. Implement each declared UI case with real AT-SPI actions, semantic
    assertions, and artifacts. Reuse scenario fixtures where applicable.
+   For dependency blockers, inspect existing upstream fixes first. If no
+   suitable release/fix exists, backport the minimal regression-tested repair
+   onto the project's exact dependency pin, preserving submodule revisions.
+   Do not substitute unvalidated upstream master. The user has prohibited a
+   libcosmic PR; publish only the authorized fork branch and exact app pin.
+   See [the button-routing evidence](ui-action-routing-blocker.md).
 4. Add the resulting UI paths to the coverage report and close their remaining
    application/view/update coverage gaps.
 5. Update README and plan documents to describe the three truthful layers:
