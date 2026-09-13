@@ -10,6 +10,7 @@ mod delete;
 mod edit;
 mod resize;
 
+pub(crate) use create::create_partition_table_with_connection;
 pub use create::{create_partition, create_partition_table, create_partition_with_filesystem};
 pub use delete::delete_partition;
 pub use edit::{edit_partition, set_partition_flags, set_partition_name, set_partition_type};

@@ -10,14 +10,28 @@ use zbus::zvariant::{OwnedObjectPath, Value};
 
 /// Create a partition table on a disk
 pub async fn create_partition_table(disk_path: &str, table_type: &str) -> Result<(), DiskError> {
-    let _connection = crate::manager::shared_connection()
+    let connection = crate::manager::shared_connection()
         .await
         .map_err(|e| DiskError::ConnectionFailed(e.to_string()))?;
 
+    create_partition_table_with_connection(connection.as_ref(), disk_path, table_type).await
+}
+
+/// Create a partition table through the caller-selected UDisks transport.
+pub(crate) async fn create_partition_table_with_connection(
+    connection: &zbus::Connection,
+    disk_path: &str,
+    table_type: &str,
+) -> Result<(), DiskError> {
     // Use the new flat format_disk function from disk module
-    crate::disk::format::format_disk(disk_path.to_string(), table_type, false)
-        .await
-        .map_err(|e| DiskError::OperationFailed(format!("Format disk failed: {}", e)))?;
+    crate::disk::format::format_disk_with_connection(
+        connection,
+        disk_path.to_string(),
+        table_type,
+        false,
+    )
+    .await
+    .map_err(|e| DiskError::OperationFailed(format!("Format disk failed: {}", e)))?;
 
     Ok(())
 }

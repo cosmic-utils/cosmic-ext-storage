@@ -1,7 +1,7 @@
 use std::{os::unix::fs::FileTypeExt, process::Command};
 
 use std::sync::Arc;
-use storage_contracts::DiskDiscovery;
+use storage_contracts::{DiskDiscovery, PartitionOperations};
 use storage_lab_tests::{LabFixture, Result};
 use storage_udisks::UdisksBackend;
 use zbus::Connection;
@@ -29,16 +29,63 @@ async fn capability_starts_private_dbus_udisks_and_sftp() -> Result<()> {
     assert!(std::fs::metadata(&loop_path)?.file_type().is_block_device());
     assert!(fixture.root()?.path().join("ledger.txt").is_file());
 
+    let backend = private_backend().await?;
+    wait_for_discovery(&backend, &loop_path).await?;
+    fixture.cleanup()?;
+    Ok(())
+}
+
+/// This executes the real adapter mutation and discovery path against the
+/// same private connection selected for the test, not the process-global
+/// system-bus helper.
+#[tokio::test]
+#[ignore = "runs only inside the private Testcontainers storage lab"]
+async fn partition_table_round_trip_uses_the_private_adapter_transport() -> Result<()> {
+    let mut fixture = LabFixture::create("partition-table")?;
+    let loop_device = fixture.attach_sparse_loop("disk.img", 128 * 1024 * 1024)?;
+    let loop_path = loop_device.path().to_owned();
+    let backend = private_backend().await?;
+    wait_for_discovery(&backend, &loop_path).await?;
+
+    backend
+        .create_partition_table(&loop_path.to_string_lossy(), "gpt")
+        .await
+        .map_err(|error| error.to_string())?;
+    let partition_type = require_success(Command::new("lsblk").args([
+        "--noheadings",
+        "--output",
+        "PTTYPE",
+        loop_path.to_string_lossy().as_ref(),
+    ]))?;
+    assert_eq!(
+        String::from_utf8_lossy(&partition_type.stdout).trim(),
+        "gpt"
+    );
+    let partitions = backend
+        .list_partitions(&loop_path.to_string_lossy())
+        .await
+        .map_err(|error| error.to_string())?;
+    assert!(
+        partitions.is_empty(),
+        "new GPT table must start without partitions"
+    );
+
+    fixture.cleanup()?;
+    Ok(())
+}
+
+async fn private_backend() -> Result<UdisksBackend> {
     // This is deliberately the production adapter, attached to the lab's
     // private D-Bus socket. No host D-Bus bridge or test-only backend is used.
-    let backend = UdisksBackend::from_connection(Arc::new(
-        Connection::system()
-            .await
-            .map_err(|error| error.to_string())?,
-    ));
-    let mut discovered = Vec::new();
+    let connection = Connection::system()
+        .await
+        .map_err(|error| error.to_string())?;
+    Ok(UdisksBackend::from_connection(Arc::new(connection)))
+}
+
+async fn wait_for_discovery(backend: &UdisksBackend, loop_path: &std::path::Path) -> Result<()> {
     for _ in 0..100 {
-        discovered = backend
+        let discovered = backend
             .list_disks()
             .await
             .map_err(|error| error.to_string())?;
@@ -46,18 +93,15 @@ async fn capability_starts_private_dbus_udisks_and_sftp() -> Result<()> {
             .iter()
             .any(|disk| disk.device == loop_path.to_string_lossy())
         {
-            break;
+            return Ok(());
         }
         tokio::time::sleep(std::time::Duration::from_millis(100)).await;
     }
-    assert!(
-        discovered
-            .iter()
-            .any(|disk| disk.device == loop_path.to_string_lossy()),
+    Err(
         "the production UDisks adapter did not discover the lab-owned loop device"
-    );
-    fixture.cleanup()?;
-    Ok(())
+            .to_owned()
+            .into(),
+    )
 }
 
 fn require_success(command: &mut Command) -> Result<std::process::Output> {

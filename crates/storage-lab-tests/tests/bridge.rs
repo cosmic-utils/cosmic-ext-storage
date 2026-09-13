@@ -21,10 +21,21 @@ use testcontainers::{
 const IMAGE_NAME: &str = "cosmic-storage-lab";
 const IMAGE_TAG: &str = "local";
 const CAPABILITY_FILTER: &str = "capability_starts_private_dbus_udisks_and_sftp";
+const PARTITION_FILTER: &str = "partition_table_round_trip_uses_the_private_adapter_transport";
 
 #[test]
 #[ignore = "requires STORAGE_LAB=1 and the locally built privileged storage-lab image"]
 fn capability_runs_in_the_private_storage_lab() -> Result<(), Box<dyn Error>> {
+    run_inner_test(CAPABILITY_FILTER)
+}
+
+#[test]
+#[ignore = "requires STORAGE_LAB=1 and the locally built privileged storage-lab image"]
+fn partition_table_runs_in_the_private_storage_lab() -> Result<(), Box<dyn Error>> {
+    run_inner_test(PARTITION_FILTER)
+}
+
+fn run_inner_test(filter: &str) -> Result<(), Box<dyn Error>> {
     if std::env::var("STORAGE_LAB").as_deref() != Ok("1") {
         return Err("STORAGE_LAB=1 is required to execute the private storage lab".into());
     }
@@ -40,7 +51,7 @@ fn capability_runs_in_the_private_storage_lab() -> Result<(), Box<dyn Error>> {
     write_artifact(&artifact_dir, "container-id.txt", container.id())?;
     let mut test = container.exec(
         ExecCommand::new(["/usr/local/bin/storage-lab-run-tests"])
-            .with_env_vars([("STORAGE_LAB_TEST_FILTER", CAPABILITY_FILTER)]),
+            .with_env_vars([("STORAGE_LAB_TEST_FILTER", filter)]),
     )?;
     let test_stdout = String::from_utf8(test.stdout_to_vec()?)?;
     let test_stderr = String::from_utf8(test.stderr_to_vec()?)?;

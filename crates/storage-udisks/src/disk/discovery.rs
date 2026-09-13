@@ -505,6 +505,16 @@ pub async fn block_object_path_for_device(device: &str) -> Result<String, crate:
         .map(|path| path.to_string())
 }
 
+/// Resolve a device through an explicitly supplied UDisks connection.
+pub(crate) async fn block_object_path_for_device_with_connection(
+    connection: &Connection,
+    device: &str,
+) -> Result<String, crate::error::DiskError> {
+    super::resolve::block_object_path_for_device_with_connection(connection, device)
+        .await
+        .map(|path| path.to_string())
+}
+
 /// Get disk information as canonical storage-types models (public API).
 /// Uses the cached connection from DiskManager for improved performance.
 pub async fn get_disks(manager: &DiskManager) -> Result<Vec<DiskInfo>> {

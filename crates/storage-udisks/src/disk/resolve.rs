@@ -27,7 +27,15 @@ pub(crate) async fn block_object_path_for_device(
         .await
         .map_err(|e| DiskError::ConnectionFailed(e.to_string()))?;
 
-    let manager_proxy = UDisks2ManagerProxy::new(&connection)
+    block_object_path_for_device_with_connection(connection.as_ref(), device).await
+}
+
+/// Resolve a device through the caller-selected UDisks transport.
+pub(crate) async fn block_object_path_for_device_with_connection(
+    connection: &zbus::Connection,
+    device: &str,
+) -> Result<OwnedObjectPath, DiskError> {
+    let manager_proxy = UDisks2ManagerProxy::new(connection)
         .await
         .map_err(|e| DiskError::DBusError(e.to_string()))?;
 
@@ -39,7 +47,7 @@ pub(crate) async fn block_object_path_for_device(
     let device_canon = canonicalize_best_effort(device);
 
     for obj in &block_paths {
-        let proxy = match BlockProxy::builder(&connection).path(obj)?.build().await {
+        let proxy = match BlockProxy::builder(connection).path(obj)?.build().await {
             Ok(p) => p,
             Err(_) => continue,
         };

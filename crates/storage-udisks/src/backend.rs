@@ -231,12 +231,19 @@ impl PartitionOperations for UdisksBackend {
         disk: &str,
         table_type: &str,
     ) -> Result<(), StorageError> {
-        let path = crate::block_object_path_for_device(disk)
-            .await
-            .map_err(error)?;
-        crate::create_partition_table(&path, table_type)
-            .await
-            .map_err(error)
+        let path = crate::disk::discovery::block_object_path_for_device_with_connection(
+            self.manager.connection().as_ref(),
+            disk,
+        )
+        .await
+        .map_err(error)?;
+        crate::partition::create_partition_table_with_connection(
+            self.manager.connection().as_ref(),
+            &path,
+            table_type,
+        )
+        .await
+        .map_err(error)
     }
 
     async fn create_partition(
