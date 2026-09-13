@@ -142,7 +142,7 @@ async fn filesystem_format_and_label_use_the_production_adapter() -> Result<()> 
         "--probe",
         "--output",
         "value",
-        "--match-token",
+        "--match-tag",
         "TYPE",
         loop_path.to_string_lossy().as_ref(),
     ]))?;
