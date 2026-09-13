@@ -225,6 +225,8 @@ def run_target(root: Path, target: dict[str, Any]) -> None:
             "--bin", target["name"], "--", "--list",
         ]
     elif kind == "e2e-case":
+        if target.get("execution_status") != "planned":
+            fail("The inventory-only E2E runner cannot claim executed case status")
         command = [
             "cargo", "run", "-p", "ui-e2e-runner", "--locked", "--",
             "list-cases", "--root", target["name"],
@@ -240,6 +242,8 @@ def run_target(root: Path, target: dict[str, Any]) -> None:
         for test in expected:
             if listed.count(test) != 1:
                 fail(f"E2E case {test!r} must appear exactly once in {target['name']}")
+        if target["execution_status"] == "planned":
+            print(f"{target['name']}: planned inventory validated; interactive cases NOT executed")
         return
     for test in expected:
         pattern = rf"(?m)^(?:[A-Za-z0-9_]+::)*{re.escape(test)}: test$"

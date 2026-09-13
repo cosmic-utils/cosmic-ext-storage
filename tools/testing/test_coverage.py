@@ -1,0 +1,94 @@
+"""Regression tests for the acceptance checker (no Docker or LLVM required)."""
+import datetime as dt
+import hashlib
+from pathlib import Path
+import tempfile
+import unittest
+
+import coverage as gate
+
+
+class CoverageGateTests(unittest.TestCase):
+    def test_changed_uncovered_line_fails(self):
+        lines = {"src/app.rs": {line: int(line != 5) for line in range(1, 101)}}
+        functions = {"src/app.rs": {(1, 100, "main"): 1}}
+        _, failures = gate.evaluate(lines, functions, {"src/app.rs": {5}}, {})
+        self.assertEqual(failures, ["changed uncovered line: src/app.rs:5"])
+
+    def test_changed_uncovered_function_fails(self):
+        _, failures = gate.evaluate({"src/app.rs": {1: 1}},
+                                   {"src/app.rs": {(1, 1, "main"): 0}},
+                                   {"src/app.rs": {1}}, {})
+        self.assertIn("changed uncovered function: src/app.rs:1", failures)
+
+    def test_threshold_regression_fails(self):
+        for path, required in [("src/app.rs", 98), ("crates/storage-sys/src/image.rs", 100)]:
+            lines = {path: {line: int(line < required) for line in range(100)}}
+            functions = {path: {(1, 100, "main"): 1}}
+            self.assertEqual(gate.evaluate(lines, functions, {}, {})[1], [])
+            lines[path][0] = 0
+            self.assertTrue(gate.evaluate(lines, functions, {}, {})[1])
+
+    def test_expired_or_broad_exception_fails(self):
+        lines = {"src/app.rs": {line: 0 for line in range(1, 101)}}
+        functions = {"src/app.rs": {(1, 100, "main"): 1}}
+        entry = dict(path="src/app.rs", start_line=1, end_line=1, reason="kernel fault",
+                     evidence="fault_test", owner="maintainer", expires="2099-01-01")
+        def validate(value):
+            return gate.exceptions({"exceptions": [value]}, lines, functions, {"fault_test"}, dt.date(2026, 9, 13))
+        self.assertEqual(validate(entry), {"src/app.rs": {1}})
+        for change in [dict(expires="2026-09-13"), dict(path="src/*"), dict(end_line=2),
+                       dict(evidence="not_executed"), dict(owner=""), dict(start_line=0),
+                       dict(end_line=101), dict(unknown=True)]:
+            with self.subTest(change=change), self.assertRaises(ValueError):
+                validate(entry | change)
+        # Even a small function is not an exception-sized escape hatch.
+        functions["src/app.rs"] = {(1, 1, "tiny"): 0}
+        with self.assertRaisesRegex(ValueError, "entire function"):
+            validate(entry)
+
+    def test_lab_profile_is_required_for_final_report(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            records = []
+            for source in ["host", "ui", "lab"]:
+                path = root / f"{source}.profraw"
+                path.write_bytes(source.encode())
+                records.append(dict(path=str(path), source=source,
+                                    sha256=hashlib.sha256(path.read_bytes()).hexdigest(),
+                                    tests=sorted(gate.UI_CASES) if source == "ui" else [f"{source}_test"]))
+            with self.assertRaisesRegex(ValueError, "host, lab and executed UI"):
+                gate.validate_evidence({"profiles": records[:2]}, root)
+            self.assertIn("lab_test", gate.validate_evidence({"profiles": records}, root))
+            records[-1]["sha256"] = "wrong"
+            with self.assertRaisesRegex(ValueError, "hash mismatch"):
+                gate.validate_evidence({"profiles": records}, root)
+
+    def test_third_party_and_test_source_are_excluded_by_exact_path_rule(self):
+        root = Path("/repo")
+        for path in ["/repo/tests/example.rs", "/repo/target/build/vendor/src/lib.rs",
+                     "/cargo/registry/crate/src/lib.rs", "/repo/crates/name/tests/test.rs",
+                     "src/../outside.rs", "/different/project/src/lib.rs"]:
+            self.assertIsNone(gate.source_path(path, root), path)
+        for path in ["src/app.rs", "crates/storage-sys/src/lib.rs", "crates/test-backend/src/lib.rs"]:
+            for prefix in ["", "/repo/", "/workspace/"]:
+                self.assertEqual(gate.source_path(prefix + path, root), path)
+
+    def test_lcov_counts_are_merged_without_dropping_uncovered_lines(self):
+        text = "SF:/repo/src/app.rs\nDA:1,0\nDA:2,1\nend_of_record\nSF:/repo/src/app.rs\nDA:1,2\nDA:3,0\nend_of_record"
+        self.assertEqual(gate.read_lcov(text, Path("/repo")), {"src/app.rs": {1: 2, 2: 1, 3: 0}})
+        with self.assertRaises(ValueError):
+            gate.read_lcov("SF:/repo/src/app.rs\nDA:0,-1", Path("/repo"))
+        with self.assertRaises(ValueError):
+            gate.read_lcov("SF:/third-party/lib.rs\nDA:1,1", Path("/repo"))
+
+    def test_function_definitions_merge_across_builds_and_instantiations(self):
+        definitions = []
+        for name, count in [("host_generic_u32", 0), ("lab_generic_u32", 1), ("host_generic_u64", 0)]:
+            definitions.append(dict(name=name, count=count, filenames=["/repo/src/app.rs"], regions=[[1, 1, 4, 2, count, 0, 0, 0]]))
+        functions = gate.read_functions({"data": [{"functions": definitions}]}, Path("/repo"))
+        self.assertEqual(functions, {"src/app.rs": {(1, 4, "1:2"): 1}})
+
+
+if __name__ == "__main__":
+    unittest.main()

@@ -164,6 +164,7 @@ tests = [
 phase = "9"
 kind = "e2e-case"
 name = "tests/ui/cases"
+execution_status = "planned"
 tests = [
   "physical_partition_format", "busy_unmount", "luks_unlock",
   "logical_preflight_confirmation", "network_mount", "image_usage_progress",
