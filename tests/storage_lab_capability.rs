@@ -198,7 +198,10 @@ test -b "$loop_device"
 dbus-send --system --dest=org.freedesktop.UDisks2 --print-reply \
     /org/freedesktop/UDisks2 org.freedesktop.DBus.Peer.Ping >/dev/null
 losetup --detach "$loop_device"
-test ! -e "/sys/class/block/${loop_device##*/}"
+if losetup --list --noheadings --output BACK-FILE "$loop_device" | grep -q .; then
+    printf 'loop device still has a backing file after detach: %s\n' "$loop_device" >&2
+    exit 1
+fi
 rm -rf "$lab_root"
 trap - EXIT
 printf 'LOOP_DEVICE=%s\n' "$loop_device"
