@@ -139,6 +139,9 @@ fn unique_artifact_dir() -> Result<PathBuf, Box<dyn Error>> {
 }
 
 fn workspace_target_dir() -> PathBuf {
+    if let Some(directory) = std::env::var_os("STORAGE_LAB_ARTIFACT_ROOT") {
+        return PathBuf::from(directory);
+    }
     Path::new(env!("CARGO_MANIFEST_DIR")).join("../../target")
 }
 
