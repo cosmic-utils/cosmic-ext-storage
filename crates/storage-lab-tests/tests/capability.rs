@@ -1,7 +1,9 @@
 use std::{os::unix::fs::FileTypeExt, process::Command};
 
 use std::sync::Arc;
-use storage_contracts::{DiskDiscovery, FilesystemOperations, PartitionOperations};
+use storage_contracts::{
+    DiskDiscovery, EncryptionOperations, FilesystemOperations, PartitionOperations,
+};
 use storage_lab_tests::{LabFixture, Result};
 use storage_udisks::UdisksBackend;
 use storage_udisks::storage_types::FormatOptions;
@@ -150,6 +152,53 @@ async fn filesystem_format_and_label_use_the_production_adapter() -> Result<()> 
         String::from_utf8_lossy(&filesystem_type.stdout).trim(),
         "ext4"
     );
+
+    fixture.cleanup()?;
+    Ok(())
+}
+
+// This remains outside the normal Testcontainers suite until the VM capability
+// spike demonstrates that its guest kernel can provide device mapper support.
+// The spike's dedicated outer bridge is the only caller of this test.
+#[tokio::test]
+#[ignore = "runs only in the disposable-QEMU Testcontainers capability spike"]
+async fn luks_unlock_rejects_bad_secret_and_locks_cleanly() -> Result<()> {
+    let mut fixture = LabFixture::create("luks")?;
+    let loop_device = fixture.attach_sparse_loop("disk.img", 128 * 1024 * 1024)?;
+    let loop_path = loop_device.path().to_owned();
+    let backend = private_backend().await?;
+    wait_for_discovery(&backend, &loop_path).await?;
+
+    let passphrase = "storage-lab-secret";
+    backend
+        .format_luks(&loop_path.to_string_lossy(), passphrase, "luks2")
+        .await
+        .map_err(|error| error.to_string())?;
+    // UDisks automatically unlocks after formatting. Test bad credentials only
+    // after closing that mapping, otherwise "already unlocked" proves nothing.
+    backend
+        .lock_luks(&loop_path.to_string_lossy())
+        .await
+        .map_err(|error| error.to_string())?;
+    assert!(
+        backend
+            .unlock_luks(&loop_path.to_string_lossy(), "wrong-secret")
+            .await
+            .is_err(),
+        "a wrong LUKS passphrase must be rejected"
+    );
+    let cleartext = backend
+        .unlock_luks(&loop_path.to_string_lossy(), passphrase)
+        .await
+        .map_err(|error| error.to_string())?;
+    assert!(
+        std::fs::metadata(&cleartext)?.file_type().is_block_device(),
+        "UDisks must return a cleartext block device"
+    );
+    backend
+        .lock_luks(&loop_path.to_string_lossy())
+        .await
+        .map_err(|error| error.to_string())?;
 
     fixture.cleanup()?;
     Ok(())

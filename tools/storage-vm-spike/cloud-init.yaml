@@ -1,0 +1,18 @@
+#cloud-config
+# This image is disposable. It mounts only the checked-out source read-only and
+# a separate write-only evidence directory; all Docker/device operations occur
+# within the guest.
+package_update: true
+packages:
+  - docker.io
+runcmd:
+  - >
+    mkdir -p /mnt/workspace &&
+    mount -t 9p -o trans=virtio,version=9p2000.L workspace /mnt/workspace &&
+    exec bash /mnt/workspace/tools/storage-vm-spike/guest-run.sh
+power_state:
+  delay: now
+  mode: poweroff
+  message: storage VM capability spike completed
+  timeout: 30
+  condition: true

@@ -1,0 +1,108 @@
+name: VM storage-lab prototype
+
+on:
+  workflow_dispatch:
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+
+concurrency:
+  group: ${{ github.ref }}-${{ github.workflow }}
+  cancel-in-progress: true
+
+jobs:
+  guest-storage-lab:
+    name: Guest VM Testcontainers LUKS capability
+    if: github.event_name == 'workflow_dispatch' || github.event.pull_request.draft == false
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+      - run: rustup update
+      - uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: vm-storage-lab-prototype-${{ runner.os }}
+      - name: Install QEMU and host build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes --no-install-recommends \
+            cloud-image-utils \
+            libbtrfsutil-dev \
+            libclang-dev \
+            qemu-system-x86 \
+            qemu-utils
+      - name: Build the exact lab image and guest Testcontainers bridge
+        run: |
+          docker build --tag cosmic-storage-lab:local --file tools/storage-lab/Containerfile .
+          mkdir -p target/vm-storage-lab-prototype
+          docker save --output target/vm-storage-lab-prototype/storage-lab-image.tar cosmic-storage-lab:local
+          bridge_executable=$(cargo test --locked -p storage-lab-tests --features vm-spike --test vm_bridge --no-run --message-format=json | jq -r 'select(.reason == "compiler-artifact" and .target.name == "vm_bridge") | .executable // empty')
+          test -x "$bridge_executable"
+          install -m 0755 "$bridge_executable" target/vm-storage-lab-prototype/bridge
+      - name: Compare the same suite directly on the runner
+        id: host-control
+        continue-on-error: true
+        env:
+          STORAGE_LAB: "1"
+          STORAGE_LAB_ARTIFACT_ROOT: ${{ github.workspace }}/target/vm-storage-lab-prototype/host-control
+        run: |
+          mkdir -p "$STORAGE_LAB_ARTIFACT_ROOT"
+          timeout 5m target/vm-storage-lab-prototype/bridge --ignored --test-threads=1 --nocapture 2>&1 | tee "$STORAGE_LAB_ARTIFACT_ROOT/bridge.log"
+      - name: Boot a disposable guest and run the Testcontainers LUKS bridge
+        env:
+          VM_DIR: ${{ github.workspace }}/target/vm-storage-lab-prototype
+          VM_ARTIFACTS: ${{ runner.temp }}/vm-storage-lab-prototype-artifacts
+        run: |
+          set -Eeuo pipefail
+          mkdir -p "$VM_DIR" "$VM_ARTIFACTS"
+          # Retain evidence even if QEMU fails or reaches its deadline.
+          trap 'sudo chown -R "$USER:$USER" "$VM_ARTIFACTS"; mkdir -p "$VM_DIR/artifacts"; cp -a "$VM_ARTIFACTS/." "$VM_DIR/artifacts/"' EXIT
+          curl --fail --location --retry 3 --output "$VM_DIR/noble-server-cloudimg-amd64.img" \
+            https://cloud-images.ubuntu.com/noble/current/noble-server-cloudimg-amd64.img
+          curl --fail --location --retry 3 --output "$VM_DIR/SHA256SUMS" \
+            https://cloud-images.ubuntu.com/noble/current/SHA256SUMS
+          (
+            cd "$VM_DIR"
+            grep 'noble-server-cloudimg-amd64.img$' SHA256SUMS | sha256sum --check
+          )
+          cloud-localds "$VM_DIR/cloud-init.iso" tools/storage-vm-spike/cloud-init.yaml
+          qemu-img create -f qcow2 -F qcow2 \
+            -b "$(realpath "$VM_DIR/noble-server-cloudimg-amd64.img")" \
+            "$VM_DIR/guest-overlay.qcow2" 20G
+          {
+            echo "runner kernel=$(uname -r)"
+            if sudo test -c /dev/kvm && sudo test -r /dev/kvm && sudo test -w /dev/kvm; then
+              echo 'kvm-device=accessible; QEMU will prefer KVM and fall back to TCG'
+            else
+              echo 'kvm-device=not-accessible; QEMU will use TCG emulation'
+            fi
+          } | tee "$VM_ARTIFACTS/runner-virtualization.txt"
+          set -o pipefail
+          timeout 28m sudo qemu-system-x86_64 \
+            -machine accel=kvm:tcg \
+            -m 4096 \
+            -smp 2 \
+            -drive "file=$VM_DIR/guest-overlay.qcow2,if=virtio,format=qcow2" \
+            -drive "file=$VM_DIR/cloud-init.iso,if=virtio,format=raw" \
+            -virtfs "local,path=${{ github.workspace }},mount_tag=workspace,security_model=none,readonly=on" \
+            -virtfs "local,path=$VM_ARTIFACTS,mount_tag=artifacts,security_model=none" \
+            -nic user,model=virtio-net-pci \
+            -nographic \
+            -monitor none \
+            -no-reboot \
+            2>&1 | tee "$VM_ARTIFACTS/qemu-serial.log"
+          sudo chown -R "$USER:$USER" "$VM_ARTIFACTS"
+          mkdir -p "$VM_DIR/artifacts"
+          cp -a "$VM_ARTIFACTS/." "$VM_DIR/artifacts/"
+          test -f "$VM_ARTIFACTS/result-0"
+      - name: Remove the guest-only image archive before upload
+        if: always()
+        run: rm -f target/vm-storage-lab-prototype/storage-lab-image.tar
+      - name: Upload VM capability evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: vm-storage-lab-prototype-evidence
+          path: |
+            target/vm-storage-lab-prototype/artifacts
+            target/vm-storage-lab-prototype/host-control
+          if-no-files-found: warn

@@ -49,7 +49,7 @@ fn filesystem_runs_in_the_private_storage_lab() -> Result<(), Box<dyn Error>> {
     run_inner_test(FILESYSTEM_FILTER)
 }
 
-fn run_inner_test(filter: &str) -> Result<(), Box<dyn Error>> {
+pub(crate) fn run_inner_test(filter: &str) -> Result<(), Box<dyn Error>> {
     if std::env::var("STORAGE_LAB").as_deref() != Ok("1") {
         return Err("STORAGE_LAB=1 is required to execute the private storage lab".into());
     }
@@ -63,6 +63,16 @@ fn run_inner_test(filter: &str) -> Result<(), Box<dyn Error>> {
     let container = image.start()?;
 
     write_artifact(&artifact_dir, "container-id.txt", container.id())?;
+    let (devices, devices_stderr, _) = execute(
+        &container,
+        [
+            "sh",
+            "-ec",
+            "cat /proc/devices; ls -l /dev/dm-* /dev/mapper/control; dmsetup info -c; lsblk -o NAME,MAJ:MIN,TYPE,MOUNTPOINTS",
+        ],
+    )?;
+    write_artifact(&artifact_dir, "devices-before.stdout.log", &devices)?;
+    write_artifact(&artifact_dir, "devices-before.stderr.log", &devices_stderr)?;
     let mut test = container.exec(
         ExecCommand::new(["/usr/local/bin/storage-lab-run-tests"])
             .with_env_vars([("STORAGE_LAB_TEST_FILTER", filter)]),
@@ -108,7 +118,7 @@ fn run_inner_test(filter: &str) -> Result<(), Box<dyn Error>> {
         artifact_dir.display()
     );
     assert!(
-        !loops_stdout.contains("/tmp/storage-lab/capability-"),
+        !loops_stdout.contains("/tmp/storage-lab/"),
         "a lab-backed loop survived the inner test; inspect {}",
         artifact_dir.display()
     );
@@ -139,6 +149,9 @@ fn unique_artifact_dir() -> Result<PathBuf, Box<dyn Error>> {
 }
 
 fn workspace_target_dir() -> PathBuf {
+    if let Some(directory) = std::env::var_os("STORAGE_LAB_ARTIFACT_ROOT") {
+        return PathBuf::from(directory);
+    }
     Path::new(env!("CARGO_MANIFEST_DIR")).join("../../target")
 }
 

@@ -8,6 +8,9 @@ description = "Private Testcontainers storage-lab fixtures and integration tests
 
 [features]
 outer-bridge = ["dep:testcontainers"]
+# Deliberately isolated from the regular lab bridge: this feature is compiled
+# only by the disposable-QEMU capability spike.
+vm-spike = ["outer-bridge"]
 
 [dependencies]
 storage-contracts.workspace = true
