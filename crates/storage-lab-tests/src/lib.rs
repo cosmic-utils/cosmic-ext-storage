@@ -289,7 +289,7 @@ fn run(command: &mut Command) -> Result<Output> {
 
 #[cfg(test)]
 mod tests {
-    use super::is_lab_loop_device;
+    use super::{LabFixture, LabRoot, is_lab_loop_device};
 
     #[test]
     fn rejects_non_loop_and_physical_device_patterns() {
@@ -303,5 +303,22 @@ mod tests {
             assert!(!is_lab_loop_device(device), "must reject {device}");
         }
         assert!(is_lab_loop_device("/dev/loop42"));
+    }
+
+    #[test]
+    fn fixture_cleanup_is_idempotent_after_partial_setup() {
+        let mut fixture = LabFixture::create("partial-cleanup").expect("create lab root");
+        let root = fixture.root().expect("fixture root").path().to_owned();
+
+        fixture.cleanup().expect("first cleanup");
+        fixture.cleanup().expect("second cleanup");
+        assert!(!root.exists());
+    }
+
+    #[test]
+    fn fixture_paths_reject_parent_traversal() {
+        let root = LabRoot::create("path-validation").expect("create lab root");
+        assert!(root.sparse_file("../outside.img", 1).is_err());
+        root.remove().expect("remove lab root");
     }
 }

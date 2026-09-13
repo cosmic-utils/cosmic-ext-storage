@@ -179,6 +179,24 @@ cargo test -p storage-lab-tests --locked --test capability
 STORAGE_LAB=1 cargo test -p storage-lab-tests --locked --test capability
 ```
 
+### Implementation findings (2026-09-13)
+
+- The pinned runtime must start `systemd-udevd` before `udisksd`. A private
+  D-Bus ping alone is insufficient: without udev, an attached lab loop is not
+  emitted as a UDisks object and the production adapter correctly cannot
+  discover it.
+- The host-side test must be `#[ignore]` by default and fail if invoked without
+  `STORAGE_LAB=1`; a successful no-op outer test would recreate the old
+  harness's false-green failure mode. Nextest enables only those ignored bridge
+  tests for the lab profile.
+- Building the real adapter in the inner image needs builder-only
+  `libclang-dev` and `libbtrfsutil-dev` for the native Btrfs binding. They are
+  not runtime dependencies and remain out of the runtime image.
+- Local nested Docker still cannot allocate a loop device in this workspace.
+  The same Testcontainers bridge passed both private adapter discovery and GPT
+  partition-table creation on a GitHub-hosted runner; local failure preserves
+  its captured artifacts and is never treated as a skip.
+
 ## Phase 2 — Production transport seam
 
 ### Files

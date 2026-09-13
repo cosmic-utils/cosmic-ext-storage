@@ -74,6 +74,31 @@ async fn partition_table_round_trip_uses_the_private_adapter_transport() -> Resu
     Ok(())
 }
 
+#[test]
+#[ignore = "runs only inside the private Testcontainers storage lab"]
+fn dropping_a_fixture_detaches_its_ledgered_loop() -> Result<()> {
+    let mut fixture = LabFixture::create("drop-cleanup")?;
+    let loop_device = fixture.attach_sparse_loop("disk.img", 64 * 1024 * 1024)?;
+    let loop_path = loop_device.path().to_owned();
+    let root = fixture.root()?.path().to_owned();
+
+    drop(fixture);
+
+    assert!(!root.exists(), "fixture root must be removed on drop");
+    let mappings = require_success(Command::new("losetup").args([
+        "--list",
+        "--noheadings",
+        "--output",
+        "BACK-FILE",
+        loop_path.to_string_lossy().as_ref(),
+    ]))?;
+    assert!(
+        String::from_utf8_lossy(&mappings.stdout).trim().is_empty(),
+        "a dropped fixture left a loop backing mapping"
+    );
+    Ok(())
+}
+
 async fn private_backend() -> Result<UdisksBackend> {
     // This is deliberately the production adapter, attached to the lab's
     // private D-Bus socket. No host D-Bus bridge or test-only backend is used.

@@ -22,6 +22,7 @@ const IMAGE_NAME: &str = "cosmic-storage-lab";
 const IMAGE_TAG: &str = "local";
 const CAPABILITY_FILTER: &str = "capability_starts_private_dbus_udisks_and_sftp";
 const PARTITION_FILTER: &str = "partition_table_round_trip_uses_the_private_adapter_transport";
+const DROP_CLEANUP_FILTER: &str = "dropping_a_fixture_detaches_its_ledgered_loop";
 
 #[test]
 #[ignore = "requires STORAGE_LAB=1 and the locally built privileged storage-lab image"]
@@ -33,6 +34,12 @@ fn capability_runs_in_the_private_storage_lab() -> Result<(), Box<dyn Error>> {
 #[ignore = "requires STORAGE_LAB=1 and the locally built privileged storage-lab image"]
 fn partition_table_runs_in_the_private_storage_lab() -> Result<(), Box<dyn Error>> {
     run_inner_test(PARTITION_FILTER)
+}
+
+#[test]
+#[ignore = "requires STORAGE_LAB=1 and the locally built privileged storage-lab image"]
+fn fixture_drop_cleanup_runs_in_the_private_storage_lab() -> Result<(), Box<dyn Error>> {
+    run_inner_test(DROP_CLEANUP_FILTER)
 }
 
 fn run_inner_test(filter: &str) -> Result<(), Box<dyn Error>> {
