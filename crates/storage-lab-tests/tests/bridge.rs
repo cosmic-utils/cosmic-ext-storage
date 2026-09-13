@@ -55,6 +55,12 @@ fn luks_runs_in_the_private_storage_lab() -> Result<(), Box<dyn Error>> {
     run_inner_test("luks_unlock_rejects_bad_secret_and_locks_cleanly")
 }
 
+#[test]
+#[ignore = "requires STORAGE_LAB=1 and the locally built privileged storage-lab image"]
+fn failed_case_cleanup_runs_in_the_private_storage_lab() -> Result<(), Box<dyn Error>> {
+    run_inner_test("failing_case_still_removes_all_ledgered_resources")
+}
+
 fn run_inner_test(filter: &str) -> Result<(), Box<dyn Error>> {
     if std::env::var("STORAGE_LAB").as_deref() != Ok("1") {
         return Err("STORAGE_LAB=1 is required to execute the private storage lab".into());
@@ -94,7 +100,7 @@ fn run_inner_test(filter: &str) -> Result<(), Box<dyn Error>> {
         [
             "sh",
             "-ec",
-            "cat /tmp/storage-lab/polkitd.log /tmp/storage-lab/udisksd.log /tmp/storage-lab/sshd.log 2>/dev/null || true",
+            "cat /tmp/storage-lab/polkitd.log /tmp/storage-lab/udisksd.log /tmp/storage-lab/sshd.log /tmp/storage-lab-evidence/*.ledger 2>/dev/null || true",
         ],
     )?;
     write_artifact(&artifact_dir, "services.stdout.log", &service_stdout)?;
@@ -121,6 +127,16 @@ fn run_inner_test(filter: &str) -> Result<(), Box<dyn Error>> {
         test_exit,
         Some(0),
         "the inner Rust test failed; inspect {}",
+        artifact_dir.display()
+    );
+    assert!(
+        !service_stdout.contains("cleanup-failed\t"),
+        "fixture cleanup failed; inspect {}",
+        artifact_dir.display()
+    );
+    assert!(
+        loops_exit == Some(0),
+        "post-test leak check failed; inspect {}",
         artifact_dir.display()
     );
     assert!(

@@ -1,7 +1,8 @@
 #!/bin/sh
 set -eu
 
-mkdir -p /run/dbus /run/sshd /tmp/storage-lab
+mkdir -p /run/dbus /run/sshd /tmp/storage-lab /tmp/storage-lab-evidence
+touch /run/storage-lab-private
 # A privileged container still may not receive device-mapper nodes. UDisks
 # creates mapper devices for LUKS/LVM, so provide only the conventional
 # container-local control node and a small numbered range. The container is
@@ -40,7 +41,11 @@ ssh-keygen -A >/tmp/storage-lab/ssh-keygen.log 2>&1
 sshd_pid=$!
 
 for attempt in $(seq 1 100); do
-    if dbus-send --system --dest=org.freedesktop.UDisks2 --print-reply \
+    if kill -0 "$udisksd_pid" "$polkitd_pid" "$udevd_pid" "$sshd_pid" 2>/dev/null \
+        && ss -ltn | grep -q ':2222 ' \
+        && dbus-send --system --dest=org.freedesktop.PolicyKit1 --print-reply \
+        /org/freedesktop/PolicyKit1/Authority org.freedesktop.DBus.Peer.Ping >/tmp/storage-lab/polkit-ready.log 2>&1 \
+        && dbus-send --system --dest=org.freedesktop.UDisks2 --print-reply \
         /org/freedesktop/UDisks2 org.freedesktop.DBus.Peer.Ping \
         >/tmp/storage-lab/udisks-ready.log 2>&1; then
         printf '%s\n' 'STORAGE_LAB_READY'

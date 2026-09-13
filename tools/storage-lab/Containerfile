@@ -22,6 +22,8 @@ RUN --mount=type=cache,target=/usr/local/cargo/registry \
 
 FROM docker.io/library/rust@sha256:300ec56abce8cc9448ddea2172747d048ed902a3090e6b57babb2bf19f754081
 
+ENV STORAGE_LAB_PRIVATE=1
+
 RUN rm -f /etc/apt/sources.list.d/debian.sources \
  && printf '%s\n' \
       'deb [check-valid-until=no] https://snapshot.debian.org/archive/debian/20250701T000000Z/ bookworm main' \

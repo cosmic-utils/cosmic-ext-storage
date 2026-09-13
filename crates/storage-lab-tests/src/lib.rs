@@ -6,7 +6,8 @@
 use std::{
     error::Error,
     fmt,
-    fs::{self, File},
+    fs::{self, OpenOptions},
+    io::Write,
     path::{Path, PathBuf},
     process::{Command, Output},
     thread,
@@ -17,6 +18,10 @@ const LAB_ROOT_PARENT: &str = "/tmp/storage-lab";
 const LOOP_NODE_LIMIT: u32 = 16;
 const DETACH_ATTEMPTS: u32 = 100;
 const DETACH_POLL: Duration = Duration::from_millis(100);
+const EVIDENCE_ROOT: &str = "/tmp/storage-lab-evidence";
+
+mod resources;
+pub use resources::{LabArray, LabMapper, LabMount, LabVolumeGroup};
 
 pub type Result<T> = std::result::Result<T, LabError>;
 
@@ -57,9 +62,10 @@ pub struct LabRoot {
 
 impl LabRoot {
     pub fn create(label: &str) -> Result<Self> {
-        if !label
-            .bytes()
-            .all(|byte| byte.is_ascii_alphanumeric() || byte == b'-')
+        if label.is_empty()
+            || !label
+                .bytes()
+                .all(|byte| byte.is_ascii_alphanumeric() || byte == b'-')
         {
             return Err(LabError::new(
                 "lab root label must be ASCII alphanumeric or hyphen",
@@ -70,7 +76,8 @@ impl LabRoot {
             .map_err(|error| LabError::new(error.to_string()))?
             .as_nanos();
         let path = Path::new(LAB_ROOT_PARENT).join(format!("{label}-{nonce}"));
-        fs::create_dir_all(&path)?;
+        fs::create_dir_all(LAB_ROOT_PARENT)?;
+        fs::create_dir(&path)?;
         Ok(Self { path })
     }
 
@@ -79,13 +86,17 @@ impl LabRoot {
     }
 
     pub fn sparse_file(&self, name: &str, bytes: u64) -> Result<LabBackingFile> {
-        if name.contains('/') || name.is_empty() {
+        if name.contains('/') || name.is_empty() || name == "." || name == ".." {
             return Err(LabError::new(
                 "backing file name must be a single path component",
             ));
         }
         let path = self.path.join(name);
-        File::create(&path)?.set_len(bytes)?;
+        OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .open(&path)?
+            .set_len(bytes)?;
         Ok(LabBackingFile { path })
     }
 
@@ -111,11 +122,13 @@ impl LabBackingFile {
 #[derive(Debug)]
 pub struct LabLoopDevice {
     path: PathBuf,
+    backing: PathBuf,
     created_nodes: Vec<PathBuf>,
 }
 
 impl LabLoopDevice {
     pub fn attach(backing: &LabBackingFile) -> Result<Self> {
+        require_private_lab()?;
         let created_nodes = create_missing_loop_nodes()?;
         let attach_result = run(Command::new("losetup").args([
             "--find",
@@ -139,6 +152,7 @@ impl LabLoopDevice {
         }
         Ok(Self {
             path,
+            backing: backing.path.clone(),
             created_nodes,
         })
     }
@@ -147,13 +161,31 @@ impl LabLoopDevice {
         &self.path
     }
 
-    pub fn detach(self) -> Result<()> {
+    pub fn detach(&self) -> Result<()> {
+        // A loop number can be reused. Never detach it unless its current
+        // backing file still belongs to this exact capability.
+        if loop_backing(&self.path)?.is_none() {
+            remove_created_nodes(&self.created_nodes);
+            return Ok(());
+        }
+        self.verify()?;
         let detach_result =
             run(Command::new("losetup").args(["--detach", self.path.to_string_lossy().as_ref()]));
         let wait_result = wait_for_detach(&self.path);
-        remove_created_nodes(&self.created_nodes);
         detach_result?;
-        wait_result
+        wait_result?;
+        remove_created_nodes(&self.created_nodes);
+        Ok(())
+    }
+
+    pub fn verify(&self) -> Result<()> {
+        require_private_lab()?;
+        if loop_backing(&self.path)?.as_deref() != Some(self.backing.as_path()) {
+            return Err(LabError::new(
+                "loop backing no longer matches its owned capability",
+            ));
+        }
+        Ok(())
     }
 }
 
@@ -161,15 +193,26 @@ impl LabLoopDevice {
 #[derive(Debug)]
 pub struct LabFixture {
     root: Option<LabRoot>,
-    loop_device: Option<LabLoopDevice>,
+    loops: Vec<LabLoopDevice>,
+    ledger: PathBuf,
+    resources: Vec<resources::Resource>,
 }
 
 impl LabFixture {
     pub fn create(label: &str) -> Result<Self> {
-        Ok(Self {
-            root: Some(LabRoot::create(label)?),
-            loop_device: None,
-        })
+        let root = LabRoot::create(label)?;
+        fs::create_dir_all(EVIDENCE_ROOT)?;
+        let ledger = Path::new(EVIDENCE_ROOT)
+            .join(root.path().file_name().unwrap())
+            .with_extension("ledger");
+        let fixture = Self {
+            root: Some(root),
+            loops: Vec::new(),
+            ledger,
+            resources: Vec::new(),
+        };
+        fixture.record("root", fixture.root()?.path())?;
+        Ok(fixture)
     }
 
     pub fn attach_sparse_loop(&mut self, name: &str, bytes: u64) -> Result<&LabLoopDevice> {
@@ -177,14 +220,16 @@ impl LabFixture {
             .root
             .as_ref()
             .ok_or_else(|| LabError::new("lab fixture has already been cleaned up"))?;
-        if self.loop_device.is_some() {
-            return Err(LabError::new("this fixture already owns a loop device"));
-        }
         let backing = root.sparse_file(name, bytes)?;
-        self.loop_device = Some(LabLoopDevice::attach(&backing)?);
-        self.write_ledger()?;
-        self.loop_device
-            .as_ref()
+        self.record("backing", backing.path())?;
+        self.loops.push(LabLoopDevice::attach(&backing)?);
+        let device = self.loops.last().unwrap();
+        for node in &device.created_nodes {
+            self.record("node", node)?;
+        }
+        self.record("loop", device.path())?;
+        self.loops
+            .last()
             .ok_or_else(|| LabError::new("loop device was not recorded"))
     }
 
@@ -195,31 +240,66 @@ impl LabFixture {
     }
 
     pub fn cleanup(&mut self) -> Result<()> {
-        let loop_result = self
-            .loop_device
-            .take()
-            .map_or(Ok(()), LabLoopDevice::detach);
-        let root_result = self.root.take().map_or(Ok(()), LabRoot::remove);
-        loop_result.and(root_result)
+        // Keep failed entries and their backing files for a retry/diagnosis.
+        // Unlinking a busy backing file hides a leaked kernel resource.
+        while let Some(resource) = self.resources.last() {
+            self.cleanup_resource(resource)?;
+            self.record("removed-resource", Path::new(&format!("{resource:?}")))?;
+            self.resources.pop();
+        }
+        while let Some(device) = self.loops.last() {
+            if loop_backing(device.path())?.is_some() {
+                self.cleanup_dependents(device.path(), 0)?;
+            }
+            device.detach()?;
+            self.record("detached", device.path())?;
+            self.loops.pop();
+        }
+        if let Some(root) = &self.root {
+            fs::remove_dir_all(root.path())?;
+            self.record("removed-root", root.path())?;
+            self.root = None;
+        }
+        Ok(())
     }
 
-    fn write_ledger(&self) -> Result<()> {
-        let root = self.root()?;
-        let loop_device = self
-            .loop_device
-            .as_ref()
-            .ok_or_else(|| LabError::new("cannot write a ledger without a loop device"))?;
-        fs::write(
-            root.path().join("ledger.txt"),
-            format!("loop_device={}\n", loop_device.path().display()),
-        )?;
+    /// Read-only evidence survives successful cleanup of the fixture root.
+    pub fn ledger_path(&self) -> &Path {
+        &self.ledger
+    }
+
+    /// Resolve only a resource already held by this fixture, never a path
+    /// merely resembling a loop device. Revalidate before each mutation.
+    pub fn owned_loop(&self, path: &Path) -> Result<&LabLoopDevice> {
+        let device = self
+            .loops
+            .iter()
+            .find(|device| device.path == path)
+            .ok_or_else(|| LabError::new("device is not in this fixture's ledger"))?;
+        device.verify()?;
+        Ok(device)
+    }
+
+    fn record(&self, action: &str, path: &Path) -> Result<()> {
+        let mut file = OpenOptions::new()
+            .create(true)
+            .append(true)
+            .open(&self.ledger)?;
+        writeln!(file, "{action}\t{}", path.display())?;
+        file.sync_all()?;
         Ok(())
     }
 }
 
 impl Drop for LabFixture {
     fn drop(&mut self) {
-        let _ = self.cleanup();
+        if let Err(error) = self.cleanup() {
+            eprintln!(
+                "storage lab cleanup failed: {error}; ledger: {}",
+                self.ledger.display()
+            );
+            let _ = self.record("cleanup-failed", Path::new(&error.to_string()));
+        }
     }
 }
 
@@ -236,15 +316,38 @@ fn create_missing_loop_nodes() -> Result<Vec<PathBuf>> {
         if path.exists() {
             continue;
         }
-        run(Command::new("mknod").args([
+        if let Err(error) = run(Command::new("mknod").args([
             path.to_string_lossy().as_ref(),
             "b",
             "7",
             &index.to_string(),
-        ]))?;
+        ])) {
+            remove_created_nodes(&created);
+            return Err(error);
+        }
         created.push(path);
     }
     Ok(created)
+}
+
+fn require_private_lab() -> Result<()> {
+    if std::env::var("STORAGE_LAB_PRIVATE").as_deref() != Ok("1")
+        || !Path::new("/run/storage-lab-private").is_file()
+    {
+        return Err(LabError::new(
+            "device operations require the private storage lab",
+        ));
+    }
+    Ok(())
+}
+
+fn loop_backing(device: &Path) -> Result<Option<PathBuf>> {
+    let output = run(Command::new("losetup")
+        .args(["--list", "--noheadings", "--raw", "--output", "BACK-FILE"])
+        .arg(device))?;
+    let value = String::from_utf8_lossy(&output.stdout);
+    let value = value.trim();
+    Ok((!value.is_empty()).then(|| PathBuf::from(value)))
 }
 
 fn wait_for_detach(loop_device: &Path) -> Result<()> {
@@ -319,6 +422,43 @@ mod tests {
     fn fixture_paths_reject_parent_traversal() {
         let root = LabRoot::create("path-validation").expect("create lab root");
         assert!(root.sparse_file("../outside.img", 1).is_err());
+        assert!(root.sparse_file("..", 1).is_err());
+        assert!(root.sparse_file(".", 1).is_err());
+        root.sparse_file("unique.img", 1).expect("first allocation");
+        assert!(root.sparse_file("unique.img", 2).is_err());
         root.remove().expect("remove lab root");
+    }
+
+    #[test]
+    fn ledger_rejects_non_owned_and_physical_device_patterns() {
+        let fixture = LabFixture::create("ownership").unwrap();
+        for path in [
+            "/dev/loop0",
+            "/dev/loop999",
+            "/dev/sda",
+            "/dev/nvme0n1",
+            "/dev/vda",
+            "/dev/mapper/root",
+        ] {
+            assert!(fixture.owned_loop(std::path::Path::new(path)).is_err());
+        }
+    }
+
+    #[test]
+    fn ledger_survives_cleanup_and_records_root_lifecycle() {
+        let mut fixture = LabFixture::create("evidence").unwrap();
+        let ledger = fixture.ledger_path().to_owned();
+        fixture.cleanup().unwrap();
+        let text = std::fs::read_to_string(&ledger).unwrap();
+        assert!(text.starts_with("root\t/tmp/storage-lab/evidence-"));
+        assert!(text.contains("removed-root\t"));
+        std::fs::remove_file(ledger).unwrap();
+    }
+
+    #[test]
+    fn labels_cannot_escape_or_be_empty() {
+        for label in ["", "../escape", "has space", "has\nnewline", "é"] {
+            assert!(LabRoot::create(label).is_err());
+        }
     }
 }

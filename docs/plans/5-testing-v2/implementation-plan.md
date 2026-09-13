@@ -192,10 +192,9 @@ STORAGE_LAB=1 cargo test -p storage-lab-tests --locked --test capability
 - Building the real adapter in the inner image needs builder-only
   `libclang-dev` and `libbtrfsutil-dev` for the native Btrfs binding. They are
   not runtime dependencies and remain out of the runtime image.
-- Local nested Docker still cannot allocate a loop device in this workspace.
-  The same Testcontainers bridge passed both private adapter discovery and GPT
-  partition-table creation on a GitHub-hosted runner; local failure preserves
-  its captured artifacts and is never treated as a skip.
+- The earlier local loop-allocation failure is resolved. The same bridge now
+  executes locally as well as on GitHub-hosted runners; failures preserve
+  artifacts and are never treated as skips.
 - The original device-mapper diagnosis was premature. The entrypoint created
   `/dev/dm0` while UDisks accessed `/dev/dm-0`, and the observed failure was
   a missing path. The authorised VM spike in PR #119 exposed this naming bug.
@@ -218,6 +217,12 @@ STORAGE_LAB=1 cargo test -p storage-lab-tests --locked --test capability
   when an exact test filter matches nothing. Select the executable from Cargo's
   JSON build messages and reject missing test names before execution. Validate
   both cold CI and warm local builds, and inspect inner execution counts.
+- Fixture ledgers live outside the removable backing-file root and are copied
+  into the outer artifacts. Multiple-loop unwind cleanup is now executed, not
+  just inferred from `Drop`. Query the complete post-cleanup backing mapping:
+  querying an individual device node after removing that node legitimately
+  fails even when detach succeeded. Failed cleanup retains backing files and
+  ledger entries for retry; it must never hide a busy loop by unlinking its file.
 
 ## Phase 2 — Production transport seam
 

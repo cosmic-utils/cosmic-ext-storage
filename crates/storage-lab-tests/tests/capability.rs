@@ -30,7 +30,7 @@ async fn capability_starts_private_dbus_udisks_and_sftp() -> Result<()> {
     let loop_device = fixture.attach_sparse_loop("disk.img", 64 * 1024 * 1024)?;
     let loop_path = loop_device.path().to_owned();
     assert!(std::fs::metadata(&loop_path)?.file_type().is_block_device());
-    assert!(fixture.root()?.path().join("ledger.txt").is_file());
+    assert!(fixture.ledger_path().is_file());
 
     let backend = private_backend().await?;
     wait_for_discovery(&backend, &loop_path).await?;
@@ -188,6 +188,7 @@ async fn luks_unlock_rejects_bad_secret_and_locks_cleanly() -> Result<()> {
         .unlock_luks(&loop_path.to_string_lossy(), passphrase)
         .await
         .map_err(|error| error.to_string())?;
+    fixture.track_mapper(std::path::Path::new(&cleartext))?;
     assert!(
         std::fs::metadata(&cleartext)?.file_type().is_block_device(),
         "UDisks must return a cleartext block device"
@@ -198,6 +199,55 @@ async fn luks_unlock_rejects_bad_secret_and_locks_cleanly() -> Result<()> {
         .map_err(|error| error.to_string())?;
 
     fixture.cleanup()?;
+    Ok(())
+}
+
+#[test]
+#[ignore = "runs only inside the private Testcontainers storage lab"]
+fn failing_case_still_removes_all_ledgered_resources() -> Result<()> {
+    let mut fixture = LabFixture::create("intentional-unwind")?;
+    let root = fixture.root()?.path().to_owned();
+    let ledger = fixture.ledger_path().to_owned();
+    let first = fixture
+        .attach_sparse_loop("first.img", 64 * 1024 * 1024)?
+        .path()
+        .to_owned();
+    let second = fixture
+        .attach_sparse_loop("second.img", 64 * 1024 * 1024)?
+        .path()
+        .to_owned();
+    assert_ne!(first, second);
+    // The test succeeds only when an actual panic unwinds the fixture and
+    // independent kernel observations prove both resources were removed.
+    let outcome = std::panic::catch_unwind(move || {
+        let _owned_until_unwind = fixture;
+        panic!("deliberate inner case failure");
+    });
+    assert!(outcome.is_err());
+    assert!(!root.exists());
+    let output = require_success(Command::new("losetup").args([
+        "--list",
+        "--noheadings",
+        "--output",
+        "BACK-FILE",
+    ]))?;
+    assert!(!String::from_utf8_lossy(&output.stdout).contains(root.to_string_lossy().as_ref()));
+    let evidence = std::fs::read_to_string(ledger)?;
+    assert_eq!(
+        evidence
+            .lines()
+            .filter(|line| line.starts_with("loop\t"))
+            .count(),
+        2
+    );
+    assert_eq!(
+        evidence
+            .lines()
+            .filter(|line| line.starts_with("detached\t"))
+            .count(),
+        2
+    );
+    assert!(!evidence.contains("cleanup-failed"));
     Ok(())
 }
 
