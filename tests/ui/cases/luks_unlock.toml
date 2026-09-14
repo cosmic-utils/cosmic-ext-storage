@@ -1,0 +1,19 @@
+schema_version = 1
+id = "luks_unlock"
+scenario = "tests/ui/scenarios/physical/luks.toml"
+
+[semantic_ready]
+role = "application"
+name = "COSMIC Storage"
+
+[[step]]
+action = "focus"
+[step.selector]
+role = "textbox"
+name = "Passphrase"
+
+[[checkpoint]]
+golden = "tests/ui/goldens/luks_unlock.json"
+[checkpoint.selector]
+role = "dialog"
+name = "Unlock"

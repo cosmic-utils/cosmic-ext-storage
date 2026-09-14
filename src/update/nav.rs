@@ -33,8 +33,6 @@ pub(super) fn update_nav(
         Some(ShowDialog::ChangePassphrase(s)) => s.running,
         Some(ShowDialog::EditEncryptionOptions(s)) => s.running,
         Some(ShowDialog::DeletePartition(s)) => s.running,
-        Some(ShowDialog::BtrfsCreateSubvolume(s)) => s.running,
-        Some(ShowDialog::BtrfsCreateSnapshot(s)) => s.running,
         _ => false,
     };
 

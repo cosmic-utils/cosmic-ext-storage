@@ -1,0 +1,42 @@
+schema_version = 2
+id = "physical-luks-unlock"
+description = "A locked LUKS2 container whose passphrase is supplied from the in-memory test-secret store."
+
+[backend]
+id = "ui-scenario"
+capabilities = ["encryption", "filesystem"]
+
+[world]
+revision = 0
+
+[[world.disks]]
+id = "disk0"
+device = "/dev/ui-disk0"
+model = "Encryption Scenario Disk"
+size_bytes = 1073741824
+partition_table = "gpt"
+
+[[world.partitions]]
+id = "disk0p1"
+disk_id = "disk0"
+device = "/dev/ui-disk0p1"
+start_bytes = 1048576
+size_bytes = 536870912
+
+[[world.filesystems]]
+id = "cleartext-fs"
+device = "/dev/mapper/ui-crypt-data"
+type = "ext4"
+label = "Secret Data"
+mount_points = []
+size_bytes = 536870912
+available_bytes = 268435456
+
+[[world.luks]]
+id = "luks0"
+device = "/dev/ui-disk0p1"
+version = "luks2"
+mapper = "/dev/mapper/ui-crypt-data"
+secret_id = "luks0"
+unlocked = false
+filesystem_id = "cleartext-fs"

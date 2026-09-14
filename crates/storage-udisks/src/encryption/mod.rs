@@ -7,11 +7,11 @@
 //! - Listing encrypted devices
 
 pub mod config;
-mod format;
-mod list;
-mod lock;
-mod passphrase;
-mod unlock;
+pub(crate) mod format;
+pub(crate) mod list;
+pub(crate) mod lock;
+pub(crate) mod passphrase;
+pub(crate) mod unlock;
 
 pub use config::EncryptionOptionsSettings;
 pub use format::format_luks;

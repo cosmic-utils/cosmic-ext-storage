@@ -12,12 +12,19 @@ pub async fn resize_partition(partition_path: &str, new_size: u64) -> Result<(),
     let connection = crate::manager::shared_connection()
         .await
         .map_err(|e| DiskError::ConnectionFailed(e.to_string()))?;
+    resize_partition_with_connection(connection.as_ref(), partition_path, new_size).await
+}
 
+pub(crate) async fn resize_partition_with_connection(
+    connection: &zbus::Connection,
+    partition_path: &str,
+    new_size: u64,
+) -> Result<(), DiskError> {
     let obj_path: OwnedObjectPath = partition_path
         .try_into()
         .map_err(|e| DiskError::InvalidPath(format!("Invalid partition path: {}", e)))?;
 
-    let partition_proxy = PartitionProxy::builder(&connection)
+    let partition_proxy = PartitionProxy::builder(connection)
         .path(&obj_path)
         .map_err(|e| DiskError::DBusError(e.to_string()))?
         .build()

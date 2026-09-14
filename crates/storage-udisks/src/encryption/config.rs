@@ -11,7 +11,6 @@ use anyhow::Result;
 use zbus::zvariant::OwnedValue;
 
 use crate::dbus::bytestring as bs;
-use crate::disk::resolve;
 use crate::error::DiskError;
 use crate::infra::options::{
     join_options, remove_prefixed, remove_token, set_token_present, split_options, stable_dedup,
@@ -25,15 +24,20 @@ pub use storage_types::EncryptionOptionsSettings;
 ///
 /// Returns None if no crypttab configuration exists for the device.
 pub async fn get_encryption_options(device: &str) -> Result<Option<EncryptionOptionsSettings>> {
-    let connection = crate::manager::shared_connection()
-        .await
-        .map_err(|e| DiskError::ConnectionFailed(e.to_string()))?;
+    let connection = crate::manager::shared_connection().await?;
+    get_encryption_options_with_connection(connection.as_ref(), device).await
+}
 
-    let object_path = resolve::block_object_path_for_device(device)
-        .await
-        .map_err(|e| DiskError::DBusError(e.to_string()))?;
+pub(crate) async fn get_encryption_options_with_connection(
+    connection: &zbus::Connection,
+    device: &str,
+) -> Result<Option<EncryptionOptionsSettings>> {
+    let object_path =
+        crate::disk::resolve::block_object_path_for_device_with_connection(connection, device)
+            .await
+            .map_err(|e| DiskError::DBusError(e.to_string()))?;
 
-    let proxy = UDisks2BlockConfigurationProxy::builder(&connection)
+    let proxy = UDisks2BlockConfigurationProxy::builder(connection)
         .path(&object_path)?
         .build()
         .await
@@ -62,7 +66,9 @@ pub async fn get_encryption_options(device: &str) -> Result<Option<EncryptionOpt
     // Build EncryptionOptionsSettings from crypttab entry
     let settings = EncryptionOptionsSettings {
         name: name_str.unwrap_or_default().trim().to_string(),
-        unlock_at_startup: false,
+        unlock_at_startup: opts_str
+            .as_ref()
+            .is_some_and(|options| !split_options(options).iter().any(|token| token == "noauto")),
         require_auth: opts_str
             .as_ref()
             .map(|o| split_options(o).iter().any(|t| t == "x-udisks-auth"))
@@ -101,26 +107,32 @@ pub async fn set_encryption_options(
     device: &str,
     settings: &EncryptionOptionsSettings,
 ) -> Result<()> {
+    let connection = crate::manager::shared_connection().await?;
+    set_encryption_options_with_connection(connection.as_ref(), device, settings).await
+}
+
+pub(crate) async fn set_encryption_options_with_connection(
+    connection: &zbus::Connection,
+    device: &str,
+    settings: &EncryptionOptionsSettings,
+) -> Result<()> {
     if settings.name.trim().is_empty() {
         anyhow::bail!("Name must not be empty");
     }
 
-    let connection = crate::manager::shared_connection()
-        .await
-        .map_err(|e| DiskError::ConnectionFailed(e.to_string()))?;
+    let object_path =
+        crate::disk::resolve::block_object_path_for_device_with_connection(connection, device)
+            .await
+            .map_err(|e| DiskError::DBusError(e.to_string()))?;
 
-    let object_path = resolve::block_object_path_for_device(device)
-        .await
-        .map_err(|e| DiskError::DBusError(e.to_string()))?;
-
-    let proxy = UDisks2BlockConfigurationProxy::builder(&connection)
+    let proxy = UDisks2BlockConfigurationProxy::builder(connection)
         .path(&object_path)?
         .build()
         .await
         .map_err(|e| DiskError::DBusError(e.to_string()))?;
 
     // Get block UUID for device identification
-    let block_proxy = udisks2::block::BlockProxy::builder(&connection)
+    let block_proxy = udisks2::block::BlockProxy::builder(connection)
         .path(&object_path)?
         .build()
         .await
@@ -164,6 +176,12 @@ pub async fn set_encryption_options(
         bs::bytestring_owned_value(&settings.name),
     );
     dict.insert("options".to_string(), bs::bytestring_owned_value(&opts));
+    // UDisks requires this key even when no stored passphrase is requested.
+    // An empty byte string means prompt at unlock, not a missing argument.
+    dict.insert(
+        "passphrase-contents".to_string(),
+        bs::bytestring_owned_value(""),
+    );
 
     // Add passphrase fields if provided
     if let Some(passphrase) = &settings.passphrase {
@@ -209,15 +227,20 @@ pub async fn set_encryption_options(
 ///
 /// Removes the crypttab entry for the device if one exists.
 pub async fn clear_encryption_options(device: &str) -> Result<()> {
-    let connection = crate::manager::shared_connection()
-        .await
-        .map_err(|e| DiskError::ConnectionFailed(e.to_string()))?;
+    let connection = crate::manager::shared_connection().await?;
+    clear_encryption_options_with_connection(connection.as_ref(), device).await
+}
 
-    let object_path = resolve::block_object_path_for_device(device)
-        .await
-        .map_err(|e| DiskError::DBusError(e.to_string()))?;
+pub(crate) async fn clear_encryption_options_with_connection(
+    connection: &zbus::Connection,
+    device: &str,
+) -> Result<()> {
+    let object_path =
+        crate::disk::resolve::block_object_path_for_device_with_connection(connection, device)
+            .await
+            .map_err(|e| DiskError::DBusError(e.to_string()))?;
 
-    let proxy = UDisks2BlockConfigurationProxy::builder(&connection)
+    let proxy = UDisks2BlockConfigurationProxy::builder(connection)
         .path(&object_path)?
         .build()
         .await

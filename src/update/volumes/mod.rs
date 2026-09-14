@@ -5,7 +5,6 @@ use crate::message::volumes::VolumesControlMessage;
 use crate::state::dialogs::ShowDialog;
 use crate::state::volumes::{DetailTab, VolumesControl};
 
-mod btrfs;
 mod create;
 mod encryption;
 mod filesystem;
@@ -110,12 +109,6 @@ impl VolumesControl {
             VolumesControlMessage::OpenEditEncryptionOptions => {
                 encryption::open_edit_encryption_options(self, dialog)
             }
-            VolumesControlMessage::OpenBtrfsCreateSubvolume => {
-                btrfs::open_create_subvolume(self, dialog)
-            }
-            VolumesControlMessage::OpenBtrfsCreateSnapshot => {
-                btrfs::open_create_snapshot(self, dialog)
-            }
 
             VolumesControlMessage::CreateMessage(msg) => create::create_message(self, msg, dialog),
             VolumesControlMessage::UnlockMessage(unlock_message) => {
@@ -141,12 +134,6 @@ impl VolumesControl {
             }
             VolumesControlMessage::EditEncryptionOptionsMessage(msg) => {
                 encryption::edit_encryption_options_message(self, msg, dialog)
-            }
-            VolumesControlMessage::BtrfsCreateSubvolumeMessage(msg) => {
-                btrfs::btrfs_create_subvolume_message(self, msg, dialog)
-            }
-            VolumesControlMessage::BtrfsCreateSnapshotMessage(msg) => {
-                btrfs::btrfs_create_snapshot_message(self, msg, dialog)
             }
         }
     }

@@ -17,7 +17,17 @@ use zbus::zvariant::Value;
 /// Note: Caller should ensure no mounted filesystems exist before calling this.
 pub async fn format_disk(block_path: String, format_type: &str, erase: bool) -> Result<()> {
     let connection = crate::manager::shared_connection().await?;
-    let block_proxy = BlockProxy::builder(&connection)
+    format_disk_with_connection(connection.as_ref(), block_path, format_type, erase).await
+}
+
+/// Format a disk through the caller-selected UDisks transport.
+pub(crate) async fn format_disk_with_connection(
+    connection: &zbus::Connection,
+    block_path: String,
+    format_type: &str,
+    erase: bool,
+) -> Result<()> {
+    let block_proxy = BlockProxy::builder(connection)
         .path(block_path)?
         .build()
         .await?;

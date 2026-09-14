@@ -30,12 +30,6 @@ pub fn is_protected_path(mount_point: &Path) -> bool {
     })
 }
 
+#[path = "../../tests/unit/operations/protected_paths_tests.rs"]
 #[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn root_is_protected() {
-        assert!(is_protected_path(Path::new("/")));
-    }
-}
+mod tests;

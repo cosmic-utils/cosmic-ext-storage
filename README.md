@@ -7,7 +7,8 @@ COSMIC Storage is a desktop storage utility for the COSMIC desktop. It runs as t
 
 ### Prerequisites
 You will need the following packages/services:
- - `udisks2` (system service) - required for device enumeration, events, and native Polkit-authorized operations
+- `udisks2` (system service) - required for device enumeration, events, and native Polkit-authorized operations
+- UDisks2's LVM2, MD RAID, and Btrfs plugins for logical-storage discovery and actions
  - `just` (task runner) - install via `cargo install just` or your package manager
  
 For partition type support:
@@ -22,6 +23,14 @@ Recommended:
 - Optional: `rclone` for per-user network-drive configurations. Configurations live under the desktop user’s `~/.config/rclone/`; mounts and mount-on-login units are also user-scoped.
 
 The application uses the backend-neutral `storage-contracts` API. The currently shipped block-storage adapter is `UdisksBackend`; additional local or network adapters can be registered at the application composition root without making UI code depend on their implementation.
+
+## Logical storage
+
+Logical storage discovery covers LVM volume groups and logical volumes, MD RAID
+arrays, and Btrfs filesystems/subvolumes. Actions are sent directly to UDisks2
+through typed requests and use its native Polkit prompts. There is no
+project-owned privileged service or fallback command path. Destructive actions
+show their typed confirmation before they are submitted.
 
 ## Development
 
@@ -39,9 +48,24 @@ just check              # Run fmt, clippy, and tests
 just run                # Build and run the app
 just install            # Install the app binary and desktop assets
 just uninstall          # Remove installed app files
+STORAGE_LAB=1 just test-lab # Run real storage tests in private Testcontainers
+just app-workflow-check    # Run deterministic application workflow tests
+just ui-e2e                # Prove the headless UI/accessibility environment
+just coverage              # Collect coverage; currently fails incomplete acceptance
 ```
 
 `just install` installs the application binary, desktop entry, metainfo, and icon. It does not install service, policy, or socket files.
+
+The storage suite uses the same Testcontainers lifecycle locally and in CI.
+Its pinned private image provides UDisks, D-Bus, Polkit, filesystem/LVM/MD/Btrfs
+tools, and local SFTP; mutations are restricted to ledger-owned file-backed
+loops. No host storage or D-Bus mounts and no VM are required. See the
+[lab contract](tools/storage-lab/README.md) for prerequisites and artifacts.
+
+Scenario workflow tests remain a separate deterministic layer. `just ui-e2e`
+currently proves capability only; the eight interactive cases are still
+planned, not executed. [Coverage tooling](tools/testing/README.md) collects
+real host/container profiles but does not yet meet Testing V2 acceptance.
 
 ## Logging
 

@@ -62,7 +62,13 @@ async fn open_image_readonly_fd(image_path: &str) -> Result<OwnedFd> {
 /// Set up a loop device for an image file
 pub async fn loop_setup(image_path: &str) -> Result<OwnedObjectPath> {
     let connection = crate::manager::shared_connection().await?;
+    loop_setup_with_connection(connection.as_ref(), image_path).await
+}
 
+pub(crate) async fn loop_setup_with_connection(
+    connection: &zbus::Connection,
+    image_path: &str,
+) -> Result<OwnedObjectPath> {
     let manager_path: OwnedObjectPath = "/org/freedesktop/UDisks2/Manager".try_into()?;
 
     // UDisks2 expects a Unix FD handle for LoopSetup: (h a{sv}).
@@ -76,7 +82,7 @@ pub async fn loop_setup(image_path: &str) -> Result<OwnedObjectPath> {
     options.insert("read-only", Value::from(true));
 
     call_udisks_raw(
-        &connection,
+        connection,
         &manager_path,
         "org.freedesktop.UDisks2.Manager",
         "LoopSetup",

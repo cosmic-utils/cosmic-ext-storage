@@ -17,7 +17,13 @@ pub enum OperationError {
     Unsupported(String),
     #[error("Operation not found: {0}")]
     MissingOperation(String),
-    #[error("Storage operation failed: {0}")]
+    #[error("Storage device is busy: {0}")]
+    Busy(String),
+    #[error("Storage state changed: {0}")]
+    Conflict(String),
+    #[error("{0}")]
+    Other(String),
+    #[error("{0}")]
     Failed(String),
 }
 
@@ -29,7 +35,14 @@ impl From<StorageError> for OperationError {
             StorageErrorKind::PermissionDenied => Self::PermissionDenied(error.message),
             StorageErrorKind::Unsupported => Self::Unsupported(error.message),
             StorageErrorKind::Unavailable => Self::Unavailable(error.message),
+            StorageErrorKind::Busy => Self::Busy(error.message),
+            StorageErrorKind::Conflict => Self::Conflict(error.message),
+            StorageErrorKind::Other => Self::Other(error.message),
             _ => Self::Failed(error.message),
         }
     }
 }
+
+#[path = "../../tests/unit/operations/error_tests.rs"]
+#[cfg(test)]
+mod tests;

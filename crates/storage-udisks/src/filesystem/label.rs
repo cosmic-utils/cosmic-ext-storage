@@ -15,13 +15,21 @@ use zbus::zvariant::Value;
 /// # Returns
 /// The filesystem label (may be empty string if no label set)
 pub async fn get_filesystem_label(device: &str) -> Result<String, DiskError> {
-    let connection = crate::manager::shared_connection().await.map_err(|e| {
-        DiskError::ConnectionFailed(format!("Failed to connect to system bus: {}", e))
-    })?;
+    let connection = crate::manager::shared_connection()
+        .await
+        .map_err(|e| DiskError::ConnectionFailed(e.to_string()))?;
+    get_filesystem_label_with_connection(connection.as_ref(), device).await
+}
 
-    let block_path = crate::disk::resolve::block_object_path_for_device(device).await?;
+pub(crate) async fn get_filesystem_label_with_connection(
+    connection: &zbus::Connection,
+    device: &str,
+) -> Result<String, DiskError> {
+    let block_path =
+        crate::disk::resolve::block_object_path_for_device_with_connection(connection, device)
+            .await?;
 
-    let block_proxy = BlockProxy::builder(&connection)
+    let block_proxy = BlockProxy::builder(connection)
         .path(&block_path)
         .map_err(|e| DiskError::InvalidPath(format!("Invalid block path: {}", e)))?
         .build()
@@ -38,10 +46,19 @@ pub async fn set_filesystem_label(device_path: &str, label: &str) -> Result<(), 
     let connection = crate::manager::shared_connection()
         .await
         .map_err(|e| DiskError::ConnectionFailed(e.to_string()))?;
+    set_filesystem_label_with_connection(connection.as_ref(), device_path, label).await
+}
 
-    let fs_path = crate::disk::resolve::block_object_path_for_device(device_path).await?;
+pub(crate) async fn set_filesystem_label_with_connection(
+    connection: &zbus::Connection,
+    device_path: &str,
+    label: &str,
+) -> Result<(), DiskError> {
+    let fs_path =
+        crate::disk::resolve::block_object_path_for_device_with_connection(connection, device_path)
+            .await?;
 
-    let fs_proxy = FilesystemProxy::builder(&connection)
+    let fs_proxy = FilesystemProxy::builder(connection)
         .path(&fs_path)
         .map_err(|e| DiskError::DBusError(e.to_string()))?
         .build()

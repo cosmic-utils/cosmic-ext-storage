@@ -2,7 +2,6 @@
 
 //! LUKS unlocking operations
 
-use crate::disk::resolve::block_object_path_for_device;
 use crate::error::DiskError;
 use std::collections::HashMap;
 use udisks2::{block::BlockProxy, encrypted::EncryptedProxy};
@@ -15,10 +14,18 @@ pub async fn get_cleartext_device(device_path: &str) -> Result<String, DiskError
     let connection = crate::manager::shared_connection()
         .await
         .map_err(|e| DiskError::ConnectionFailed(e.to_string()))?;
+    get_cleartext_device_with_connection(connection.as_ref(), device_path).await
+}
 
-    let encrypted_path = block_object_path_for_device(device_path).await?;
+pub(crate) async fn get_cleartext_device_with_connection(
+    connection: &zbus::Connection,
+    device_path: &str,
+) -> Result<String, DiskError> {
+    let encrypted_path =
+        crate::disk::resolve::block_object_path_for_device_with_connection(connection, device_path)
+            .await?;
 
-    let encrypted_proxy = EncryptedProxy::builder(&connection)
+    let encrypted_proxy = EncryptedProxy::builder(connection)
         .path(&encrypted_path)?
         .build()
         .await
@@ -35,7 +42,7 @@ pub async fn get_cleartext_device(device_path: &str) -> Result<String, DiskError
     }
 
     // Get the device path from the cleartext block device
-    let block_proxy = BlockProxy::builder(&connection)
+    let block_proxy = BlockProxy::builder(connection)
         .path(&cleartext_object)?
         .build()
         .await
@@ -59,10 +66,19 @@ pub async fn unlock_luks(device_path: &str, passphrase: &str) -> Result<String, 
     let connection = crate::manager::shared_connection()
         .await
         .map_err(|e| DiskError::ConnectionFailed(e.to_string()))?;
+    unlock_luks_with_connection(connection.as_ref(), device_path, passphrase).await
+}
 
-    let encrypted_path = block_object_path_for_device(device_path).await?;
+pub(crate) async fn unlock_luks_with_connection(
+    connection: &zbus::Connection,
+    device_path: &str,
+    passphrase: &str,
+) -> Result<String, DiskError> {
+    let encrypted_path =
+        crate::disk::resolve::block_object_path_for_device_with_connection(connection, device_path)
+            .await?;
 
-    let encrypted_proxy = EncryptedProxy::builder(&connection)
+    let encrypted_proxy = EncryptedProxy::builder(connection)
         .path(&encrypted_path)?
         .build()
         .await
@@ -75,7 +91,7 @@ pub async fn unlock_luks(device_path: &str, passphrase: &str) -> Result<String, 
         .map_err(|e| DiskError::OperationFailed(format!("Unlock failed: {}", e)))?;
 
     // Get the device path from the cleartext object
-    let block_proxy = BlockProxy::builder(&connection)
+    let block_proxy = BlockProxy::builder(connection)
         .path(&cleartext_path)?
         .build()
         .await

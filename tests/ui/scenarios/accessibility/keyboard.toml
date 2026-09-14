@@ -1,0 +1,17 @@
+schema_version = 2
+id = "accessibility-keyboard"
+description = "A physical disk scenario reserved for keyboard-only dialog navigation."
+
+[backend]
+id = "ui-scenario"
+capabilities = ["partition", "filesystem"]
+
+[world]
+revision = 0
+
+[[world.disks]]
+id = "disk0"
+device = "/dev/ui-disk0"
+model = "Keyboard Scenario Disk"
+size_bytes = 1073741824
+partition_table = "gpt"

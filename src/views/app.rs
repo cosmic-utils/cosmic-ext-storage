@@ -66,8 +66,11 @@ fn tab_button_style(active: bool, theme: &cosmic::theme::Theme) -> cosmic::widge
 }
 
 /// Elements to pack at the start of the header bar.
-pub(crate) fn header_start(_app: &AppModel) -> Vec<Element<'_, Message>> {
-    vec![]
+pub(crate) fn header_start(app: &AppModel) -> Vec<Element<'_, Message>> {
+    app.runtime
+        .scenario_marker()
+        .map(|marker| vec![widget::text::caption(marker).id("test.scenario").into()])
+        .unwrap_or_default()
 }
 
 /// Elements to pack at the end of the header bar.
@@ -159,9 +162,19 @@ pub(crate) fn dialog(app: &AppModel) -> Option<Element<'_, Message>> {
             | crate::state::dialogs::ShowDialog::FormatDisk(_)
             | crate::state::dialogs::ShowDialog::NewDiskImage(_)
             | crate::state::dialogs::ShowDialog::AttachDiskImage(_)
-            | crate::state::dialogs::ShowDialog::ImageOperation(_)
-            | crate::state::dialogs::ShowDialog::BtrfsCreateSubvolume(_)
-            | crate::state::dialogs::ShowDialog::BtrfsCreateSnapshot(_) => None,
+            | crate::state::dialogs::ShowDialog::ImageOperation(_) => None,
+
+            crate::state::dialogs::ShowDialog::LogicalActionForm(state) => {
+                Some(dialogs::logical_action_form(state.clone()))
+            }
+
+            crate::state::dialogs::ShowDialog::LogicalDevicePicker(state) => {
+                Some(dialogs::logical_device_picker(state.clone()))
+            }
+
+            crate::state::dialogs::ShowDialog::LogicalActionConfirmation(state) => {
+                Some(dialogs::logical_confirmation(state.clone()))
+            }
 
             crate::state::dialogs::ShowDialog::DeletePartition(state) => {
                 Some(dialogs::confirmation(
@@ -243,8 +256,6 @@ fn full_page_wizard_view(dialog: &ShowDialog) -> Option<Element<'_, Message>> {
             Some(dialogs::attach_disk_image(state.as_ref().clone()))
         }
         ShowDialog::ImageOperation(state) => Some(dialogs::image_operation(state.as_ref().clone())),
-        ShowDialog::BtrfsCreateSubvolume(state) => Some(dialogs::create_subvolume(state.clone())),
-        ShowDialog::BtrfsCreateSnapshot(state) => Some(dialogs::create_snapshot(state.clone())),
         _ => None,
     }
 }
@@ -257,14 +268,22 @@ pub(crate) fn nav_bar(app: &AppModel) -> Option<Element<'_, cosmic::Action<Messa
 
     let controls_enabled = app.dialog.is_none();
 
-    let mut nav = sidebar::sidebar(&app.nav, &app.sidebar, &app.network, controls_enabled)
-        .map(Into::into)
-        .apply(widget::container)
-        .padding(8)
-        .class(cosmic::style::Container::Background)
-        // Both width and height must be Shrink for flex layout to respect the max_width constraint
-        .width(cosmic::iced::Length::Shrink)
-        .height(cosmic::iced::Length::Shrink);
+    let mut nav = sidebar::sidebar(
+        &app.nav,
+        &app.sidebar,
+        &app.network,
+        &app.logical,
+        controls_enabled,
+    )
+    .map(Into::into)
+    .apply(widget::container)
+    .padding(8)
+    .class(cosmic::style::Container::Background)
+    // Keep the card constrained horizontally while it fills the navigation
+    // column. A shrink-wrapped height leaves the glass surface stranded above
+    // the bottom of the window.
+    .width(cosmic::iced::Length::Shrink)
+    .height(cosmic::iced::Length::Fill);
 
     if !app.core.is_condensed() {
         nav = nav.max_width(280);
@@ -314,6 +333,19 @@ pub(crate) fn view(app: &AppModel) -> Element<'_, Message> {
     {
         let controls_enabled = app.dialog.is_none();
         return network_main_view(&app.network, controls_enabled).map(Message::Network);
+    }
+
+    if app.logical.view_requested {
+        if let Some(volumes_control) = app.nav.active_data::<VolumesControl>()
+            && volumes_control.detail_tab == DetailTab::Usage
+        {
+            return widget::container(usage_tab_view(volumes_control))
+                .padding(20)
+                .width(Length::Fill)
+                .height(Length::Fill)
+                .into();
+        }
+        return crate::views::logical::detail(&app.logical, &app.sidebar, app.dialog.is_none());
     }
 
     match app.nav.active_data::<UiDrive>() {
@@ -550,7 +582,7 @@ fn usage_category_label(category: UsageCategory) -> String {
     }
 }
 
-fn usage_tab_view<'a>(volumes_control: &'a VolumesControl) -> Element<'a, Message> {
+pub(crate) fn usage_tab_view<'a>(volumes_control: &'a VolumesControl) -> Element<'a, Message> {
     let usage_state = &volumes_control.usage_state;
 
     if usage_state.loading {
@@ -1716,8 +1748,10 @@ fn build_free_space_info<'a>(
     // Action button for creating a partition in free space
     let filesystem_tools_clone = filesystem_tools.to_vec();
     let add_partition_button = widget::tooltip(
-        widget::button::icon(icon::from_name("list-add-symbolic")).on_press(Message::Dialog(
-            Box::new(ShowDialog::AddPartition(
+        widget::button::icon(icon::from_name("list-add-symbolic"))
+            .name(fl!("create-partition"))
+            .id("partition.create".into())
+            .on_press(Message::Dialog(Box::new(ShowDialog::AddPartition(
                 crate::state::dialogs::CreatePartitionDialog {
                     info: segment.get_create_info(),
                     step: crate::state::dialogs::CreatePartitionStep::Basics,
@@ -1725,8 +1759,7 @@ fn build_free_space_info<'a>(
                     error: None,
                     filesystem_tools: filesystem_tools_clone,
                 },
-            )),
-        )),
+            )))),
         widget::text(fl!("create-partition")),
         widget::tooltip::Position::Bottom,
     );
@@ -1751,46 +1784,6 @@ fn build_free_space_info<'a>(
         .into()
 }
 
+#[path = "../../tests/unit/views/app_tests.rs"]
 #[cfg(test)]
-mod tests {
-    use super::*;
-    use cosmic::iced::keyboard::Modifiers;
-
-    #[test]
-    fn usage_row_selection_message_defaults_to_single_click_selection() {
-        let message = usage_row_selection_message("/tmp/a".to_string(), 3, Modifiers::empty());
-
-        match message {
-            Message::UsageSelectionSingle { path, index } => {
-                assert_eq!(path, "/tmp/a");
-                assert_eq!(index, 3);
-            }
-            other => panic!("unexpected message: {other:?}"),
-        }
-    }
-
-    #[test]
-    fn usage_row_selection_message_uses_ctrl_for_toggle() {
-        let message = usage_row_selection_message("/tmp/b".to_string(), 5, Modifiers::CTRL);
-
-        match message {
-            Message::UsageSelectionCtrl { path, index } => {
-                assert_eq!(path, "/tmp/b");
-                assert_eq!(index, 5);
-            }
-            other => panic!("unexpected message: {other:?}"),
-        }
-    }
-
-    #[test]
-    fn usage_row_selection_message_uses_shift_for_range_selection() {
-        let message = usage_row_selection_message("/tmp/c".to_string(), 7, Modifiers::SHIFT);
-
-        match message {
-            Message::UsageSelectionShift { index } => {
-                assert_eq!(index, 7);
-            }
-            other => panic!("unexpected message: {other:?}"),
-        }
-    }
-}
+mod tests;

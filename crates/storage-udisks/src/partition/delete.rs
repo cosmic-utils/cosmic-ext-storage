@@ -16,17 +16,28 @@ pub async fn delete_partition(partition_path: &str) -> Result<(), DiskError> {
     let connection = crate::manager::shared_connection()
         .await
         .map_err(|e| DiskError::ConnectionFailed(e.to_string()))?;
+    delete_partition_with_connection(connection.as_ref(), partition_path).await
+}
 
+pub(crate) async fn delete_partition_with_connection(
+    connection: &zbus::Connection,
+    partition_path: &str,
+) -> Result<(), DiskError> {
     let obj_path: OwnedObjectPath = partition_path
         .try_into()
         .map_err(|e| DiskError::InvalidPath(format!("Invalid partition path: {}", e)))?;
 
     // Try to unmount first (ignore errors - might not be mounted)
     // This logic merged from volume_model implementation
-    let _ = crate::filesystem::unmount_filesystem(partition_path, false).await;
+    let _ = crate::filesystem::mount::unmount_filesystem_with_connection(
+        connection,
+        partition_path,
+        false,
+    )
+    .await;
 
     // Delete the partition
-    let partition_proxy = PartitionProxy::builder(&connection)
+    let partition_proxy = PartitionProxy::builder(connection)
         .path(&obj_path)
         .map_err(|e| DiskError::DBusError(e.to_string()))?
         .build()

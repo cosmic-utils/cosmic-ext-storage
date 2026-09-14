@@ -505,6 +505,16 @@ pub async fn block_object_path_for_device(device: &str) -> Result<String, crate:
         .map(|path| path.to_string())
 }
 
+/// Resolve a device through an explicitly supplied UDisks connection.
+pub(crate) async fn block_object_path_for_device_with_connection(
+    connection: &Connection,
+    device: &str,
+) -> Result<String, crate::error::DiskError> {
+    super::resolve::block_object_path_for_device_with_connection(connection, device)
+        .await
+        .map(|path| path.to_string())
+}
+
 /// Get disk information as canonical storage-types models (public API).
 /// Uses the cached connection from DiskManager for improved performance.
 pub async fn get_disks(manager: &DiskManager) -> Result<Vec<DiskInfo>> {
@@ -526,13 +536,41 @@ pub async fn get_disks_with_partitions(
     manager: &DiskManager,
 ) -> Result<Vec<(DiskInfo, Vec<PartitionInfo>)>> {
     let pairs = get_disks_with_volumes_inner(manager.connection()).await?;
-    Ok(pairs
-        .into_iter()
-        .map(|(d, vols)| {
-            let device = d.device.clone();
-            (d, flatten_volumes_to_partitions(&vols, &device))
-        })
-        .collect())
+    let connection = manager.connection().as_ref();
+    let mut result = Vec::new();
+    for (disk, volumes) in pairs {
+        let mut partitions = flatten_volumes_to_partitions(&volumes, &disk.device);
+        for partition in &mut partitions {
+            let path = super::resolve::block_object_path_for_device_with_connection(
+                connection,
+                &partition.device,
+            )
+            .await?;
+            let proxy = udisks2::partition::PartitionProxy::builder(connection)
+                .path(&path)?
+                .build()
+                .await?;
+            // Volume labels describe filesystem/UI presentation, not GPT
+            // metadata. Never substitute them for the actual partition name,
+            // type, flags or UUID exposed by the Partition interface.
+            partition.name = proxy.name().await?;
+            partition.type_id = proxy.type_().await?;
+            partition.flags = proxy.flags().await?.bits();
+            partition.uuid = proxy.uuid().await?;
+            partition.number = proxy.number().await?;
+            partition.offset = proxy.offset().await?;
+            partition.size = proxy.size().await?;
+            let table = proxy.table().await?;
+            partition.table_type = PartitionTableProxy::builder(connection)
+                .path(&table)?
+                .build()
+                .await?
+                .type_()
+                .await?;
+        }
+        result.push((disk, partitions));
+    }
+    Ok(result)
 }
 
 /// Get DiskInfo for a drive given its UDisks2 drive object path (e.g. from InterfacesAdded).
@@ -572,71 +610,6 @@ pub async fn get_disk_info_for_drive_path(
     ))
 }
 
+#[path = "../../tests/unit/disk/discovery_tests.rs"]
 #[cfg(test)]
-mod tests {
-    use super::flatten_volumes_to_partitions;
-    use storage_types::{VolumeInfo, VolumeKind};
-
-    fn volume(
-        kind: VolumeKind,
-        partition_number: u32,
-        offset: u64,
-        device_path: Option<&str>,
-        children: Vec<VolumeInfo>,
-    ) -> VolumeInfo {
-        VolumeInfo {
-            kind,
-            label: String::new(),
-            size: 1024,
-            offset,
-            partition_number,
-            id_type: "ext4".to_string(),
-            device_path: device_path.map(ToOwned::to_owned),
-            parent_path: None,
-            has_filesystem: true,
-            mount_points: vec![],
-            usage: None,
-            locked: false,
-            children,
-        }
-    }
-
-    #[test]
-    fn flatten_partitions_sorts_by_offset() {
-        let volumes = vec![
-            volume(VolumeKind::Partition, 2, 4096, Some("/dev/sda2"), vec![]),
-            volume(VolumeKind::Partition, 1, 2048, Some("/dev/sda1"), vec![]),
-        ];
-
-        let partitions = flatten_volumes_to_partitions(&volumes, "/dev/sda");
-
-        let devices: Vec<&str> = partitions.iter().map(|p| p.device.as_str()).collect();
-        assert_eq!(devices, vec!["/dev/sda1", "/dev/sda2"]);
-    }
-
-    #[test]
-    fn flatten_partitions_ignores_non_partition_and_nested_children() {
-        let nested_child = volume(
-            VolumeKind::Partition,
-            99,
-            8192,
-            Some("/dev/mapper/inner"),
-            vec![],
-        );
-        let volumes = vec![
-            volume(VolumeKind::Filesystem, 0, 1024, Some("/dev/sda"), vec![]),
-            volume(
-                VolumeKind::Partition,
-                1,
-                2048,
-                Some("/dev/sda1"),
-                vec![nested_child],
-            ),
-        ];
-
-        let partitions = flatten_volumes_to_partitions(&volumes, "/dev/sda");
-
-        assert_eq!(partitions.len(), 1);
-        assert_eq!(partitions[0].device, "/dev/sda1");
-    }
-}
+mod tests;

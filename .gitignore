@@ -4,6 +4,8 @@ debug/
 target/
 vendor/
 vendor.tar
+ui-artifacts/
+__pycache__/
 debian/*
 !debian/changelog
 !debian/control

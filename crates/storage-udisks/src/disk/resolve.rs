@@ -27,7 +27,15 @@ pub(crate) async fn block_object_path_for_device(
         .await
         .map_err(|e| DiskError::ConnectionFailed(e.to_string()))?;
 
-    let manager_proxy = UDisks2ManagerProxy::new(&connection)
+    block_object_path_for_device_with_connection(connection.as_ref(), device).await
+}
+
+/// Resolve a device through the caller-selected UDisks transport.
+pub(crate) async fn block_object_path_for_device_with_connection(
+    connection: &zbus::Connection,
+    device: &str,
+) -> Result<OwnedObjectPath, DiskError> {
+    let manager_proxy = UDisks2ManagerProxy::new(connection)
         .await
         .map_err(|e| DiskError::DBusError(e.to_string()))?;
 
@@ -39,7 +47,7 @@ pub(crate) async fn block_object_path_for_device(
     let device_canon = canonicalize_best_effort(device);
 
     for obj in &block_paths {
-        let proxy = match BlockProxy::builder(&connection).path(obj)?.build().await {
+        let proxy = match BlockProxy::builder(connection).path(obj)?.build().await {
             Ok(p) => p,
             Err(_) => continue,
         };
@@ -81,14 +89,11 @@ pub(crate) async fn block_object_path_for_device(
 
 /// Resolve a mount point path (e.g. "/run/media/user/DISK") to the UDisks2 block object path.
 /// Used when unmounting by mount point.
-pub(crate) async fn block_object_path_for_mount_point(
+pub(crate) async fn block_object_path_for_mount_point_with_connection(
+    connection: &zbus::Connection,
     mount_point: &str,
 ) -> Result<OwnedObjectPath, DiskError> {
-    let connection = crate::manager::shared_connection()
-        .await
-        .map_err(|e| DiskError::ConnectionFailed(e.to_string()))?;
-
-    let manager_proxy = UDisks2ManagerProxy::new(&connection)
+    let manager_proxy = UDisks2ManagerProxy::new(connection)
         .await
         .map_err(|e| DiskError::DBusError(e.to_string()))?;
 
@@ -98,7 +103,7 @@ pub(crate) async fn block_object_path_for_mount_point(
         .map_err(|e| DiskError::DBusError(e.to_string()))?;
 
     for obj in &block_paths {
-        let fs_proxy = match FilesystemProxy::builder(&connection)
+        let fs_proxy = match FilesystemProxy::builder(connection)
             .path(obj)?
             .build()
             .await
@@ -123,15 +128,14 @@ pub(crate) async fn block_object_path_for_mount_point(
 
 /// Resolve a block device path (e.g. "/dev/sda") to the UDisks2 drive object path.
 /// Used for SMART and other drive-level operations.
-pub(crate) async fn drive_object_path_for_device(
+pub(crate) async fn drive_object_path_for_device_with_connection(
+    connection: &zbus::Connection,
     device: &str,
 ) -> Result<OwnedObjectPath, DiskError> {
-    let connection = crate::manager::shared_connection()
-        .await
-        .map_err(|e| DiskError::ConnectionFailed(e.to_string()))?;
-
-    let block_path = block_object_path_for_device(device).await?;
-    let block_proxy = BlockProxy::builder(&connection)
+    let block_path =
+        crate::disk::resolve::block_object_path_for_device_with_connection(connection, device)
+            .await?;
+    let block_proxy = BlockProxy::builder(connection)
         .path(&block_path)?
         .build()
         .await

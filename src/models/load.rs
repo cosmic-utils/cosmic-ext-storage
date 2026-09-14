@@ -4,6 +4,24 @@
 
 use super::UiDrive;
 use crate::operations::{DisksClient, error::OperationError};
+use std::time::Instant;
+use storage_types::DiskInfo;
+
+pub async fn load_drive_candidates() -> Result<Vec<DiskInfo>, OperationError> {
+    DisksClient::new().await?.list_disks().await
+}
+
+pub async fn build_drive_timed(disk: DiskInfo) -> (Result<UiDrive, String>, u128) {
+    let started = Instant::now();
+    let device = disk.device.clone();
+    let result = UiDrive::new(disk).await.map_err(|error| error.to_string());
+    let elapsed_ms = started.elapsed().as_millis();
+    match &result {
+        Ok(_) => tracing::info!(%device, elapsed_ms, "drive build complete"),
+        Err(error) => tracing::warn!(%device, elapsed_ms, %error, "drive build failed"),
+    }
+    (result, elapsed_ms)
+}
 
 /// Load all drives from in-process operations as UiDrive instances
 ///
@@ -17,8 +35,7 @@ use crate::operations::{DisksClient, error::OperationError};
 /// }
 /// ```
 pub async fn load_all_drives() -> Result<Vec<UiDrive>, OperationError> {
-    let client = DisksClient::new().await?;
-    let disks = client.list_disks().await?;
+    let disks = load_drive_candidates().await?;
 
     let mut drives = Vec::new();
     for disk in disks {

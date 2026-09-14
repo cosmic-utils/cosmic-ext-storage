@@ -13,12 +13,19 @@ pub async fn set_partition_type(partition_path: &str, type_id: &str) -> Result<(
     let connection = crate::manager::shared_connection()
         .await
         .map_err(|e| DiskError::ConnectionFailed(e.to_string()))?;
+    set_partition_type_with_connection(connection.as_ref(), partition_path, type_id).await
+}
 
+pub(crate) async fn set_partition_type_with_connection(
+    connection: &zbus::Connection,
+    partition_path: &str,
+    type_id: &str,
+) -> Result<(), DiskError> {
     let obj_path: OwnedObjectPath = partition_path
         .try_into()
         .map_err(|e| DiskError::InvalidPath(format!("Invalid partition path: {}", e)))?;
 
-    let partition_proxy = PartitionProxy::builder(&connection)
+    let partition_proxy = PartitionProxy::builder(connection)
         .path(&obj_path)
         .map_err(|e| DiskError::DBusError(e.to_string()))?
         .build()
@@ -39,12 +46,19 @@ pub async fn set_partition_flags(partition_path: &str, flags: u64) -> Result<(),
     let connection = crate::manager::shared_connection()
         .await
         .map_err(|e| DiskError::ConnectionFailed(e.to_string()))?;
+    set_partition_flags_with_connection(connection.as_ref(), partition_path, flags).await
+}
 
+pub(crate) async fn set_partition_flags_with_connection(
+    connection: &zbus::Connection,
+    partition_path: &str,
+    flags: u64,
+) -> Result<(), DiskError> {
     let obj_path: OwnedObjectPath = partition_path
         .try_into()
         .map_err(|e| DiskError::InvalidPath(format!("Invalid partition path: {}", e)))?;
 
-    let partition_proxy = PartitionProxy::builder(&connection)
+    let partition_proxy = PartitionProxy::builder(connection)
         .path(&obj_path)
         .map_err(|e| DiskError::DBusError(e.to_string()))?
         .build()
@@ -66,12 +80,19 @@ pub async fn set_partition_name(partition_path: &str, name: &str) -> Result<(), 
     let connection = crate::manager::shared_connection()
         .await
         .map_err(|e| DiskError::ConnectionFailed(e.to_string()))?;
+    set_partition_name_with_connection(connection.as_ref(), partition_path, name).await
+}
 
+pub(crate) async fn set_partition_name_with_connection(
+    connection: &zbus::Connection,
+    partition_path: &str,
+    name: &str,
+) -> Result<(), DiskError> {
     let obj_path: OwnedObjectPath = partition_path
         .try_into()
         .map_err(|e| DiskError::InvalidPath(format!("Invalid partition path: {}", e)))?;
 
-    let partition_proxy = PartitionProxy::builder(&connection)
+    let partition_proxy = PartitionProxy::builder(connection)
         .path(&obj_path)
         .map_err(|e| DiskError::DBusError(e.to_string()))?
         .build()
@@ -98,9 +119,36 @@ pub async fn edit_partition(
     name: &str,
     flags: u64,
 ) -> Result<(), DiskError> {
+    let connection = crate::manager::shared_connection()
+        .await
+        .map_err(|e| DiskError::ConnectionFailed(e.to_string()))?;
+    edit_partition_with_connection(
+        connection.as_ref(),
+        partition_path,
+        partition_type,
+        name,
+        flags,
+    )
+    .await
+}
+
+pub(crate) async fn edit_partition_with_connection(
+    connection: &zbus::Connection,
+    partition_path: &str,
+    partition_type: &str,
+    name: &str,
+    flags: u64,
+) -> Result<(), DiskError> {
     // Merged from volume_model - convenient all-in-one operation
-    set_partition_type(partition_path, partition_type).await?;
-    set_partition_name(partition_path, name).await?;
-    set_partition_flags(partition_path, flags).await?;
+    crate::partition::edit::set_partition_type_with_connection(
+        connection,
+        partition_path,
+        partition_type,
+    )
+    .await?;
+    crate::partition::edit::set_partition_name_with_connection(connection, partition_path, name)
+        .await?;
+    crate::partition::edit::set_partition_flags_with_connection(connection, partition_path, flags)
+        .await?;
     Ok(())
 }

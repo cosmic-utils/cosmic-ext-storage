@@ -17,10 +17,10 @@ pub enum BtrfsError {
     #[error("Invalid path: {0}")]
     InvalidPath(String),
 
-    #[error("BTRFS operation failed: {0}")]
+    #[error("{0}")]
     OperationFailed(String),
 
-    #[error("Command execution failed: {0}")]
+    #[error("{0}")]
     CommandFailed(String),
 
     #[error("Parse error: {0}")]
@@ -32,3 +32,7 @@ pub enum BtrfsError {
 
 /// Result type alias for BTRFS operations
 pub type Result<T> = std::result::Result<T, BtrfsError>;
+
+#[path = "../tests/unit/error_tests.rs"]
+#[cfg(test)]
+mod tests;

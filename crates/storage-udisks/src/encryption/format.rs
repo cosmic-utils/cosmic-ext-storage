@@ -16,10 +16,20 @@ pub async fn format_luks(
     let connection = crate::manager::shared_connection()
         .await
         .map_err(|e| DiskError::ConnectionFailed(e.to_string()))?;
+    format_luks_with_connection(connection.as_ref(), device_path, passphrase, version).await
+}
 
-    let block_path = crate::disk::resolve::block_object_path_for_device(device_path).await?;
+pub(crate) async fn format_luks_with_connection(
+    connection: &zbus::Connection,
+    device_path: &str,
+    passphrase: &str,
+    version: &str,
+) -> Result<(), DiskError> {
+    let block_path =
+        crate::disk::resolve::block_object_path_for_device_with_connection(connection, device_path)
+            .await?;
 
-    let block_proxy = BlockProxy::builder(&connection)
+    let block_proxy = BlockProxy::builder(connection)
         .path(&block_path)?
         .build()
         .await
