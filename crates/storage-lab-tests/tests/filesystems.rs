@@ -1,14 +1,20 @@
 mod common;
-use common::{lab, owned};
+use common::owned;
 use std::{fs, path::Path, process::Command};
 use storage_contracts::FilesystemOperations;
 use storage_lab_tests::Result;
 use storage_udisks::storage_types::{FormatOptions, MountOptions};
 
+#[rstest::rstest]
 #[tokio::test]
 #[ignore = "runs only inside the private Testcontainers storage lab"]
-async fn filesystem_mount_options_busy_retry_and_cleanup() -> Result<()> {
-    let (mut fixture, backend, disk) = lab("filesystem-mount", 128).await?;
+async fn filesystem_mount_options_busy_retry_and_cleanup(
+    #[from(common::lab)]
+    #[with("filesystem-mount", 128)]
+    #[future(awt)]
+    lab: Result<common::OwnedLab>,
+) -> Result<()> {
+    let (mut fixture, backend, disk) = lab?;
     backend
         .format_filesystem(
             owned(&fixture, &disk)?,

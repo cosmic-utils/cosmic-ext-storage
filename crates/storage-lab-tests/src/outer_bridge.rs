@@ -21,10 +21,6 @@ const IMAGE_NAME: &str = "cosmic-storage-lab";
 
 const IMAGE_TAG: &str = "local";
 
-pub fn run_inner_test(filter: &str) -> Result<(), Box<dyn Error>> {
-    run_inner_case("capability", filter)
-}
-
 pub fn run_inner_case(target: &str, filter: &str) -> Result<(), Box<dyn Error>> {
     capture_inner_case(target, filter)?.verify()
 }

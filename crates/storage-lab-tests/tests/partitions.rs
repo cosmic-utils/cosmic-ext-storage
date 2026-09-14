@@ -1,15 +1,21 @@
 mod common;
-use common::{lab, owned};
+use common::owned;
 use futures::StreamExt;
 use std::{path::Path, time::Duration};
 use storage_contracts::{DeviceEventSource, PartitionOperations};
 use storage_lab_tests::Result;
 use storage_udisks::storage_types::DeviceEvent;
 
+#[rstest::rstest]
 #[tokio::test]
 #[ignore = "runs only inside the private Testcontainers storage lab"]
-async fn partition_create_edit_delete_round_trip() -> Result<()> {
-    let (mut fixture, backend, disk) = lab("partition-lifecycle", 256).await?;
+async fn partition_create_edit_delete_round_trip(
+    #[from(common::lab)]
+    #[with("partition-lifecycle", 256)]
+    #[future(awt)]
+    lab: Result<common::OwnedLab>,
+) -> Result<()> {
+    let (mut fixture, backend, disk) = lab?;
     backend
         .create_partition_table(owned(&fixture, &disk)?, "gpt")
         .await?;

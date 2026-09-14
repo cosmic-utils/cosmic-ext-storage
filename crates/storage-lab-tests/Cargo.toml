@@ -19,3 +19,6 @@ tokio.workspace = true
 zbus.workspace = true
 futures.workspace = true
 sha2 = { workspace = true, optional = true }
+
+[dev-dependencies]
+rstest.workspace = true

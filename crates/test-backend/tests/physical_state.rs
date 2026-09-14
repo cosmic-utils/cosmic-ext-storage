@@ -1,3 +1,5 @@
+mod common;
+use common::fixture;
 use futures::StreamExt;
 use std::collections::BTreeMap;
 use storage_contracts::{
@@ -6,16 +8,14 @@ use storage_contracts::{
 };
 use test_backend::{ScenarioBackend, ScenarioRuntime, ScenarioStore};
 
-fn fixture(name: &str) -> std::path::PathBuf {
-    std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("../../tests/ui/scenarios")
-        .join(name)
-}
-
+#[rstest::rstest]
 #[tokio::test]
-async fn partition_transition_emits_ordered_device_event() {
-    let runtime = ScenarioRuntime::load(fixture("physical/partition-format.toml"), None, None)
-        .expect("runtime");
+async fn partition_transition_emits_ordered_device_event(
+    #[from(common::scenario)]
+    #[with("physical/partition-format.toml")]
+    #[future(awt)]
+    runtime: ScenarioRuntime,
+) {
     let backend = runtime.backend();
     backend
         .create_partition("/dev/ui-disk0", 0, 1024, "linux")
@@ -28,10 +28,14 @@ async fn partition_transition_emits_ordered_device_event() {
     );
 }
 
+#[rstest::rstest]
 #[tokio::test]
-async fn device_subscriptions_remain_live_and_do_not_steal_each_others_events() {
-    let runtime = ScenarioRuntime::load(fixture("physical/partition-format.toml"), None, None)
-        .expect("runtime");
+async fn device_subscriptions_remain_live_and_do_not_steal_each_others_events(
+    #[from(common::scenario)]
+    #[with("physical/partition-format.toml")]
+    #[future(awt)]
+    runtime: ScenarioRuntime,
+) {
     let backend = runtime.backend();
     let mut first = backend.device_events().await.expect("first subscription");
     let mut second = backend.device_events().await.expect("second subscription");
@@ -61,14 +65,13 @@ async fn device_subscriptions_remain_live_and_do_not_steal_each_others_events() 
     }
 }
 
+#[rstest::rstest]
 #[tokio::test]
-async fn busy_unmount_preserves_state() {
-    let backend = ScenarioBackend::load(ScenarioStore::new(
-        fixture("physical/busy-unmount.toml"),
-        None,
-        None,
-    ))
-    .expect("backend");
+async fn busy_unmount_preserves_state(
+    #[from(common::backend)]
+    #[with("physical/busy-unmount.toml")]
+    backend: std::sync::Arc<ScenarioBackend>,
+) {
     let error = backend
         .unmount_filesystem("/dev/ui-disk0p1", false)
         .await

@@ -3,6 +3,22 @@
 schema_version = 1
 
 [[target]]
+phase = "rstest"
+package = "test-backend"
+kind = "rust-integration"
+name = "fixture_composition"
+tests = [
+  "async_fixture_override::case_1_partition",
+  "async_fixture_override::case_2_empty",
+  "independent_mutable_scenarios::case_1_first",
+  "independent_mutable_scenarios::case_2_second",
+  "owned_fixture_drops_normally",
+  "fixture_dependencies_are_factories",
+  "failure_is_reported_and_resources_unwind::case_1_setup",
+  "failure_is_reported_and_resources_unwind::case_2_body"
+]
+
+[[target]]
 phase = "1"
 package = "storage-contracts"
 kind = "rust-integration"

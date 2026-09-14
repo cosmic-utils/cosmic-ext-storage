@@ -27,6 +27,7 @@ storage-contracts.workspace = true
 storage-types.workspace = true
 
 [dev-dependencies]
+rstest.workspace = true
 tempfile = "=3.27.0"
 
 [lints.rust]

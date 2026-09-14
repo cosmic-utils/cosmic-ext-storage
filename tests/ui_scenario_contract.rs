@@ -1,21 +1,20 @@
 #![cfg(feature = "test-backend")]
 
+mod common;
+use common::fixture;
 use cosmic_ext_storage::AppRuntime;
 use storage_types::{
     ImageAssetRef, ImageCopyKind, ImageCopyRequest, NetworkBackendId, NetworkDriveConfig,
     NetworkDriveStatus, UsageWorkflowRequest,
 };
 
-fn fixture(name: &str) -> std::path::PathBuf {
-    std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("tests/ui/scenarios")
-        .join(name)
-}
-
+#[rstest::rstest]
 #[tokio::test]
-async fn physical_scenario_drives_dialog_and_refresh() {
-    let runtime = AppRuntime::scenario(fixture("physical/partition-format.toml"), None, None)
-        .expect("scenario runtime");
+async fn physical_scenario_drives_dialog_and_refresh(
+    #[from(common::scenario)]
+    #[with("physical/partition-format.toml")]
+    runtime: AppRuntime,
+) {
     let operations = runtime.operations();
     let device = operations
         .registry
@@ -26,10 +25,13 @@ async fn physical_scenario_drives_dialog_and_refresh() {
     assert_eq!(device, "/dev/ui-disk0p1");
 }
 
+#[rstest::rstest]
 #[tokio::test]
-async fn configured_backend_error_remains_actionable() {
-    let runtime = AppRuntime::scenario(fixture("physical/busy-unmount.toml"), None, None)
-        .expect("scenario runtime");
+async fn configured_backend_error_remains_actionable(
+    #[from(common::scenario)]
+    #[with("physical/busy-unmount.toml")]
+    runtime: AppRuntime,
+) {
     let error = runtime
         .operations()
         .registry
@@ -40,10 +42,13 @@ async fn configured_backend_error_remains_actionable() {
     assert!(error.message.contains("Fixture user is active"));
 }
 
+#[rstest::rstest]
 #[tokio::test]
-async fn usage_and_image_progress_render_from_contract_events() {
-    let runtime = AppRuntime::scenario(fixture("workflows/image-usage.toml"), None, None)
-        .expect("scenario runtime");
+async fn usage_and_image_progress_render_from_contract_events(
+    #[from(common::scenario)]
+    #[with("workflows/image-usage.toml")]
+    runtime: AppRuntime,
+) {
     let operations = runtime.operations();
     let scan = operations
         .usage_operations

@@ -40,6 +40,26 @@ not infer compile-time feature absence from a `test-backend` test binary.
 `same_tick_cancel_order_is_deterministic` runs in Phase 6, after the image/usage
 operation model exists; Phase 5 covers only serialized clock control.
 
+## rstest composition regression gate (Testing V2 addition)
+
+The `rstest` phase adds the `test-backend` integration target
+`fixture_composition`. Its maintained mandatory identities are:
+
+- `async_fixture_override::case_1_partition`
+- `async_fixture_override::case_2_empty`
+- `independent_mutable_scenarios::case_1_first`
+- `independent_mutable_scenarios::case_2_second`
+- `owned_fixture_drops_normally`
+- `fixture_dependencies_are_factories`
+- `failure_is_reported_and_resources_unwind::case_1_setup`
+- `failure_is_reported_and_resources_unwind::case_2_body`
+
+The two failure parents execute their ignored child probes and verify nonzero
+exit and owned-resource cleanup. The probes are not independent passing gates.
+These composition regressions supplement, rather than replace, the semantic
+workflow and executed UI obligations. See the
+[adoption plan](../5-testing-v2/rstest-implementation-plan.md).
+
 ## Commands
 
 Minimum commands after implementation:

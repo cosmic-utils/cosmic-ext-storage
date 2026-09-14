@@ -1,21 +1,18 @@
 #![cfg(feature = "test-backend")]
 
+mod common;
+use common::fixture;
 use std::time::Duration;
 
 use cosmic_ext_storage::{AppRuntime, RuntimeRequest};
 
-fn fixture(name: &str) -> std::path::PathBuf {
-    std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("tests/ui/scenarios")
-        .join(name)
-}
-
+#[rstest::rstest]
 #[tokio::test]
-async fn scenario_control_starts_only_for_selected_scenario_runtime() {
-    let root = std::env::temp_dir();
-    let socket = root.join(format!("cs-{}-runtime.sock", std::process::id()));
-    let token = root.join(format!("cs-{}-token", std::process::id()));
-    let _ = std::fs::remove_file(&socket);
+async fn scenario_control_starts_only_for_selected_scenario_runtime(
+    #[from(common::scratch)] root: tempfile::TempDir,
+) {
+    let socket = root.path().join("runtime.sock");
+    let token = root.path().join("token");
     std::fs::write(
         &token,
         "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef\n",
@@ -43,6 +40,14 @@ async fn scenario_control_starts_only_for_selected_scenario_runtime() {
     }
     assert!(socket.exists(), "scenario control socket was created");
     drop(runtime);
-    let _ = std::fs::remove_file(&socket);
-    let _ = std::fs::remove_file(&token);
+    for _ in 0..100 {
+        if !socket.exists() {
+            break;
+        }
+        tokio::time::sleep(Duration::from_millis(5)).await;
+    }
+    assert!(
+        !socket.exists(),
+        "control server released its socket before root cleanup"
+    );
 }

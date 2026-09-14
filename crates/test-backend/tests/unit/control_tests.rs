@@ -1,4 +1,8 @@
-use std::{path::Path, time::Duration};
+use std::time::Duration;
+
+#[path = "../common/paths.rs"]
+mod paths;
+use paths::fixture;
 
 use super::*;
 use crate::ScenarioRuntime;
@@ -18,12 +22,6 @@ fn coverage_command_is_closed_and_uninstrumented_builds_reject_it() {
         flush_coverage().unwrap_err().kind,
         StorageErrorKind::Unsupported
     );
-}
-
-fn fixture(name: &str) -> PathBuf {
-    Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("../../tests/ui/scenarios")
-        .join(name)
 }
 
 #[tokio::test]
@@ -56,11 +54,12 @@ async fn coverage_checkpoint_obeys_control_authentication() {
     }
 }
 
+#[rstest::rstest]
 #[tokio::test]
-async fn control_server_authenticates_and_serializes_requests() {
-    let root = std::env::temp_dir();
-    let socket = root.join(format!("cs-{}-control.sock", std::process::id()));
-    let _ = std::fs::remove_file(&socket);
+async fn control_server_authenticates_and_serializes_requests(
+    #[from(paths::scratch)] root: tempfile::TempDir,
+) {
+    let socket = root.path().join("control.sock");
     let runtime =
         ScenarioRuntime::load(fixture("workflows/image-usage.toml"), None, None).expect("scenario");
     let server = runtime
@@ -137,7 +136,16 @@ async fn control_server_authenticates_and_serializes_requests() {
     server.request_shutdown();
     drop(runtime);
     drop(server);
-    let _ = std::fs::remove_file(socket);
+    for _ in 0..100 {
+        if !socket.exists() {
+            break;
+        }
+        tokio::time::sleep(Duration::from_millis(5)).await;
+    }
+    assert!(
+        !socket.exists(),
+        "server must release the socket before root cleanup"
+    );
 }
 
 #[test]

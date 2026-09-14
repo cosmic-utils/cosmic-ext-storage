@@ -1,14 +1,20 @@
 mod common;
-use common::{lab, owned};
+use common::owned;
 use std::{path::Path, time::Duration};
 use storage_contracts::*;
 use storage_lab_tests::Result;
 use storage_udisks::storage_types::{FormatOptions, MountOptions};
 
+#[rstest::rstest]
 #[tokio::test]
 #[ignore = "runs only inside the private Testcontainers storage lab"]
-async fn btrfs_subvolume_snapshot_default_and_conflict_round_trip() -> Result<()> {
-    let (mut fixture, backend, disk) = lab("btrfs-lifecycle", 256).await?;
+async fn btrfs_subvolume_snapshot_default_and_conflict_round_trip(
+    #[from(common::lab)]
+    #[with("btrfs-lifecycle", 256)]
+    #[future(awt)]
+    lab: Result<common::OwnedLab>,
+) -> Result<()> {
+    let (mut fixture, backend, disk) = lab?;
     backend.enable_optional_modules().await?;
     backend
         .format_filesystem(

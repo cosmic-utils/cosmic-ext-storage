@@ -1,16 +1,11 @@
+mod common;
 use std::sync::Arc;
 
 use storage_contracts::{
     BlockStorageBackend, DriveOperations, ImageDeviceOperations, ScenarioOperation,
     StorageErrorKind,
 };
-use test_backend::{ScenarioBackend, ScenarioStore};
-
-fn fixture(name: &str) -> std::path::PathBuf {
-    std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("../../tests/ui/scenarios")
-        .join(name)
-}
+use test_backend::ScenarioBackend;
 
 #[test]
 fn scenario_operation_inventory_matches_contract_surface() {
@@ -60,10 +55,13 @@ fn scenario_store_is_the_only_host_io_boundary() {
     assert!(include_str!("../src/store.rs").contains("std::fs"));
 }
 
+#[rstest::rstest]
 #[tokio::test]
-async fn unsupported_methods_never_succeed_or_touch_host() {
-    let backend = ScenarioBackend::load(ScenarioStore::new(fixture("empty.toml"), None, None))
-        .expect("fixture loads");
+async fn unsupported_methods_never_succeed_or_touch_host(
+    #[from(common::backend)]
+    #[with("empty.toml")]
+    backend: std::sync::Arc<ScenarioBackend>,
+) {
     let error = backend
         .standby("/dev/ui-disk0")
         .await
@@ -72,10 +70,13 @@ async fn unsupported_methods_never_succeed_or_touch_host() {
     let _: Arc<dyn BlockStorageBackend> = backend;
 }
 
+#[rstest::rstest]
 #[tokio::test]
-async fn native_only_legacy_image_methods_return_unsupported() {
-    let backend = ScenarioBackend::load(ScenarioStore::new(fixture("empty.toml"), None, None))
-        .expect("fixture loads");
+async fn native_only_legacy_image_methods_return_unsupported(
+    #[from(common::backend)]
+    #[with("empty.toml")]
+    backend: std::sync::Arc<ScenarioBackend>,
+) {
     let error = backend
         .loop_setup("/tmp/not-used.img")
         .await

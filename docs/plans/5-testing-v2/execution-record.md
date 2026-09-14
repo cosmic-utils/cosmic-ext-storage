@@ -1,5 +1,15 @@
 # Testing V2 execution record
 
+## rstest adoption follow-up (2026-09-14)
+
+See the [rstest execution record](rstest-execution-record.md) and
+[assertion/discovery map](rstest-test-mapping.md). Local migration gates pass:
+282 host tests, 17 native cases, 26 Python checks, normal and instrumented reload.
+Fresh source-aligned coverage comparison loses no covered retained behavior;
+the overall Testing V2 targets and seven missing executed UI cases remain
+unfinished. Hosted validation of the adoption branch is pending publication
+approval. The records below retain their original historical context.
+
 ## Current status (2026-09-13)
 
 Implementation is **not acceptance-complete**. The transport seam and all

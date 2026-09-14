@@ -105,6 +105,12 @@ class CoverageGateTests(unittest.TestCase):
                 profile.write_bytes(b"ui")
                 records.append(dict(path=str(profile), source="ui", tests=[case], sha256=hashlib.sha256(profile.read_bytes()).hexdigest(), execution=dict(path=str(report), sha256=hashlib.sha256(report.read_bytes()).hexdigest())))
             self.assertIn("lab_test", gate.validate_evidence({"profiles": records}, root))
+            generated = "native_case::case_01_capability"
+            records[1]["tests"].append(generated)
+            self.assertIn(generated, gate.validate_evidence({"profiles": records}, root))
+            # Generated Rust cases cannot stand in for an unexecuted UI source.
+            with self.assertRaisesRegex(ValueError, "missing executed UI coverage sources"):
+                gate.validate_evidence({"profiles": records[:-1]}, root)
             proof = records[-1].pop("execution")
             with self.assertRaisesRegex(ValueError, "executed UI report"):
                 gate.validate_evidence({"profiles": records}, root)
