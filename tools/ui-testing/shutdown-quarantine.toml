@@ -9,8 +9,8 @@ case_sha256 = "a2233684796ffdff2a02e97e0f57bb48f857a1c01b0dceeef0e33d537407bd90"
 # Reviewed instrumentation-only Containerfile change: same pinned OS/GDB,
 # libcosmic/iced and stack signature. No dependency upgrade or expiry extension.
 environment_sha256 = "66c8e39ffdc0ab59f8c7741e8ea3f67b3b8e3d5adc58fc963eb1d28394484017"
-# Approved pinned focus repairs only: eighteen git-source replacements, no
+# Pinned focus/tooltip repairs only: eighteen git-source replacements, no
 # package/version additions or upgrades. Fresh new-pin reload reproduced the
 # same ordered post-close stack; see dependency-fix-ledger.md for revalidation.
 # Case, environment, signature, owner and expiry are unchanged.
-cargo_lock_sha256 = "a04ad48f45e2005a91fceb320b51e93929ffef7713f1904b822c3abb255150c8"
+cargo_lock_sha256 = "3666c9738e009f594a10b5fe3c71575eeddffd534c64db90124869cf688b7476"

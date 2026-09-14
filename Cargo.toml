@@ -148,7 +148,7 @@ features = ["fluent-system", "desktop-requester"]
 # Repairs on our existing pin, not unvalidated upstream master. Scope and removal
 # conditions are recorded in docs/plans/5-testing-v2/dependency-fix-ledger.md.
 git = "https://github.com/stoorps/libcosmic.git"
-rev = "fe1630e7c3a2af47a812f50007ed5f95b3d1691b"
+rev = "7a4912de43b6720a86f9c2e663758f8870261472"
 features = [
     # Accessibility support
     "a11y",

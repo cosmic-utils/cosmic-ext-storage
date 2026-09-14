@@ -5,6 +5,24 @@ schema_version = 1
 [[target]]
 phase = "testing-v2-completion"
 package = "cosmic-ext-storage"
+kind = "rust-lib"
+name = "cosmic_ext_storage"
+tests = [
+  "update::volumes::create::tests::basics_requires_a_known_available_filesystem::case_1_available",
+  "update::volumes::create::tests::basics_requires_a_known_available_filesystem::case_2_unavailable",
+  "update::volumes::create::tests::basics_requires_a_known_available_filesystem::case_3_unknown_table",
+  "update::volumes::create::tests::basics_requires_a_known_available_filesystem::case_4_stale_index",
+  "update::volumes::create::tests::sizing_requires_a_nonzero_size_within_the_extent::case_1_zero",
+  "update::volumes::create::tests::sizing_requires_a_nonzero_size_within_the_extent::case_2_minimum",
+  "update::volumes::create::tests::sizing_requires_a_nonzero_size_within_the_extent::case_3_maximum",
+  "update::volumes::create::tests::sizing_requires_a_nonzero_size_within_the_extent::case_4_oversized",
+  "update::volumes::create::tests::sizing_requires_a_nonzero_size_within_the_extent::case_5_overflow_boundary",
+  "update::volumes::create::tests::final_step_does_not_reapply_basics_or_sizing_navigation_checks"
+]
+
+[[target]]
+phase = "testing-v2-completion"
+package = "cosmic-ext-storage"
 kind = "rust-integration"
 name = "volume_models"
 features = ["test-backend"]

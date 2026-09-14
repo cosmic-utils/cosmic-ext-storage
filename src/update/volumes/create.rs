@@ -13,6 +13,10 @@ use storage_types::CreatePartitionInfo;
 
 use crate::state::volumes::VolumesControl;
 
+#[path = "../../../tests/unit/update/create_tests.rs"]
+#[cfg(test)]
+mod tests;
+
 fn create_partition_step_can_advance(state: &crate::state::dialogs::CreatePartitionDialog) -> bool {
     match state.step {
         CreatePartitionStep::Basics => {

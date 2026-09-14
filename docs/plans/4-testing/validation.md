@@ -134,6 +134,25 @@ The target is explicitly scenario-feature-gated; it does not silently pass
 without running assertions. Native resource ownership and all destructive
 tests remain in the private storage lab.
 
+### Active create-wizard validation regressions (2026-09-14)
+
+Required root library tests use Cargo's standard `--lib -- --list`, with no
+new test dispatcher. These rstest fixtures own plain dialog values; no host
+storage or global runtime is used.
+The validator also checks the separate `--ignored --list` output for every
+Rust target: ordinary listing alone cannot distinguish ignored required tests.
+
+- `update::volumes::create::tests::basics_requires_a_known_available_filesystem::case_1_available`
+- `update::volumes::create::tests::basics_requires_a_known_available_filesystem::case_2_unavailable`
+- `update::volumes::create::tests::basics_requires_a_known_available_filesystem::case_3_unknown_table`
+- `update::volumes::create::tests::basics_requires_a_known_available_filesystem::case_4_stale_index`
+- `update::volumes::create::tests::sizing_requires_a_nonzero_size_within_the_extent::case_1_zero`
+- `update::volumes::create::tests::sizing_requires_a_nonzero_size_within_the_extent::case_2_minimum`
+- `update::volumes::create::tests::sizing_requires_a_nonzero_size_within_the_extent::case_3_maximum`
+- `update::volumes::create::tests::sizing_requires_a_nonzero_size_within_the_extent::case_4_oversized`
+- `update::volumes::create::tests::sizing_requires_a_nonzero_size_within_the_extent::case_5_overflow_boundary`
+- `update::volumes::create::tests::final_step_does_not_reapply_basics_or_sizing_navigation_checks`
+
 ### Active UI runtime-directory regressions (2026-09-14)
 
 - `long_artifact_paths_have_short_owned_sockets_and_preserve_evidence`

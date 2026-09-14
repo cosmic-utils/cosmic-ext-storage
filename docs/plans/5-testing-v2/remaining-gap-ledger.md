@@ -50,7 +50,13 @@ and a native test cannot substitute for an actual UI action.
 
 First batch: `volume_models` replaces two silent D-Bus skips and adds five
 assertion-bearing scenario model cases. Targeted execution passes; a fresh
-combined coverage comparison is pending. All other gap rows remain open.
+combined coverage comparison is pending. A subsequent ten-case rstest batch
+exercises the actual create-wizard navigation validator: available/missing or
+unrelated tools, unknown tables/stale indexes and zero/minimum/maximum/oversized
+sizes. The final step's navigation behavior is tested separately from submission
+validation. No new percentage or full operation-outcome coverage is claimed.
+Other gap rows remain open. Full UI form execution currently requires the
+[missing custom-widget accessibility scope decision](form-accessibility-blocker.md).
 
 Non-Rust inventory currently comprises `tools/testing/{coverage,run_coverage}.py`,
 `tools/ui-testing/{assert_tests,debug-app}.py`,

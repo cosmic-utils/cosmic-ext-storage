@@ -30,16 +30,17 @@ not represented as newly implemented or freshly upstream-reviewed today.
 | Route button actions to their target | Not changed | [ab3a7b9c](https://github.com/stoorps/libcosmic/commit/ab3a7b9c) |
 | Publish widget focus | [d446d617b](https://github.com/stoorps/iced/commit/d446d617b3c0ad8b3ffa8b8826df85ed14178830) | [9afc8819](https://github.com/stoorps/libcosmic/commit/9afc881977fea36a87a88e33bb7ebfe091f93f06) |
 | Forward window focus to AccessKit | [a2d4097d3](https://github.com/stoorps/iced/commit/a2d4097d394a8be295b31fe4d731039fa605707e) | [fe1630e7](https://github.com/stoorps/libcosmic/commit/fe1630e7c3a2af47a812f50007ed5f95b3d1691b) |
+| Preserve tooltip content accessibility | [b852a3354](https://github.com/stoorps/iced/commit/b852a3354aca786ca0e6d899fb36dc2d4fa62aaf) | [7a4912de](https://github.com/stoorps/libcosmic/commit/7a4912de43b6720a86f9c2e663758f8870261472) |
 
 The libcosmic commits corresponding to iced fixes are submodule integrations;
 the actual iced patches belong in iced review, not duplicated into libcosmic.
 The initial bridge commit also changes the iced submodule URL to the fork.
-Repairs 6–7 are published only on `codex/pinned-a11y-focus` in each `stoorps` fork.
-They are two separate iced commits on the previous exact submodule pin, with
+Repairs 6–8 are published only on `codex/pinned-a11y-focus` in each `stoorps` fork.
+They are separate iced commits on the previous exact submodule pin, with
 corresponding separate libcosmic submodule bumps. No fork master or upstream branch changed;
 no PR was opened. The app remains on `4-ui-testing`.
-The app lockfile changes exactly eighteen git source URLs, with no added/removed
-packages or package-version changes. New Cargo.lock SHA-256:
+The focus integration changed exactly eighteen git source URLs, with no added/removed
+packages or package-version changes. Its Cargo.lock SHA-256 was:
 `a04ad48f45e2005a91fceb320b51e93929ffef7713f1904b822c3abb255150c8`.
 
 ## 1. Publish the widget accessibility tree
@@ -160,7 +161,38 @@ warning-free upstream code. Red/green logs are under the app's ignored
 `target/testing-v2-completion/focus/`. App integration and real keyboard evidence
 must be recorded separately from these dependency unit-test results.
 
-## Integration evidence and exact quarantine rebind
+## 8. Preserve tooltip content accessibility (continued execution)
+
+- **Symptom:** the real tree has no Create partition button, even though the
+  application supplies its name and `partition.create` ID. The standard iced
+  Tooltip wraps it but does not implement `a11y_nodes`, so the default empty
+  tree hides all wrapped controls from assistive technology.
+- **Existing-fix audit (2026-09-14):** searched open/historical pop-os/iced and
+  pop-os/libcosmic PRs for tooltip accessibility/a11y. No matching fix appeared.
+  Inspected current upstream `widget/src/tooltip.rs` and its recent path
+  history: `operate` exists but `a11y_nodes` is still absent. The old
+  `949c4edc` operation-forwarding change does not publish accessibility nodes.
+  No upstream revision was adopted.
+- **Scope:** only `iced/widget/src/tooltip.rs`; forward the content's existing
+  layout (including offsets), own child state and cursor to `a11y_nodes`.
+  Return its tree unchanged. No new IDs, hidden-hint nodes, input behavior,
+  focus policy, tooltip timing/geometry, overlay policy or Wayland change.
+- **Regression:** `tooltip_preserves_content_accessibility_without_exposing_hidden_hint`
+  constructs a real iced button, state tree and layout with offsets. Checks
+  full root/child equality, button role/name/author ID/action and omission of
+  the hidden hint. Before the repair it fails with an empty tree; afterward
+  it passes. All 2 iced_widget, 6 iced_winit and 20 libcosmic tests pass.
+- **Evidence:** `target/testing-v2-completion/tooltip/{red,green}.log`; test
+  command is the dependency command above with `-p iced_widget` additionally.
+  Normal capability also passes (`tooltip/capability.log`). Real dialog-flow
+  and final-pin quarantine/instrumented verification are tracked separately;
+  this unit result alone is not full UI acceptance.
+- **Upstream notes:** standard iced Tooltip is used by libcosmic's public
+  helper; the separate Wayland tooltip already has its own forwarding and
+  is not changed. This patch does not implement accessible tooltip-overlay
+  descriptions or promise that every wrapper/widget has complete accessibility.
+
+## Focus integration evidence and exact quarantine rebind
 
 Evidence root: ignored `target/testing-v2-completion/focus/`. These are local
 container/host results, not a claim of hosted CI or completion of Testing V2.
@@ -241,6 +273,49 @@ Functional assertions, pre-close coverage checkpoint, profile/ELF transport
 and shutdown-policy acceptance must each be verified. Do not claim a new
 aggregate percentage from these focused runs.
 
+## Tooltip integration and exact revalidation
+
+Fix 8 updates the app from libcosmic `fe1630e7` to
+`7a4912de43b6720a86f9c2e663758f8870261472` (iced `b852a3354`). Cargo.lock again
+changes only eighteen git source URLs; no package/version change or unrelated
+submodule update. Its SHA-256 is now
+`3666c9738e009f594a10b5fe3c71575eeddffd534c64db90124869cf688b7476`.
+
+Before rebind, reload ran all nine steps, then failed the old lock binding as
+required: `live_scenario_reload-12-1789418816905834692`. Its post-close SIGSEGV
+contains the unchanged ordered libwayland proxy → backend ConnectionState →
+iced WaylandSource teardown stack. Debugger SHA-256 is still
+`134509fa88aad15184b6d7a53f7614b1a5175c008c6ce2837e834d9bb4d75e99`.
+Only the quarantine's Cargo.lock hash moves from `a04ad48f...` to `3666c973...`;
+case, environment, signature, owner and October 13 expiry are unchanged.
+There is no new-case allowance. This is not a teardown repair.
+
+Evidence root: `target/testing-v2-completion/tooltip/` (ignored).
+
+| Run | Result | Artifact directory under `ui-artifacts/executed/` |
+| --- | --- | --- |
+| Normal keyboard dialog diagnostic | 35 steps pass; clean shutdown | `keyboard_accessibility-12-1789418812567602309` |
+| Normal rebound reload | 9 steps pass; clean shutdown | `live_scenario_reload-12-1789419004630507314` |
+| Instrumented reload | 9 steps pass; existing shutdown warning | `live_scenario_reload-12-1789419125107298393` |
+| Instrumented keyboard dialog diagnostic | 35 steps pass; clean shutdown | `keyboard_accessibility-12-1789419156750270318` |
+
+The [exact dialog probe](keyboard-dialog-probe.toml) has SHA-256
+`f4cb4466ad9af6c8a88f65da7f2959271dc540eb112158474a66b23780e600c9`.
+It is archived outside the required-case directory, whose planned keyboard
+inventory is restored afterward. It checks opening/cancellation and unchanged
+storage state, not the full required disabled-reason/submission flow. See the
+[new form-widget blocker](form-accessibility-blocker.md). Use the same temporary
+case replacement/reproduction procedure above, not a second runner.
+
+The normal capability and UI shell-contract check pass. Existing `collect_ui`
+accepts two profiles and two matching binaries for each instrumented run,
+including exact program/input provenance and acknowledged pre-close flush.
+Pinned LLVM merges both profile pairs and reports first-party mappings without
+warnings (`profile-verification.log`, `verified-{reload,keyboard}/mapping-check.txt`).
+The default local image tag is restored to the normal image. No complete
+coverage percentage, final CI, mandatory keyboard-case success or visual
+approval is claimed by this diagnostic batch.
+
 ## App-only fixes and exclusions
 
 - App commit `9924e1b`: short owned `/tmp/cs-ui-*` runtime directories fix Sway
@@ -260,3 +335,14 @@ aggregate percentage from these focused runs.
   patch or clean-shutdown claim. No stashed lifecycle experiment is included.
 - Test-only LLVM checkpoints, Bash wrapper extraction and rstest adoption are
   app/testing infrastructure work, not dependencies to mix into upstream PRs.
+- The ten create-dialog navigation validation cases and required-name support
+  for standard Cargo library tests are app/test infrastructure only. They
+  change no storage algorithm or dependency API; keep them out of an upstream
+  tooltip patch. See the continued execution record for exact discovery and
+  stale-selection checks.
+- Required-test validation now rejects ignored tests using a separate real
+  `--ignored --list` discovery. Ordinary libtest output does not annotate
+  ignored entries; the previous single listing could accept them. Missing,
+  duplicate and stale names still fail, and failed ignored discovery fails
+  closed. Python regression coverage plus a real ignored fixture-helper check
+  verifies this app-only checker fix; it is unrelated to libcosmic upstreaming.

@@ -594,6 +594,13 @@ Do not replace keyboard assertions with clicks, infer focus from highlighting,
 or promote the exploratory keyboard probe to completed-case status. Continue
 with the full dialog navigation/activation/cancellation/disabled-reason flow;
 that mandatory case and the other remaining UI programs are not yet complete.
+The subsequent tooltip-forwarding repair exposes Create Partition; an extended
+keyboard opening/cancellation probe passes without mutating the scenario.
+Full form execution is now blocked by missing COSMIC text-input and dropdown
+accessibility implementations. See [the evidence and scope decision](form-accessibility-blocker.md).
+Implementing those widget protocols (including secure-input protection) goes
+beyond a small forwarding backport; obtain explicit scope approval. Do not
+replace the full keyboard flow with the passing diagnostic or bypass the UI.
 Keep later dependency fixes separately scoped and documented for upstreaming;
 do not upgrade to master, change Wayland lifetime, or open an upstream PR.
 

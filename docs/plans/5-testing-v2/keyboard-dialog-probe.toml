@@ -1,0 +1,185 @@
+schema_version = 2
+id = "keyboard_accessibility"
+scenario = "tests/ui/scenarios/accessibility/keyboard.toml"
+scenario_sha256 = "57a35cf7ec2a59d366993cb9c9c5b10e0e7c96426b9dca6ea8b4dfa19a3cac35"
+
+[ready]
+timeout_ms = 15000
+[[ready.assert]]
+kind = "unique"
+selector = { role = "button", name = "Keyboard Scenario Disk" }
+
+[[step]]
+id = "tab_header_1"
+kind = "key"
+key = "Tab"
+
+[[step]]
+id = "tab_header_2"
+kind = "key"
+key = "Tab"
+
+[[step]]
+id = "tab_header_3"
+kind = "key"
+key = "Tab"
+
+[[step]]
+id = "tab_header_4"
+kind = "key"
+key = "Tab"
+
+[[step]]
+id = "tab_header_5"
+kind = "key"
+key = "Tab"
+
+[[step]]
+id = "tab_volume"
+kind = "key"
+key = "Tab"
+
+[[step]]
+id = "volume_has_focus"
+kind = "assert"
+assert = { kind = "focused", selector = { role = "button", name = "Volume" } }
+
+[[step]]
+id = "tab_usage"
+kind = "key"
+key = "Tab"
+
+[[step]]
+id = "usage_has_focus"
+kind = "assert"
+assert = { kind = "focused", selector = { role = "button", name = "Usage" } }
+
+[[step]]
+id = "tab_disk"
+kind = "key"
+key = "Tab"
+
+[[step]]
+id = "disk_has_focus"
+kind = "assert"
+assert = { kind = "focused", selector = { role = "button", name = "Keyboard Scenario Disk" } }
+
+[[step]]
+id = "back_to_usage"
+kind = "key"
+key = "Shift+Tab"
+
+[[step]]
+id = "usage_has_focus_again"
+kind = "assert"
+assert = { kind = "focused", selector = { role = "button", name = "Usage" } }
+
+[[step]]
+id = "forward_to_disk"
+kind = "key"
+key = "Tab"
+
+[[step]]
+id = "tab_disk_action_1"
+kind = "key"
+key = "Tab"
+
+[[step]]
+id = "tab_disk_action_2"
+kind = "key"
+key = "Tab"
+
+[[step]]
+id = "tab_disk_action_3"
+kind = "key"
+key = "Tab"
+
+[[step]]
+id = "tab_disk_action_4"
+kind = "key"
+key = "Tab"
+
+[[step]]
+id = "tab_disk_action_5"
+kind = "key"
+key = "Tab"
+
+[[step]]
+id = "tab_disk_action_6"
+kind = "key"
+key = "Tab"
+
+[[step]]
+id = "tab_disk_action_7"
+kind = "key"
+key = "Tab"
+
+[[step]]
+id = "tab_disk_action_8"
+kind = "key"
+key = "Tab"
+
+[[step]]
+id = "tab_create"
+kind = "key"
+key = "Tab"
+
+[[step]]
+id = "create_has_focus"
+kind = "assert"
+assert = { kind = "focused", selector = { role = "button", name = "Create Partition" } }
+
+[[step]]
+id = "open_create"
+kind = "key"
+key = "Return"
+
+[[step]]
+id = "dialog_open"
+kind = "assert"
+assert = { kind = "unique", selector = { role = "button", name = "Cancel" } }
+
+[[step]]
+id = "last_dialog_control"
+kind = "key"
+key = "Shift+Tab"
+
+[[step]]
+id = "next_has_focus"
+kind = "assert"
+assert = { kind = "focused", selector = { role = "button", name = "Next" } }
+
+[[step]]
+id = "back_to_cancel"
+kind = "key"
+key = "Shift+Tab"
+
+[[step]]
+id = "cancel_has_focus"
+kind = "assert"
+assert = { kind = "focused", selector = { role = "button", name = "Cancel" } }
+
+[[step]]
+id = "cancel_with_keyboard"
+kind = "key"
+key = "Return"
+
+[[step]]
+id = "dialog_closed"
+kind = "assert"
+assert = { kind = "absent", selector = { role = "button", name = "Cancel" } }
+
+[[step]]
+id = "cancel_did_not_mutate_storage"
+kind = "assert"
+assert = { kind = "state_equals", pointer = "/ok/generation", value = 0 }
+
+[[step]]
+id = "cancel_did_not_issue_an_operation"
+kind = "assert"
+assert = { kind = "state_equals", pointer = "/ok/last_sequence", value = 0 }
+
+[[step]]
+id = "free_extent_is_unchanged"
+kind = "assert"
+assert = { kind = "unique", selector = { role = "paragraph", name = "Size: 1024.00 MB (1,073,741,824 bytes)" } }

@@ -1,8 +1,9 @@
 # Testing V2 remaining execution
 
 Status: deterministic regressions, approved Bash extraction and pinned
-focus-publication repairs are implemented. Full UI flows, collector integration
-and coverage/approval gates remain outstanding. No final acceptance or coverage
+focus/tooltip repairs are implemented. Full form flows require a decision on
+missing custom-widget accessibility support; collector integration and
+coverage/approval gates also remain outstanding. No final acceptance or coverage
 completion claimed; the sections below retain the chronology of earlier blockers.
 
 Started on 2026-09-14 from `4-ui-testing` commit
@@ -263,3 +264,59 @@ The ledger contains the exact run IDs, hashes, commands and limitations.
 No fresh combined coverage percentage is claimed for this batch. The remaining
 UI programs, coverage thresholds, support-code measurement, hosted failure
 probes, visual review and required-check administration remain outstanding.
+
+## Continued execution: tooltip forwarding and create validation
+
+Resumed from `0a52ec5` directly on `4-ui-testing`. The next real UI run exposed
+the standard iced Tooltip's absent content-tree forwarding. No compatible
+upstream fix was found in the current/historical PR search or current source.
+The one-method repair plus real-widget regression is a separate fork commit,
+iced `b852a3354`, integrated by libcosmic `7a4912de`. It does not change tooltip
+behavior, focus policy, hidden overlays or Wayland lifetime. All earlier patches
+and other submodule pins are retained. [Fix 8](dependency-fix-ledger.md) records the
+scope, red/green evidence and exact dependency chain; no upstream PR was opened.
+
+The expanded keyboard diagnostic passes 35 steps, including exact focus,
+keyboard activation, cancellation, unchanged scenario generation/operation
+sequence, and the original complete free extent. The early selector error was
+an incorrect expected capitalization (`Create partition` versus `Create Partition`),
+not a failed tooltip repair. The corrected probe traverses the actual pinned
+control order. An attempted `/ok/world/revision` assertion was also rejected;
+the real protocol exposes `/ok/generation` and `/ok/last_sequence`, both of
+which the final probe checks as zero. Failed exploratory runs are retained.
+
+Ten new owned-value rstest tests cover the real create-dialog navigation
+validator: filesystem availability, unrelated/missing tools, unknown table,
+stale index, zero/minimum/maximum/oversized sizes, and the distinct final-step
+behavior. No product validation algorithm changed. They use root library tests,
+so the existing required-name validator now supports standard Cargo `--lib`
+discovery, with a regression for its command/features and missing/duplicate/
+ignored identities. No dispatcher, forwarding test layer or new dependency
+was introduced. Required names and the active validation appendix are updated
+together. Exact Cargo and Nextest selection each execute one generated case;
+real parent-only/stale library selections are rejected.
+
+Workspace Nextest passes 300 tests (36 explicit ignored native/probe entries),
+strict Clippy passes, Python discovers 34 tests with 32 passes and two explicit
+container-only skips, and the required validator accepts 100 named tests.
+Normal capability and the UI container contract also pass. Evidence is under
+ignored `target/testing-v2-completion/tooltip/`; dependency, normal/instrumented
+UI and lockfile/quarantine evidence are detailed in the fix ledger.
+
+Inventory audit caught an existing false-green risk: ordinary libtest listing
+does not mark ignored tests. The validator now separately discovers ignored
+tests and rejects required matches, or a failed ignored-test discovery. Its
+regression uses libtest's actual listing format; a real ignored
+`test-backend::fixture_composition::panic_cleanup_probe` is rejected before
+execution (`ignored-selection.log`). This covers every Rust target kind,
+without changing planned UI-case inventory into an execution claim.
+
+The full form-flow gate now requires new accessibility implementations in
+COSMIC's custom text input and dropdown, including secure-value handling and
+targeted editing/selection actions. Their visible controls are absent from the
+real AT-SPI tree; current upstream source has the same omissions. This is
+broader than another forwarding backport. See [the blocker and recommended scope](form-accessibility-blocker.md).
+The exact partial [dialog probe](keyboard-dialog-probe.toml) is archived outside
+the required-case directory; do not count it as completed keyboard acceptance.
+No broader widget protocol implementation, alternate input test mechanism,
+threshold waiver, quarantine expansion or Wayland-lifetime repair was made.

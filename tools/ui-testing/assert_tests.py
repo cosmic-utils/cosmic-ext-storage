@@ -213,12 +213,13 @@ def main() -> int:
 def run_target(root: Path, target: dict[str, Any]) -> None:
     kind = target["kind"]
     expected = target["tests"]
-    if kind == "rust-integration":
+    if kind in {"rust-integration", "rust-lib"}:
         command = ["cargo", "test", "-p", target["package"], "--locked"]
         features = target.get("features", [])
         if features:
             command.extend(["--features", ",".join(features)])
-        command.extend(["--test", target["name"], "--", "--list"])
+        command.extend(["--lib"] if kind == "rust-lib" else ["--test", target["name"]])
+        command.extend(["--", "--list"])
     elif kind == "rust-bin":
         command = [
             "cargo", "test", "-p", target["package"], "--locked",
@@ -250,6 +251,15 @@ def run_target(root: Path, target: dict[str, Any]) -> None:
         count = len(re.findall(pattern, output))
         if count != 1:
             fail(f"required test {test!r} must appear exactly once in target {target['name']}")
+    # libtest's ordinary --list does not mark ignored tests. Ask it explicitly;
+    # a listed-but-ignored required test must not become a false-green gate.
+    ignored = subprocess.run(command + ["--ignored"], cwd=root, text=True, capture_output=True)
+    if ignored.returncode:
+        fail(f"cannot list ignored tests in target {target['name']}:\n{ignored.stdout}{ignored.stderr}")
+    for test in expected:
+        pattern = rf"(?m)^(?:[A-Za-z0-9_]+::)*{re.escape(test)}: test$"
+        if re.search(pattern, ignored.stdout):
+            fail(f"required test {test!r} is ignored in target {target['name']}")
 
 
 if __name__ == "__main__":
