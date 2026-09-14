@@ -584,6 +584,14 @@ build contracts from the rstest gate, not just all-feature success.
 
 ## Phase 6 — Honest UI E2E execution and documentation
 
+Current execution finding (2026-09-14): case-dependent Sway socket overflow is
+fixed using a short owned runtime directory, independent of artifact paths.
+Keyboard focus assertions are blocked by the pinned iced accessibility update
+hardcoding window-root focus. See [the evidence and bounded repair proposal](keyboard-focus-blocker.md).
+Do not replace keyboard assertions with clicks, infer focus from highlighting,
+or promote the exploratory keyboard probe to completed-case status. A scoped
+fork/pin decision is needed before this gate can complete.
+
 ### Work
 
 1. Preserve the existing capability probe and executed reload job step.

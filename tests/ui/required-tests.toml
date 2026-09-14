@@ -189,7 +189,9 @@ kind = "rust-bin"
 name = "ui-e2e-runner"
 tests = [
   "png_signature_requires_all_eight_bytes",
-  "legacy_case_inventory_is_sorted_and_rejects_duplicate_ids"
+  "legacy_case_inventory_is_sorted_and_rejects_duplicate_ids",
+  "long_artifact_paths_have_short_owned_sockets_and_preserve_evidence",
+  "existing_artifact_directory_is_never_removed"
 ]
 
 [[target]]

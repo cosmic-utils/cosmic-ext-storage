@@ -1,5 +1,71 @@
 use super::*;
 
+#[rstest::fixture]
+fn locked_environment() -> EnvironmentLock {
+    toml::from_str(include_str!(concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/../../tools/ui-testing/environment.lock.toml"
+    )))
+    .expect("checked-in environment lock")
+}
+
+#[rstest::rstest]
+fn long_artifact_paths_have_short_owned_sockets_and_preserve_evidence(
+    locked_environment: EnvironmentLock,
+) {
+    let root = tempfile::tempdir().unwrap();
+    let artifacts = root.path().join("long-artifact-parent-".repeat(8));
+    let evidence = EnvironmentEvidence {
+        lock_sha256: "fixture".into(),
+        base_image: locked_environment.base_image.clone(),
+        apt_snapshot: locked_environment.apt_snapshot.clone(),
+    };
+    let session = CapabilitySession::new(&artifacts, &locked_environment, evidence).unwrap();
+    let runtime = session.runtime.clone();
+    assert!(runtime.starts_with("/tmp"));
+    assert!(!runtime.starts_with(&artifacts));
+    assert_eq!(
+        fs::metadata(&runtime).unwrap().permissions().mode() & 0o777,
+        0o700
+    );
+    assert_eq!(
+        session.environment[&OsString::from("XDG_RUNTIME_DIR")],
+        runtime.as_os_str()
+    );
+    // Bind the longest Sway-style UID/PID suffix plus the two other services.
+    for name in [
+        "sway-ipc.4294967295.4294967295.sock",
+        "wayland-1",
+        "control.sock",
+    ] {
+        let socket = runtime.join(name);
+        assert!(socket.as_os_str().len() < 108);
+        std::os::unix::net::UnixListener::bind(socket).unwrap();
+    }
+    fs::write(artifacts.join("control.token"), "private fixture token").unwrap();
+    fs::write(artifacts.join("evidence.json"), "{}").unwrap();
+    drop(session);
+    assert!(!runtime.exists());
+    assert!(!artifacts.join("control.token").exists());
+    assert!(artifacts.join("evidence.json").is_file());
+}
+
+#[rstest::rstest]
+fn existing_artifact_directory_is_never_removed(locked_environment: EnvironmentLock) {
+    let root = tempfile::tempdir().unwrap();
+    fs::write(root.path().join("keep"), "user evidence").unwrap();
+    let evidence = EnvironmentEvidence {
+        lock_sha256: "fixture".into(),
+        base_image: locked_environment.base_image.clone(),
+        apt_snapshot: locked_environment.apt_snapshot.clone(),
+    };
+    assert!(CapabilitySession::new(root.path(), &locked_environment, evidence).is_err());
+    assert_eq!(
+        fs::read_to_string(root.path().join("keep")).unwrap(),
+        "user evidence"
+    );
+}
+
 #[test]
 fn png_signature_requires_all_eight_bytes() {
     let directory = tempfile::tempdir().expect("temporary directory");

@@ -517,6 +517,8 @@ struct CapabilitySession {
     app_process_group: bool,
     artifacts: PathBuf,
     runtime: PathBuf,
+    // Dropped only after shutdown() reaps the session's owned children.
+    _runtime_directory: tempfile::TempDir,
     environment_evidence: EnvironmentEvidence,
     viewport: LockedViewport,
     environment: BTreeMap<OsString, OsString>,
@@ -539,11 +541,18 @@ impl CapabilitySession {
         })?;
         ensure_private_directory(artifacts)?;
 
-        let runtime = artifacts.join("runtime");
+        // Unix socket paths are bounded (108 bytes on Linux). Artifact paths
+        // include case names and caller-selected parents; never use them for
+        // Sway, Wayland or control sockets. Ignore host TMPDIR for the same reason.
+        let runtime_directory = tempfile::Builder::new()
+            .prefix("cs-ui-")
+            .tempdir_in("/tmp")?;
+        let runtime = runtime_directory.path().to_path_buf();
+        ensure_private_directory(&runtime)?;
         let home = artifacts.join("home");
         let config = artifacts.join("config");
         let cache = artifacts.join("cache");
-        for directory in [&runtime, &home, &config, &cache] {
+        for directory in [&home, &config, &cache] {
             fs::create_dir(directory).with_context(|| format!("create {}", directory.display()))?;
             ensure_private_directory(directory)?;
         }
@@ -572,6 +581,7 @@ impl CapabilitySession {
         Ok(Self {
             artifacts: artifacts.to_path_buf(),
             runtime,
+            _runtime_directory: runtime_directory,
             environment_evidence,
             viewport: LockedViewport {
                 width: environment_lock.viewport.width,

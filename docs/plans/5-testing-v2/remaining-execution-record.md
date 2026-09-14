@@ -203,3 +203,19 @@ these 5,668. No threshold was relaxed. Complete non-Rust support coverage,
 remaining UI programs and later approval/admin gates are still outstanding.
 Saved report copies are under `target/testing-v2-completion/bash/reports/`;
 full raw matching profiles/build groups remain in `target/coverage/run-wd_l49sl`.
+
+## Continued execution: UI runtime and focus
+
+The next executable keyboard probe exposed and fixed the case-name-dependent
+Sway Unix-socket overflow. The runner now owns a short private temporary runtime
+directory with the existing pinned `tempfile` crate, preserving artifact paths
+and teardown ownership. Two mandatory rstest regressions pass; all 70 runner
+tests, strict Clippy, normal capability and the original reload flow pass.
+Cargo.lock and GUI/image/quarantine bindings are unchanged.
+
+The next gate is genuinely blocked on widget-focus publication in pinned iced:
+every accessibility update hardcodes focus to the window root. The keyboard
+inventory remains unconverted; the exploratory program and failed artifacts
+are preserved. See [the diagnosis, upstream-fix audit and scoped proposal](keyboard-focus-blocker.md).
+No dependency repair, new PR, focus-assertion waiver or quarantine expansion
+has been made. Fresh combined coverage is required after these source changes.

@@ -133,3 +133,12 @@ returns when a system bus was unavailable. All names below are mandatory:
 The target is explicitly scenario-feature-gated; it does not silently pass
 without running assertions. Native resource ownership and all destructive
 tests remain in the private storage lab.
+
+### Active UI runtime-directory regressions (2026-09-14)
+
+- `long_artifact_paths_have_short_owned_sockets_and_preserve_evidence`
+- `existing_artifact_directory_is_never_removed`
+
+These owned rstest cases bind real Unix sockets under a short private temporary
+runtime directory, even with long artifact paths. They verify runtime/token
+cleanup while preserving evidence and rejecting existing artifact directories.
