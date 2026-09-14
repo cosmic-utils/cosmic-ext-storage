@@ -1,6 +1,6 @@
 # rstest adoption execution record
 
-Status: implementation and local acceptance complete; hosted CI pending.
+Status: implementation, local acceptance and hosted CI acceptance complete.
 
 Started 2026-09-14 on `codex/rstest-adoption`, from
 `12fb884e2d462b91cacb1b097e8fa35826f84345`. Starting worktree contained only the
@@ -113,9 +113,31 @@ order changed with the new names. This single pair does not establish a causal
 fixture overhead or a performance win; no speedup is claimed and no safety or
 coverage work was removed to improve the timing.
 
-Publication and merge were authorized on 2026-09-14. The adoption branch will
-be submitted against `4-ui-testing`; all hosted checks must pass before merge.
+Publication and merge were authorized on 2026-09-14. The adoption branch was
+submitted as [app PR #120](https://github.com/cosmic-utils/cosmic-ext-storage/pull/120)
+against `4-ui-testing`; all hosted checks must pass on the final head before merge.
 No libcosmic PR or branch-protection change is authorized or needed.
+
+## Hosted acceptance
+
+[CI run 34879591862](https://github.com/cosmic-utils/cosmic-ext-storage/actions/runs/34879591862)
+passed all seven jobs on 2026-09-14 for exact branch revision
+`1539e8c0a571ec143c89f9a00f41ce2f26967890`: Rust tests, Clippy, Rustfmt,
+UI scenario contract, application workflow integration, Storage lab and
+UI E2E capability. No CI fixes, retries, relaxed checks or workflow changes
+were needed. The initial run on `58e37ca` was superseded by a documentation
+correction and automatically cancelled, not treated as acceptance evidence.
+
+The hosted native run executed all 17 intended outer cases successfully in
+60.451s, including deliberate-failure propagation and stale-selector rejection.
+The Python contract suite passed all 26 tests. UI capability and the executed
+live reload regression passed; the latter reported `semantic_passed` and
+uploaded evidence as `live_scenario_reload-12-1789410237008078711`.
+Native and UI evidence are attached to the run as `storage-lab-artifacts`
+and `ui-artifacts` respectively. This closes the rstest hosted-validation
+gate, not the wider Testing V2 coverage/visual-approval gates. The documentation
+commit recording this evidence must itself pass existing CI before merge;
+the PR checks provide that final-head audit trail.
 
 ## Final coverage and handoff
 
@@ -171,7 +193,7 @@ Baseline and final report digests are in their respective `SHA256SUMS` files.
 The temporary comparison scripts are audit artifacts under ignored `target/`,
 not another maintained runner or a build dependency.
 
-Remaining adoption gate: app-repository hosted CI, followed by merge into
-`4-ui-testing` and local synchronization. No CI success is claimed yet. Wider Testing
+Adoption acceptance is complete. Operational handoff is merge into
+`4-ui-testing` after final-head CI, followed by local synchronization. Wider Testing
 V2 completion, the seven missing UI cases, visual approval, non-Rust coverage
 and required coverage enforcement remain separate unfinished obligations.

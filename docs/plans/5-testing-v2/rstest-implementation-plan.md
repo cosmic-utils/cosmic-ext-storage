@@ -1,6 +1,7 @@
 # Implementation plan: rstest adoption
 
-Status: implementation and local gates complete; hosted CI pending.
+Status: implementation, local gates and hosted CI acceptance complete.
+See `rstest-execution-record.md` for the exact tested revision and CI evidence.
 
 Date: 2026-09-14. Working branch: `codex/rstest-adoption`, based on
 `4-ui-testing` at `12fb884e2d462b91cacb1b097e8fa35826f84345`.
@@ -286,7 +287,7 @@ report or approved-looking screenshot substitutes for executed/approved cases.
 - [x] Audit removal of superseded helpers/entry points and active stale names;
   inspect the diff for moved lifecycle code, broad dependency changes, fixture
   duplication, new implicit skips, secrets and generated build artifacts.
-- [ ] Once execution/publication is authorized, validate this branch through
+- [x] Once execution/publication is authorized, validate this branch through
   existing app-repository CI and record the exact tested revision/run URLs.
   Local success does not imply hosted success; do not open a libcosmic PR or
   change branch protection. If publishing authority is absent, report hosted
@@ -296,7 +297,9 @@ report or approved-looking screenshot substitutes for executed/approved cases.
   CI links and remaining Testing V2 obligations. Cross-link from the existing
   execution record without rewriting historical evidence.
 
-Local exit gate satisfied; the hosted-evidence gate remains open until hosted checks pass.
+Local and hosted-evidence exit gates satisfied. CI run `34879591862` passed
+all seven jobs at revision `1539e8c0a571ec143c89f9a00f41ce2f26967890`.
+Any later commit still requires its own green checks before merge.
 
 Exit gate: every migrated assertion is accounted for; own regression/feature/
 native/UI validation passes; exact identities and reporting agree; cleanup is
