@@ -77,6 +77,7 @@ RUN rm -f /etc/apt/sources.list.d/debian.sources \
 COPY --from=builder /out/ /opt/storage-lab/bin/
 COPY tools/storage-lab/entrypoint.sh /usr/local/bin/storage-lab-entrypoint
 COPY tools/storage-lab/run-tests.sh /usr/local/bin/storage-lab-run-tests
-RUN chmod 0755 /usr/local/bin/storage-lab-entrypoint /usr/local/bin/storage-lab-run-tests
+COPY tools/storage-lab/collect-evidence.sh /usr/local/bin/storage-lab-collect-evidence
+RUN chmod 0755 /usr/local/bin/storage-lab-entrypoint /usr/local/bin/storage-lab-run-tests /usr/local/bin/storage-lab-collect-evidence
 
 ENTRYPOINT ["/usr/local/bin/storage-lab-entrypoint"]

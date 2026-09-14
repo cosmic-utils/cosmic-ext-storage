@@ -729,9 +729,8 @@ impl CapabilitySession {
                 "--app-id=ui-e2e-input-probe",
                 "--title=ui-e2e-input-probe",
                 "--",
-                "sh",
-                "-ec",
-                "printf ready; exec sleep 30",
+                "/bin/bash",
+                "/workspace/tools/ui-testing/input-probe.sh",
             ])
             .stdout(Stdio::from(stdout))
             .stderr(Stdio::from(stderr))

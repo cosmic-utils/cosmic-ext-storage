@@ -51,6 +51,7 @@ test-lab:
     @docker image inspect --format 'storage-lab image={{"{{"}}.Id{{"}}"}}' cosmic-storage-lab:local
     @echo 'storage-lab suite=bridge (including LUKS) artifacts=target/storage-lab-artifacts'
     cargo nextest run --locked --profile storage-lab -p storage-lab-tests --features outer-bridge --test bridge --run-ignored ignored-only
+    STORAGE_SCRIPT_CONTAINER_TESTS=1 python3 -m unittest tools.testing.test_shell_contract.LabContainerShellContractTests
 
 # Produces an explicitly incomplete report until every acceptance source and
 # threshold passes. A host-only or host+lab-only result is never green.
@@ -66,7 +67,8 @@ ui-test scenario:
 
 ui-e2e:
     docker build --build-arg "VERGEN_GIT_SHA=$(git rev-parse HEAD)" --build-arg "VERGEN_GIT_COMMIT_DATE=$(git show -s --format=%cI HEAD)" --file tools/ui-testing/Containerfile --tag cosmic-storage-ui-e2e:local .
-    docker run --rm --network none -v "{{ invocation_directory() }}:/workspace" -w /workspace cosmic-storage-ui-e2e:local sh -ec 'ui_e2e_uid=$(stat -c %u /workspace); ui_e2e_gid=$(stat -c %g /workspace); printf "ui-e2e:x:%s:%s:UI E2E:/tmp/ui-e2e-home:/usr/sbin/nologin\n" "$ui_e2e_uid" "$ui_e2e_gid" >> /etc/passwd; mkdir -p ui-artifacts /tmp/ui-e2e-home /tmp/ui-e2e-config /tmp/ui-e2e-cache; chown "$ui_e2e_uid:$ui_e2e_gid" ui-artifacts /tmp/ui-e2e-home /tmp/ui-e2e-config /tmp/ui-e2e-cache; exec setpriv --reuid="$ui_e2e_uid" --regid="$ui_e2e_gid" --clear-groups env HOME=/tmp/ui-e2e-home XDG_CONFIG_HOME=/tmp/ui-e2e-config XDG_CACHE_HOME=/tmp/ui-e2e-cache dbus-run-session -- /opt/ui-test/bin/ui-e2e-runner capability --app /opt/ui-test/bin/cosmic-ext-storage --scenario /workspace/tests/ui/scenarios/empty.toml --sway-config /workspace/tools/ui-testing/sway.conf --environment-lock /workspace/tools/ui-testing/environment.lock.toml --artifacts /workspace/ui-artifacts/capability'
+    bash tools/ui-testing/run-capability.sh
+    STORAGE_SCRIPT_CONTAINER_TESTS=1 python3 -m unittest tools.testing.test_shell_contract.UiContainerShellContractTests
 
 ui-e2e-update:
     @echo "PNG golden updates stay disabled until the Rust case runner is implemented after this capability gate." >&2

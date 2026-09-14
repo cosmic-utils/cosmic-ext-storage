@@ -54,8 +54,10 @@ combined coverage comparison is pending. All other gap rows remain open.
 
 Non-Rust inventory currently comprises `tools/testing/{coverage,run_coverage}.py`,
 `tools/ui-testing/{assert_tests,debug-app}.py`,
-`tools/storage-lab/{entrypoint,run-tests}.sh` and `tools/ui-testing/run-case.sh`,
-including executable child-shell strings. Also audit executable recipes in
+`tools/storage-lab/{entrypoint,run-tests,collect-evidence}.sh` and
+`tools/ui-testing/{run-case,run-capability,container-runner,input-probe}.sh`.
+The runtime child-shell strings have been extracted into named Bash scripts.
+Also audit executable recipes in
 Just/Containerfiles when defining the final support boundary; merely counting
 the outer command would omit their scripts. Collector tests themselves are
 test sources, not a way to dilute the executable-support denominator.

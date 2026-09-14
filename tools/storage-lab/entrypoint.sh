@@ -1,4 +1,4 @@
-#!/bin/sh
+#!/bin/bash
 set -eu
 
 if [ -n "${STORAGE_LAB_KERNEL_RELEASE:-}" ]; then

@@ -1,4 +1,4 @@
-#!/bin/sh
+#!/bin/bash
 set -eu
 
 : "${STORAGE_LAB_TEST_FILTER:?a Rust test-harness filter is required}"

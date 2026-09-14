@@ -15,6 +15,15 @@ backing mappings disappear during cleanup.
 starting the container, passing that filter, and collecting its artifacts.
 
 Run the same suite locally and in CI with `STORAGE_LAB=1 just test-lab`.
+The entrypoint, exact-test launcher and named `collect-evidence.sh` helper use
+the pinned image's Bash in normal and instrumented execution. The Rust
+Testcontainers bridge still owns lifecycle and collects the profile archive
+over container exec before teardown, including after failed inner tests; no
+profile bind mount or Docker CLI copy was added. The recipe also checks archive
+success, non-instrumented rejection and missing-binary failure in a separate
+unprivileged, network-disabled disposable container. These fixture-byte checks
+do not claim to be real LLVM profiles; the combined coverage run validates those.
+
 The bridge covers private-service readiness; partition lifecycle and events;
 filesystem formatting, labels, mount options, busy retry, read-only protection
 and usage scanning; image backup/restore/attach/cancellation; LUKS lifecycle and

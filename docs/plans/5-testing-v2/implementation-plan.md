@@ -527,6 +527,14 @@ crates/**
    metrics; Rust percentages cannot stand in for scripts. If a collector
    cannot measure a required metric, report that gate blocked rather than
    inventing a percentage or treating it as zero executable code.
+   Approved interpreter decision (2026-09-14): use Bash for maintained runtime
+   test scripts in normal and coverage runs, with named child scripts instead
+   of inline `sh -ec` strings. Keep the existing Testcontainers/Rust lifecycle
+   and Python orchestration. The successful kcov probe is not an adopted
+   runtime dependency or proof of complete support coverage: validate the
+   collector inside the pinned runtime and across subprocess boundaries before
+   integration. Audit build recipes separately; do not hide them or shell
+   function definitions in order to obtain a passing denominator.
 6. Add the `coverage` CI job using the existing command and actual PR base.
    Fetch enough history to resolve the base; retain JSON/LCOV/HTML, acceptance,
    provenance and relevant failure artifacts. Test report/profile merging

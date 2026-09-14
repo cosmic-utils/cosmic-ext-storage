@@ -4,6 +4,15 @@
 It proves the image-built application exposes an accessibility tree and that
 the private Sway session can capture pixels and receive virtual keyboard input.
 
+Capability and executed-case commands share `container-runner.sh`. The host
+launchers and container helpers use Bash in normal and instrumented execution;
+the pinned runtime already supplies Bash. Both commands mount source read-only
+and only `ui-artifacts` writable. `input-probe.sh` is the named child program
+used by the virtual-keyboard check, not a second test runner. The capability
+recipe also runs disposable-container bootstrap argument/exit contract tests,
+using the same image locally and in CI. Those test doubles are contract checks,
+not evidence of application coverage.
+
 `just ui-e2e-case tests/ui/cases/live_scenario_reload.toml` runs a version-2
 program against the actual application through AT-SPI. Fresh artifacts under
 `ui-artifacts/executed` include actions completed, control responses, trees,

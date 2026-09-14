@@ -129,11 +129,7 @@ pub fn capture_inner_case(target: &str, filter: &str) -> Result<InnerOutcome, Bo
     write_artifact(&artifact_dir, "container-id.txt", container.id())?;
     let (devices, devices_stderr, _) = execute(
         &container,
-        [
-            "sh",
-            "-ec",
-            "cat /proc/devices; ls -l /dev/dm-* /dev/mapper/control; dmsetup info -c; lsblk -o NAME,MAJ:MIN,TYPE,MOUNTPOINTS",
-        ],
+        ["/usr/local/bin/storage-lab-collect-evidence", "devices"],
     )?;
     write_artifact(&artifact_dir, "devices-before.stdout.log", &devices)?;
     write_artifact(&artifact_dir, "devices-before.stderr.log", &devices_stderr)?;
@@ -165,11 +161,7 @@ pub fn capture_inner_case(target: &str, filter: &str) -> Result<InnerOutcome, Bo
 
     let (service_stdout, service_stderr, service_exit) = execute(
         &container,
-        [
-            "sh",
-            "-ec",
-            "cat /tmp/storage-lab/polkitd.log /tmp/storage-lab/udisksd.log /tmp/storage-lab/sshd.log /tmp/storage-lab-evidence/*.ledger 2>/dev/null || true",
-        ],
+        ["/usr/local/bin/storage-lab-collect-evidence", "services"],
     )?;
     write_artifact(&artifact_dir, "services.stdout.log", &service_stdout)?;
     write_artifact(&artifact_dir, "services.stderr.log", &service_stderr)?;
@@ -196,11 +188,11 @@ pub fn capture_inner_case(target: &str, filter: &str) -> Result<InnerOutcome, Bo
         // including 101. No bind mount or Docker CLI copy is permitted.
         let profiles = artifact_dir.join("profiles");
         fs::create_dir(&profiles)?;
-        let archive_command = format!(
-            "test \"$(cat /opt/storage-lab/bin/coverage-mode)\" = 1 && tar -czf - -C / tmp/storage-lab-profiles opt/storage-lab/bin/storage-lab-{target}"
-        );
-        // `target` comes only from literal bridge tests, never user input.
-        let mut archive = container.exec(ExecCommand::new(["sh", "-ec", &archive_command]))?;
+        let mut archive = container.exec(ExecCommand::new([
+            "/usr/local/bin/storage-lab-collect-evidence",
+            "profiles",
+            target,
+        ]))?;
         fs::write(profiles.join("inner.tar.gz"), archive.stdout_to_vec()?)?;
         fs::write(
             profiles.join("archive.stderr.log"),

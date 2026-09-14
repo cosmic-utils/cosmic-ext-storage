@@ -96,13 +96,13 @@ restricts measurement to shells with DEBUG traps (Bash, zsh, ksh), so adding
 that runner does not solve Dash measurement. Python format/reference:
 [coverage.py JSON reporting](https://coverage.readthedocs.io/en/7.16.1/commands/cmd_json.html).
 
-Decision requested: explicitly standardize the maintained test scripts on
-Bash in normal and instrumented runs and extract inline child-shell code
-into tracked scripts, preserving one execution path; or retain Dash and
-continue collector investigation. No interpreter change, second runner,
-custom trace collector, threshold reduction or unsupported metric is being
-silently introduced. Probe sources/reports remain under the ignored evidence
-directory; they have not become a maintained execution mechanism.
+Decision approved (2026-09-14): explicitly standardize maintained runtime test
+scripts on Bash in normal and instrumented runs, extracting inline child-shell
+code into tracked scripts and preserving one execution path. No second runner,
+custom trace collector, threshold reduction or unsupported metric is approved.
+Probe sources/reports remain under the ignored evidence directory; they have
+not become a maintained execution mechanism. Build recipes still need their
+own measurement-boundary audit.
 
 ## First deterministic regression batch
 
@@ -134,3 +134,72 @@ This batch does not claim a new full coverage percentage. Fresh final
 instrumentation is required after these test/source/manifest changes. The
 remaining seven UI cases, non-Rust integration, threshold work, hosted failure
 probes, visual review and required-check administration are still unfinished.
+
+## Approved Bash/runtime extraction
+
+Implemented directly on `4-ui-testing`, with no new branch:
+
+- Native entrypoint and exact-test launcher now explicitly use `/bin/bash`,
+  retaining `set -eu` rather than silently adding pipeline-failure behavior.
+- Replaced the duplicated UI bootstrap with `container-runner.sh`, called by
+  `run-capability.sh` and `run-case.sh`. Both now mount source read-only and
+  artifacts writable. Case arguments reject traversal and invalid coverage
+  booleans before starting the container.
+- Extracted lab device/service diagnostics and profile archiving into
+  `collect-evidence.sh`. Rust still owns Testcontainers lifecycle, exit checks,
+  cleanup interpretation and exec-stream archive transport before teardown.
+  Archive targets are passed as arguments and validated, not interpolated
+  into shell source. The diagnostic best-effort behavior is unchanged.
+- Extracted the terminal input probe into `input-probe.sh`. Removed all four
+  runtime `sh -ec` snippets from the two Rust runners and the duplicated UI
+  snippet from Just/the case launcher. No application/GUI dependency, UI image
+  lock or shutdown-quarantine scope changed. Build-time Containerfile commands
+  remain separately inventoried work, not silently excluded coverage.
+- Added four host contract tests and two explicitly container-only tests to
+  the existing Python unittest suite. Host discovery runs 30 checks and marks
+  the two container checks skipped; the existing `test-lab` and `ui-e2e`
+  recipes each enable their matching container check locally and in CI.
+  Explicit local execution of both container checks passes. They cover both UI
+  modes, exact argv/mount isolation, 0/7/139 exit propagation, invalid arguments,
+  and profile archive success/non-instrumented/missing-binary outcomes.
+
+Normal execution after the runtime extraction: 17 native cases pass in
+116.753 seconds (one deliberate ignored probe remains unselected), capability
+passes, and all nine reload steps pass with the unchanged known-shutdown
+quarantine warning. Strict workspace/all-feature/all-target Clippy, Bash syntax,
+Rust formatting and diff checks pass. Logs are under the ignored
+`target/testing-v2-completion/bash/` evidence directory.
+
+The same immutable kcov probe image now observes both named children when
+started by a parent Bash script: `input-probe.sh` has 3/3 executable lines hit;
+the services-only invocation of `collect-evidence.sh` has 4/14, retaining device
+and profile branches as uncovered. Parent success/failure exits remain 0/7.
+This resolves the specific inline-child measurement problem. It does **not**
+adopt that image as the runtime, establish a shell function metric, measure
+across Docker/privilege boundaries, or pass the support-code coverage gate.
+The probe's Bash 5.1.4 is not the pinned runtime's Bash 5.2.15; actual collector
+integration in that runtime remains required.
+
+Fresh combined instrumentation after the refactor: `run-wd_l49sl`, with
+`just coverage origin/main` resolving the comparison base to
+`0ba27cc2caac19acb7a8d98747f8b65058dab877`. Host, native and UI execution exit
+codes are all zero; native runs 17 tests in 144.213 seconds. The deliberate
+inner-failure case also supplies its archive before outcome checking. The
+report accepts 89 profiles in 12 matching build groups, including real app
+and runner UI profiles. No build-input/provenance/transport failure occurred.
+
+Rust totals: **11,682 / 29,342 lines (39.81%)**, **1,360 / 3,471 functions
+(39.18%)**. These include the preceding model-test batch; they are not a claim
+that extracting shell code alone increased application coverage. Runtime
+shell extraction also changes Rust source line locations/definitions, so the
+previous raw denominator is not identical.
+
+Acceptance correctly exits 1: seven missing executed UI cases (one diagnostic),
+ten package/aggregate threshold diagnostics, 4,950 changed uncovered lines
+and 707 changed uncovered functions. The changed-code findings compare the
+whole branch against `main`; the initial baseline compared against its own
+starting commit, so its eleven diagnostics are not directly comparable to
+these 5,668. No threshold was relaxed. Complete non-Rust support coverage,
+remaining UI programs and later approval/admin gates are still outstanding.
+Saved report copies are under `target/testing-v2-completion/bash/reports/`;
+full raw matching profiles/build groups remain in `target/coverage/run-wd_l49sl`.
