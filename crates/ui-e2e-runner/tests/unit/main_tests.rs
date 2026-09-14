@@ -66,6 +66,39 @@ fn existing_artifact_directory_is_never_removed(locked_environment: EnvironmentL
     );
 }
 
+#[rstest::rstest]
+fn keyboard_keeper_is_reaped_and_early_exit_is_rejected(locked_environment: EnvironmentLock) {
+    let root = tempfile::tempdir().unwrap();
+    let mut session = CapabilitySession::new(
+        &root.path().join("case"),
+        &locked_environment,
+        EnvironmentEvidence {
+            lock_sha256: "fixture".into(),
+            base_image: locked_environment.base_image.clone(),
+            apt_snapshot: locked_environment.apt_snapshot.clone(),
+        },
+    )
+    .unwrap();
+    session.keyboard = Some(Command::new("false").spawn().unwrap());
+    assert!(!session.keyboard.as_mut().unwrap().wait().unwrap().success());
+    assert!(
+        CapabilitySession::ensure_running("virtual keyboard", session.keyboard.as_mut()).is_err()
+    );
+    session.keyboard = Some(Command::new("sleep").arg("30").spawn().unwrap());
+    let pid = session.keyboard.as_ref().unwrap().id() as libc::pid_t;
+    drop(session);
+    // The owned child must have been killed AND reaped, not left as a zombie.
+    let mut status = 0;
+    assert_eq!(
+        unsafe { libc::waitpid(pid, &mut status, libc::WNOHANG) },
+        -1
+    );
+    assert_eq!(
+        std::io::Error::last_os_error().raw_os_error(),
+        Some(libc::ECHILD)
+    );
+}
+
 #[test]
 fn png_signature_requires_all_eight_bytes() {
     let directory = tempfile::tempdir().expect("temporary directory");

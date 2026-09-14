@@ -144,11 +144,11 @@ version = "0.16"
 features = ["fluent-system", "desktop-requester"]
 
 [workspace.dependencies.libcosmic]
-# Temporary maintained accessibility bridge and button-action routing fix.
-# Based on our existing 3d5fdb08 pin, not unvalidated upstream master.
-# Remove this override when a validated upstream version includes both fixes.
+# Maintained accessibility bridge, button routing and widget-focus publication.
+# Repairs on our existing pin, not unvalidated upstream master. Scope and removal
+# conditions are recorded in docs/plans/5-testing-v2/dependency-fix-ledger.md.
 git = "https://github.com/stoorps/libcosmic.git"
-rev = "ab3a7b9c58a632eb64f4478d1c95bf8764e1c9aa"
+rev = "fe1630e7c3a2af47a812f50007ed5f95b3d1691b"
 features = [
     # Accessibility support
     "a11y",

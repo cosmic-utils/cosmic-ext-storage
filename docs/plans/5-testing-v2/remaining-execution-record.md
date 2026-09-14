@@ -1,8 +1,9 @@
 # Testing V2 remaining execution
 
-Status: initial regression batch implemented; shell collector integration
-awaits the interpreter decision below. No final acceptance or coverage
-completion claimed.
+Status: deterministic regressions, approved Bash extraction and pinned
+focus-publication repairs are implemented. Full UI flows, collector integration
+and coverage/approval gates remain outstanding. No final acceptance or coverage
+completion claimed; the sections below retain the chronology of earlier blockers.
 
 Started on 2026-09-14 from `4-ui-testing` commit
 `5ff5e049756c5389f74a2bb0622b9612c219730f`, on branch
@@ -213,9 +214,52 @@ and teardown ownership. Two mandatory rstest regressions pass; all 70 runner
 tests, strict Clippy, normal capability and the original reload flow pass.
 Cargo.lock and GUI/image/quarantine bindings are unchanged.
 
-The next gate is genuinely blocked on widget-focus publication in pinned iced:
+At that point the next gate was blocked on widget-focus publication in pinned iced:
 every accessibility update hardcodes focus to the window root. The keyboard
 inventory remains unconverted; the exploratory program and failed artifacts
 are preserved. See [the diagnosis, upstream-fix audit and scoped proposal](keyboard-focus-blocker.md).
 No dependency repair, new PR, focus-assertion waiver or quarantine expansion
-has been made. Fresh combined coverage is required after these source changes.
+was made in that batch. Fresh combined coverage is required after these source changes.
+
+## Approved pinned focus-publication repairs
+
+The user subsequently approved the narrow repair and requested an upstreaming
+record for each fix. Implemented two separate iced commits on the previous
+exact pin: publish the UI's actual focused widget ID, then forward existing
+window Focused/Unfocused events to AccessKit. Neither changes Wayland lifetime
+or focus policy. Their corresponding libcosmic commits only bump the iced
+submodule. The app remains on `4-ui-testing`; only dependency fork branches
+were published, with no upstream PR. See [the complete dependency fix ledger](dependency-fix-ledger.md)
+for all retained earlier patches as well as these two new repairs.
+
+The app-only keyboard-device keeper preserves an attached virtual keyboard
+through per-key wtype invocations, checks actual device readiness/liveness,
+and kills/reaps its child. Its mandatory rstest cleanup/early-exit regression
+passes. This is harness behavior, not an upstream dependency patch.
+
+The real normal-mode diagnostic now passes exact forward/back focus assertions
+on Volume, Usage and Keyboard Scenario Disk, with a clean shutdown. Its full
+program is [retained separately](keyboard-focus-probe.toml). It does not cover
+dialog activation, disabled-reason, cancellation or submission, so the required
+keyboard flow remains planned rather than being replaced by a smaller probe.
+
+The new dependency pin initially fails the old shutdown-quarantine binding,
+as intended: reload completes all nine semantic steps, then reproduces the
+same ordered, post-close SIGSEGV stack. Rebinding only the lockfile hash is
+explicitly recorded in the ledger, with fresh normal/instrumented revalidation.
+The case, environment, signature, owner and expiry remain unchanged. This is
+not a Wayland-crash repair or a waiver for any keyboard failure.
+
+Fresh normal and instrumented reload runs pass their nine semantic steps with
+that warning. The instrumented 13-step focus probe also passes and shuts down
+cleanly. Existing collection validation accepts both runs' pre-close flush,
+app/runner profiles, matching binaries and input provenance; pinned LLVM merges
+and maps both profile sets without warnings. Workspace Nextest passes 290 tests
+(36 explicit ignores), strict Clippy and formatting pass, and all 90 required
+names validate. Host Python passes 30 tests with two explicit container-only
+skips; the normal capability run additionally passes the UI container check.
+The ledger contains the exact run IDs, hashes, commands and limitations.
+
+No fresh combined coverage percentage is claimed for this batch. The remaining
+UI programs, coverage thresholds, support-code measurement, hosted failure
+probes, visual review and required-check administration remain outstanding.

@@ -138,7 +138,10 @@ tests remain in the private storage lab.
 
 - `long_artifact_paths_have_short_owned_sockets_and_preserve_evidence`
 - `existing_artifact_directory_is_never_removed`
+- `keyboard_keeper_is_reaped_and_early_exit_is_rejected`
 
 These owned rstest cases bind real Unix sockets under a short private temporary
 runtime directory, even with long artifact paths. They verify runtime/token
 cleanup while preserving evidence and rejecting existing artifact directories.
+Keyboard cases retain an owned virtual keyboard device for the case lifetime;
+its regression rejects early process exit and verifies child termination/reaping.

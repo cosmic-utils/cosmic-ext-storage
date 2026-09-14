@@ -1,8 +1,11 @@
 # Keyboard accessibility: observed blocker
 
 2026-09-14, continuing directly on `4-ui-testing` after `c1f1e29`.
-Status: runtime-path defect fixed; widget-focus publication requires a scoped
-dependency decision. This is not completed keyboard E2E acceptance.
+Status: the scoped repair was approved and implemented on the existing pinned
+fork; real Tab/Shift+Tab widget-focus assertions now pass. This is not completed
+keyboard-dialog E2E acceptance. The diagnosis and audit below describe the
+original pin; see [the fix ledger](dependency-fix-ledger.md) for the two separate
+focus patches, exact replacement pins, regressions and integration evidence.
 
 ## Harness defect fixed locally
 
@@ -65,11 +68,12 @@ publication fix was identified in those results. Relevant candidates inspected:
 - [iced #45](https://github.com/pop-os/iced/pull/45) is closed historical,
   broad pre-current-API work, not a targeted current fix.
 
-No upstream PR was opened and no dependency branch/pin was changed.
+At the time of this audit, no upstream PR was opened and no dependency
+branch/pin was changed. The later approved fork-only changes are recorded below.
 
-## Recommended bounded next step
+## Approved bounded repair
 
-Request approval to repair **widget-focus publication only** in the existing
+The user approved repairing **focus publication only** in the existing
 pinned fork: query the UI's actual focused widget during tree generation,
 publish its existing accessibility ID, preserve root fallback when nothing is
 focused, and add regression tests for focused/unfocused and removed-widget
@@ -78,6 +82,20 @@ Do not update to master, redesign Wayland lifetime/teardown, expand quarantine,
 or open a libcosmic PR. Any required pin/hash rebind must remain explicit and
 reviewed. This unblocks a necessary assertion mechanism, not all remaining
 coverage, visual-review or UI-flow requirements.
+
+Implementation found a second necessary focus-publication omission: AccessKit
+also needs the real window Focused/Unfocused transitions, which the pinned
+runtime was not forwarding. Repair 6 publishes the widget ID; repair 7 forwards
+those existing window events without changing focus policy. The runner retains
+an owned virtual keyboard for key-driven cases and reaps it on cleanup.
+
+The exact [successful diagnostic program](keyboard-focus-probe.toml) is retained
+outside the mandatory case inventory. It traverses the five header controls,
+asserts focus on Volume, Usage and Keyboard Scenario Disk, then uses Shift+Tab
+and asserts Usage focus again. It is not a substitute for dialog activation,
+disabled-reason, cancellation or submission coverage. The full
+`keyboard_accessibility` inventory remains planned. Do not count this diagnostic
+as one of the seven completed remaining UI cases.
 
 ## Evidence
 

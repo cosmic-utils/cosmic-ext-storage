@@ -672,6 +672,13 @@ async fn run_case(
         .environment
         .insert("WAYLAND_DISPLAY".into(), display.into());
     let viewport = session.assert_viewport(&sway_socket)?;
+    let uses_keyboard = case
+        .step
+        .iter()
+        .any(|step| matches!(step.operation, Operation::Key { .. }));
+    if uses_keyboard {
+        session.start_keyboard(&sway_socket)?;
+    }
     session.app_process_group = true;
     session.app = Some(
         session
@@ -735,6 +742,9 @@ async fn run_case(
         .await?;
     }
     for step in &case.step {
+        if uses_keyboard {
+            CapabilitySession::ensure_running("virtual keyboard", session.keyboard.as_mut())?;
+        }
         let nodes = observed_tree(
             &connection,
             &mut events,

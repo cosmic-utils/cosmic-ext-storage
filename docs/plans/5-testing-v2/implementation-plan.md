@@ -586,11 +586,16 @@ build contracts from the rstest gate, not just all-feature success.
 
 Current execution finding (2026-09-14): case-dependent Sway socket overflow is
 fixed using a short owned runtime directory, independent of artifact paths.
-Keyboard focus assertions are blocked by the pinned iced accessibility update
-hardcoding window-root focus. See [the evidence and bounded repair proposal](keyboard-focus-blocker.md).
+The approved pinned-fork repairs now publish widget focus and forward actual
+window-focus transitions; real Tab/Shift+Tab focus assertions pass. See
+[the fix-by-fix scope and verification ledger](dependency-fix-ledger.md) and
+[the original diagnosis](keyboard-focus-blocker.md).
 Do not replace keyboard assertions with clicks, infer focus from highlighting,
-or promote the exploratory keyboard probe to completed-case status. A scoped
-fork/pin decision is needed before this gate can complete.
+or promote the exploratory keyboard probe to completed-case status. Continue
+with the full dialog navigation/activation/cancellation/disabled-reason flow;
+that mandatory case and the other remaining UI programs are not yet complete.
+Keep later dependency fixes separately scoped and documented for upstreaming;
+do not upgrade to master, change Wayland lifetime, or open an upstream PR.
 
 ### Work
 

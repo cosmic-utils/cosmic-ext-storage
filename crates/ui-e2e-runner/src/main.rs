@@ -525,6 +525,7 @@ struct CapabilitySession {
     sway: Option<Child>,
     app: Option<Child>,
     foot: Option<Child>,
+    keyboard: Option<Child>,
 }
 
 impl CapabilitySession {
@@ -592,6 +593,7 @@ impl CapabilitySession {
             sway: None,
             app: None,
             foot: None,
+            keyboard: None,
             app_process_group: false,
         })
     }
@@ -728,6 +730,40 @@ impl CapabilitySession {
             .context("start test-feature COSMIC Storage")?;
         self.app = Some(child);
         Ok(())
+    }
+
+    fn start_keyboard(&mut self, sway_socket: &Path) -> Result<()> {
+        // Keep a real keyboard device present while per-key wtype clients
+        // connect/disconnect. This models a desktop keyboard, not a readiness
+        // delay or an action retry. The case watchdog/Drop own its lifetime.
+        self.keyboard = Some(
+            self.command("wtype")
+                .args(["-s", "180000"])
+                .stdout(File::create(self.artifacts.join("keyboard.stdout.log"))?)
+                .stderr(File::create(self.artifacts.join("keyboard.stderr.log"))?)
+                .spawn()?,
+        );
+        wait_until(READY_TIMEOUT, || {
+            Self::ensure_running("virtual keyboard", self.keyboard.as_mut())?;
+            let output = self.run_checked(
+                "swaymsg",
+                [
+                    "-s",
+                    sway_socket.to_str().context("Sway socket path")?,
+                    "-t",
+                    "get_inputs",
+                    "-r",
+                ],
+            )?;
+            let inputs: Vec<serde_json::Value> = serde_json::from_slice(&output)?;
+            if inputs.iter().any(|input| input["type"] == "keyboard") {
+                fs::write(self.artifacts.join("keyboard-inputs.json"), output)?;
+                Ok(Some(()))
+            } else {
+                Ok(None)
+            }
+        })
+        .context("wait for the owned virtual keyboard device")
     }
 
     fn start_input_probe(&mut self) -> Result<()> {
@@ -1058,6 +1094,7 @@ impl CapabilitySession {
     }
 
     fn shutdown(&mut self) {
+        terminate("virtual keyboard", self.keyboard.take());
         terminate("input probe", self.foot.take());
         if self.app_process_group
             && let Some(child) = self.app.as_mut()
