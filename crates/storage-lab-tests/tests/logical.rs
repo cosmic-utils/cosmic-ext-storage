@@ -1,5 +1,5 @@
 mod common;
-use common::{lab, owned};
+use common::owned;
 use std::time::Duration;
 use storage_contracts::*;
 use storage_lab_tests::Result;
@@ -129,10 +129,16 @@ async fn delete(
     Ok(())
 }
 
+#[rstest::rstest]
 #[tokio::test]
 #[ignore = "runs only inside the private Testcontainers storage lab"]
-async fn lvm_create_resize_delete_and_stale_review() -> Result<()> {
-    let (mut fixture, backend, disk) = lab("lvm-lifecycle", 256).await?;
+async fn lvm_create_resize_delete_and_stale_review(
+    #[from(common::lab)]
+    #[with("lvm-lifecycle", 256)]
+    #[future(awt)]
+    lab: Result<common::OwnedLab>,
+) -> Result<()> {
+    let (mut fixture, backend, disk) = lab?;
     backend.enable_optional_modules().await?;
     let name = format!(
         "storage-lab-{}",
@@ -238,10 +244,16 @@ async fn lvm_create_resize_delete_and_stale_review() -> Result<()> {
     Ok(())
 }
 
+#[rstest::rstest]
 #[tokio::test]
 #[ignore = "runs only inside the private Testcontainers storage lab"]
-async fn mdraid_create_stop_start_delete_and_invalid_members() -> Result<()> {
-    let (mut fixture, backend, first) = lab("mdraid-lifecycle", 128).await?;
+async fn mdraid_create_stop_start_delete_and_invalid_members(
+    #[from(common::lab)]
+    #[with("mdraid-lifecycle", 128)]
+    #[future(awt)]
+    lab: Result<common::OwnedLab>,
+) -> Result<()> {
+    let (mut fixture, backend, first) = lab?;
     let second = fixture
         .attach_sparse_loop("second.img", 128 * 1024 * 1024)?
         .path()

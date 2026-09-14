@@ -3,7 +3,13 @@ use storage_contracts::DiskDiscovery;
 use storage_lab_tests::{LabFixture, Result};
 use storage_udisks::UdisksBackend;
 
-pub async fn lab(label: &str, megabytes: u64) -> Result<(LabFixture, UdisksBackend, String)> {
+pub type OwnedLab = (LabFixture, UdisksBackend, String);
+
+#[rstest::fixture]
+pub async fn lab(
+    #[default("fixture")] label: &str,
+    #[default(64)] megabytes: u64,
+) -> Result<OwnedLab> {
     let mut fixture = LabFixture::create(label)?;
     let device = fixture
         .attach_sparse_loop("disk.img", megabytes * 1024 * 1024)?

@@ -1,3 +1,5 @@
+mod common;
+use common::fixture;
 use storage_contracts::{
     ConfirmedLogicalAction, LogicalAction, LogicalActionKind, LogicalOperations,
     LogicalPreflightRequest, LogicalPreflightRequestKey, LogicalPreflightTarget, ScenarioControl,
@@ -6,17 +8,15 @@ use storage_contracts::{
 use storage_types::{NetworkBackendId, NetworkDriveConfig, NetworkDriveStatus};
 use test_backend::ScenarioRuntime;
 
-fn fixture(name: &str) -> std::path::PathBuf {
-    std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("../../tests/ui/scenarios")
-        .join(name)
-}
-
+#[rstest::rstest]
 #[tokio::test]
-async fn logical_confirmation_requires_current_preflight_key() {
-    let backend = ScenarioRuntime::load(fixture("logical/preflight.toml"), None, None)
-        .expect("runtime")
-        .backend();
+async fn logical_confirmation_requires_current_preflight_key(
+    #[from(common::scenario)]
+    #[with("logical/preflight.toml")]
+    #[future(awt)]
+    runtime: ScenarioRuntime,
+) {
+    let backend = runtime.backend();
     let anchor = backend
         .capture_logical_candidate("/dev/ui-disk0p1".into())
         .await
@@ -57,32 +57,44 @@ async fn logical_confirmation_requires_current_preflight_key() {
     assert_eq!(error.kind, StorageErrorKind::Conflict);
 }
 
+#[rstest::rstest]
 #[tokio::test]
-async fn logical_mutation_emits_one_declared_refresh_event() {
-    let backend = ScenarioRuntime::load(fixture("logical/preflight.toml"), None, None)
-        .expect("runtime")
-        .backend();
+async fn logical_mutation_emits_one_declared_refresh_event(
+    #[from(common::scenario)]
+    #[with("logical/preflight.toml")]
+    #[future(awt)]
+    runtime: ScenarioRuntime,
+) {
+    let backend = runtime.backend();
     let before = backend.diagnostics().await.expect("diagnostics");
     backend.advance_to(1).await.expect("semantic action");
     let after = backend.diagnostics().await.expect("diagnostics");
     assert_eq!(after.generation, before.generation);
 }
 
+#[rstest::rstest]
 #[tokio::test]
-async fn btrfs_utility_state_never_uses_host_tools() {
-    let backend = ScenarioRuntime::load(fixture("empty.toml"), None, None)
-        .expect("runtime")
-        .backend();
+async fn btrfs_utility_state_never_uses_host_tools(
+    #[from(common::scenario)]
+    #[with("empty.toml")]
+    #[future(awt)]
+    runtime: ScenarioRuntime,
+) {
+    let backend = runtime.backend();
     let error = storage_contracts::BtrfsOperations::list_subvolumes(&*backend, "/mnt/ui-data")
         .await
         .expect_err("not modelled");
     assert_eq!(error.kind, StorageErrorKind::Unsupported);
 }
 
+#[rstest::rstest]
 #[tokio::test]
-async fn network_mutations_follow_declared_schema() {
-    let runtime =
-        ScenarioRuntime::load(fixture("network/mount.toml"), None, None).expect("runtime");
+async fn network_mutations_follow_declared_schema(
+    #[from(common::scenario)]
+    #[with("network/mount.toml")]
+    #[future(awt)]
+    runtime: ScenarioRuntime,
+) {
     let backend = runtime
         .adapters()
         .network

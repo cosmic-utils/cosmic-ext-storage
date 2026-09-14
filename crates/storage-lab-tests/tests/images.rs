@@ -1,5 +1,5 @@
 mod common;
-use common::{lab, owned};
+use common::owned;
 use std::{
     fs::File,
     io::{Read, Seek, SeekFrom, Write},
@@ -8,10 +8,16 @@ use std::{
 use storage_contracts::ImageDeviceOperations;
 use storage_lab_tests::Result;
 
+#[rstest::rstest]
 #[tokio::test]
 #[ignore = "runs only inside the private Testcontainers storage lab"]
-async fn image_backup_restore_round_trip_and_readonly_enforcement() -> Result<()> {
-    let (mut fixture, backend, disk) = lab("image-roundtrip", 64).await?;
+async fn image_backup_restore_round_trip_and_readonly_enforcement(
+    #[from(common::lab)]
+    #[with("image-roundtrip", 64)]
+    #[future(awt)]
+    lab: Result<common::OwnedLab>,
+) -> Result<()> {
+    let (mut fixture, backend, disk) = lab?;
     let payload = b"storage lab production image descriptor round trip";
     let offset = 1024 * 1024;
     {

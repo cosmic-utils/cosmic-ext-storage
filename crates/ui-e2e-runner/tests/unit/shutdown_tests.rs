@@ -1,5 +1,7 @@
 use super::*;
+use rstest::{fixture, rstest};
 
+#[fixture]
 fn known() -> Diagnostic {
     Diagnostic {
         schema_version: 1, kind: "signal".into(), exit_code: None,
@@ -26,108 +28,91 @@ fn check(d: &Diagnostic) -> Outcome {
     .unwrap()
 }
 
-#[test]
-fn quarantine_requires_exact_ordered_stack_after_close() {
-    assert_eq!(check(&known()), Outcome::KnownFailure);
-    for change in 0..9 {
-        let mut d = known();
-        match change {
-            0 => d.close_requested = false,
-            1 => d.signal = Some("SIGABRT".into()),
-            2 => d.kind = "exited".into(),
-            3 => d.schema_version = 2,
-            4 => d.frames.clear(),
-            5 => d.frames.reverse(),
-            6 => d.frames[0].library = "other.so".into(),
-            7 => d.frames[1].function = "app::drop".into(),
-            8 => d.exit_code = Some(0),
-            _ => unreachable!(),
-        }
-        assert_eq!(check(&d), Outcome::Failed, "mutation {change}");
-    }
+#[rstest]
+#[case::before_close(|d: &mut Diagnostic| d.close_requested = false)]
+#[case::wrong_signal(|d: &mut Diagnostic| d.signal = Some("SIGABRT".into()))]
+#[case::wrong_kind(|d: &mut Diagnostic| d.kind = "exited".into())]
+#[case::wrong_schema(|d: &mut Diagnostic| d.schema_version = 2)]
+#[case::no_frames(|d: &mut Diagnostic| d.frames.clear())]
+#[case::reversed_frames(|d: &mut Diagnostic| d.frames.reverse())]
+#[case::wrong_library(|d: &mut Diagnostic| d.frames[0].library = "other.so".into())]
+#[case::wrong_owner(|d: &mut Diagnostic| d.frames[1].function = "app::drop".into())]
+#[case::conflicting_exit(|d: &mut Diagnostic| d.exit_code = Some(0))]
+fn quarantine_rejects_changed_diagnostic(
+    mut known: Diagnostic,
+    #[case] mutate: fn(&mut Diagnostic),
+) {
+    mutate(&mut known);
+    assert_eq!(check(&known), Outcome::Failed);
+}
+
+#[rstest]
+fn quarantine_accepts_only_known_stack(known: Diagnostic) {
+    assert_eq!(check(&known), Outcome::KnownFailure);
     assert!(serde_json::from_str::<Diagnostic>("{}").is_err());
 }
 
+#[fixture]
+fn policy() -> Policy {
+    toml::from_str(POLICY).unwrap()
+}
+
+#[rstest]
+#[case::missing_supervisor(|_: &mut Policy, code: &mut Option<i32>, _: &mut u64| *code = None)]
+#[case::wrong_case(|p: &mut Policy, _: &mut Option<i32>, _: &mut u64| p.case_id = "other".into())]
+#[case::wrong_case_hash(|p: &mut Policy, _: &mut Option<i32>, _: &mut u64| p.case_sha256 = "changed".into())]
+#[case::wrong_environment(|p: &mut Policy, _: &mut Option<i32>, _: &mut u64| p.environment_sha256 = "changed".into())]
+#[case::wrong_lock(|p: &mut Policy, _: &mut Option<i32>, _: &mut u64| p.cargo_lock_sha256 = "changed".into())]
+#[case::expired(|p: &mut Policy, _: &mut Option<i32>, now: &mut u64| *now = p.expires_unix)]
+fn quarantine_rejects_changed_scope(
+    known: Diagnostic,
+    mut policy: Policy,
+    #[case] mutate: fn(&mut Policy, &mut Option<i32>, &mut u64),
+) {
+    let mut code = Some(139);
+    let mut now = policy.expires_unix - 1;
+    mutate(&mut policy, &mut code, &mut now);
+    assert_eq!(
+        classify(
+            &known,
+            code,
+            &policy.case_id,
+            &policy.case_sha256,
+            &policy.environment_sha256,
+            &policy.cargo_lock_sha256,
+            now
+        )
+        .unwrap(),
+        Outcome::Failed
+    );
+}
+
 #[test]
-fn changed_scope_expiry_and_supervisor_failure_are_not_quarantined() {
-    let p: Policy = toml::from_str(POLICY).unwrap();
-    for (code, case, sha, env, lock, now) in [
-        (
-            None,
-            p.case_id.as_str(),
-            p.case_sha256.as_str(),
-            p.environment_sha256.as_str(),
-            p.cargo_lock_sha256.as_str(),
-            0,
-        ),
-        (
-            Some(139),
-            "other",
-            &p.case_sha256,
-            &p.environment_sha256,
-            &p.cargo_lock_sha256,
-            0,
-        ),
-        (
-            Some(139),
-            &p.case_id,
-            "changed",
-            &p.environment_sha256,
-            &p.cargo_lock_sha256,
-            0,
-        ),
-        (
-            Some(139),
-            &p.case_id,
-            &p.case_sha256,
-            "changed",
-            &p.cargo_lock_sha256,
-            0,
-        ),
-        (
-            Some(139),
-            &p.case_id,
-            &p.case_sha256,
-            &p.environment_sha256,
-            "changed",
-            0,
-        ),
-        (
-            Some(139),
-            &p.case_id,
-            &p.case_sha256,
-            &p.environment_sha256,
-            &p.cargo_lock_sha256,
-            p.expires_unix,
-        ),
-    ] {
-        assert_eq!(
-            classify(&known(), code, case, sha, env, lock, now).unwrap(),
-            Outcome::Failed
-        );
-    }
+fn policy_evidence_retains_identity() {
     let evidence = policy_evidence().unwrap();
     assert_eq!(evidence["id"], "iced-pinned-wayland-proxy-teardown");
     assert_eq!(evidence["sha256"].as_str().unwrap().len(), 64);
 }
 
-#[test]
-fn functional_failure_cannot_be_overridden_by_shutdown_status() {
-    for outcome in [
-        Outcome::Clean,
-        Outcome::KnownFailure,
-        Outcome::Failed,
-        Outcome::NotAttempted,
-    ] {
-        assert_eq!(status(false, &outcome), "failed");
-    }
-    assert_eq!(status(true, &Outcome::Failed), "failed");
-    assert_eq!(status(true, &Outcome::NotAttempted), "failed");
-    assert_eq!(
-        status(true, &Outcome::KnownFailure),
-        "semantic_passed_with_known_shutdown_failure"
-    );
-    assert_eq!(status(true, &Outcome::Clean), "semantic_passed");
+#[rstest]
+#[case::failed_function_clean(false, Outcome::Clean, "failed")]
+#[case::failed_function_known(false, Outcome::KnownFailure, "failed")]
+#[case::failed_function_failed(false, Outcome::Failed, "failed")]
+#[case::failed_function_not_attempted(false, Outcome::NotAttempted, "failed")]
+#[case::passed_function_failed(true, Outcome::Failed, "failed")]
+#[case::passed_function_not_attempted(true, Outcome::NotAttempted, "failed")]
+#[case::passed_function_known(
+    true,
+    Outcome::KnownFailure,
+    "semantic_passed_with_known_shutdown_failure"
+)]
+#[case::passed_function_clean(true, Outcome::Clean, "semantic_passed")]
+fn functional_and_shutdown_status(
+    #[case] functional: bool,
+    #[case] outcome: Outcome,
+    #[case] expected: &str,
+) {
+    assert_eq!(status(functional, &outcome), expected);
 }
 
 #[test]

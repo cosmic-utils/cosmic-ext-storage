@@ -1,18 +1,17 @@
+mod common;
 use storage_contracts::{ImageWorkflowOperations, ScenarioControl, ScenarioOperation};
 use storage_types::{ImageAssetRef, ImageCopyKind, ImageCopyRequest, WorkflowState};
 use test_backend::ScenarioRuntime;
 
-fn fixture(name: &str) -> std::path::PathBuf {
-    std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("../../tests/ui/scenarios")
-        .join(name)
-}
-
+#[rstest::rstest]
 #[tokio::test]
-async fn cancelled_image_operation_cannot_complete_successfully() {
-    let backend = ScenarioRuntime::load(fixture("workflows/image-usage.toml"), None, None)
-        .expect("runtime")
-        .backend();
+async fn cancelled_image_operation_cannot_complete_successfully(
+    #[from(common::scenario)]
+    #[with("workflows/image-usage.toml")]
+    #[future(awt)]
+    runtime: ScenarioRuntime,
+) {
+    let backend = runtime.backend();
     let asset = ImageAssetRef::new("asset:image").expect("asset");
     backend
         .create_image_asset(asset.clone(), 0)
@@ -42,11 +41,15 @@ async fn cancelled_image_operation_cannot_complete_successfully() {
     );
 }
 
+#[rstest::rstest]
 #[tokio::test]
-async fn same_tick_cancel_order_is_deterministic() {
-    let backend = ScenarioRuntime::load(fixture("empty.toml"), None, None)
-        .expect("runtime")
-        .backend();
+async fn same_tick_cancel_order_is_deterministic(
+    #[from(common::scenario)]
+    #[with("empty.toml")]
+    #[future(awt)]
+    runtime: ScenarioRuntime,
+) {
+    let backend = runtime.backend();
     let first = backend.advance_to(1).await.expect("first");
     let second = backend.advance_to(1).await.expect("second");
     assert!(second.sequence > first.sequence);

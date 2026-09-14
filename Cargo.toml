@@ -78,6 +78,7 @@ serde_json = { workspace = true, optional = true }
 sha2 = { workspace = true, optional = true }
 
 [dev-dependencies]
+rstest.workspace = true
 storage-lab-tests = { path = "crates/storage-lab-tests" }
 zbus.workspace = true
 
@@ -97,6 +98,7 @@ default-members = ["."]
 resolver = "2"
 
 [workspace.dependencies]
+rstest = { version = "=0.27.0", default-features = false }
 futures-util = "0.3.31"
 i18n-embed-fl = "0.10.0"
 open = "5.3.2"

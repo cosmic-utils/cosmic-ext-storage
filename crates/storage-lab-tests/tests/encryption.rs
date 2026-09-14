@@ -1,12 +1,18 @@
 mod common;
-use common::{lab, owned};
+use common::owned;
 use storage_contracts::EncryptionOperations;
 use storage_lab_tests::Result;
 
+#[rstest::rstest]
 #[tokio::test]
 #[ignore = "runs only inside the private Testcontainers storage lab"]
-async fn luks_failure_after_format_cleans_auto_opened_mapper() -> Result<()> {
-    let (fixture, backend, disk) = lab("luks-unwind", 128).await?;
+async fn luks_failure_after_format_cleans_auto_opened_mapper(
+    #[from(common::lab)]
+    #[with("luks-unwind", 128)]
+    #[future(awt)]
+    lab: Result<common::OwnedLab>,
+) -> Result<()> {
+    let (fixture, backend, disk) = lab?;
     let root = fixture.root()?.path().to_owned();
     let ledger = fixture.ledger_path().to_owned();
     let outcome = tokio::spawn(async move {

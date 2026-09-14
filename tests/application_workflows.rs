@@ -1,3 +1,4 @@
+mod common;
 use std::collections::BTreeMap;
 
 use cosmic_ext_storage::testing::{
@@ -33,12 +34,8 @@ fn luks_secrets() -> FixtureSecrets {
 
 #[tokio::test(flavor = "current_thread")]
 async fn workflow_harness_uses_only_selected_scenario_runtime() {
-    let first = WorkflowHarness::from_fixture("empty.toml", FixtureSecrets::none())
-        .await
-        .expect("first scenario harness");
-    let second = WorkflowHarness::from_fixture("empty.toml", FixtureSecrets::none())
-        .await
-        .expect("second scenario harness");
+    let first = common::workflow("empty.toml", FixtureSecrets::none()).await;
+    let second = common::workflow("empty.toml", FixtureSecrets::none()).await;
 
     assert_eq!(first.selected_block_backend_id(), "ui-scenario");
     assert_eq!(second.selected_block_backend_id(), "ui-scenario");
@@ -46,13 +43,15 @@ async fn workflow_harness_uses_only_selected_scenario_runtime() {
     assert!(second.global_operations_lookup_is_rejected().await);
 }
 
+#[rstest::rstest]
 #[tokio::test(flavor = "current_thread")]
-async fn logical_open_preflight_confirm_executes_once_and_refreshes_once() {
-    let mut harness =
-        WorkflowHarness::from_fixture("logical/preflight.toml", FixtureSecrets::none())
-            .await
-            .expect("logical harness");
-
+async fn logical_open_preflight_confirm_executes_once_and_refreshes_once(
+    #[from(common::workflow)]
+    #[with("logical/preflight.toml")]
+    #[future(awt)]
+    harness: WorkflowHarness,
+) {
+    let mut harness = harness;
     harness
         .dispatch_logical(LogicalIntent::Open {
             device_path: "/dev/ui-disk0p1".into(),
@@ -86,13 +85,15 @@ async fn logical_open_preflight_confirm_executes_once_and_refreshes_once() {
     );
 }
 
+#[rstest::rstest]
 #[tokio::test(flavor = "current_thread")]
-async fn logical_stale_preflight_completion_is_rejected() {
-    let mut harness =
-        WorkflowHarness::from_fixture("logical/preflight.toml", FixtureSecrets::none())
-            .await
-            .expect("logical harness");
-
+async fn logical_stale_preflight_completion_is_rejected(
+    #[from(common::workflow)]
+    #[with("logical/preflight.toml")]
+    #[future(awt)]
+    harness: WorkflowHarness,
+) {
+    let mut harness = harness;
     harness
         .dispatch_logical(LogicalIntent::Open {
             device_path: "/dev/ui-disk0p1".into(),
@@ -130,12 +131,15 @@ async fn logical_stale_preflight_completion_is_rejected() {
     );
 }
 
+#[rstest::rstest]
 #[tokio::test(flavor = "current_thread")]
-async fn partition_format_validation_and_completion_preserve_effect_order() {
-    let mut harness =
-        WorkflowHarness::from_fixture("physical/partition-format.toml", FixtureSecrets::none())
-            .await
-            .expect("physical harness");
+async fn partition_format_validation_and_completion_preserve_effect_order(
+    #[from(common::workflow)]
+    #[with("physical/partition-format.toml")]
+    #[future(awt)]
+    harness: WorkflowHarness,
+) {
+    let mut harness = harness;
     let mut invalid = partition_info();
     invalid.size = 0;
     harness
@@ -165,12 +169,15 @@ async fn partition_format_validation_and_completion_preserve_effect_order() {
     );
 }
 
+#[rstest::rstest]
 #[tokio::test(flavor = "current_thread")]
-async fn busy_unmount_keeps_actionable_error_and_does_not_refresh() {
-    let mut harness =
-        WorkflowHarness::from_fixture("physical/busy-unmount.toml", FixtureSecrets::none())
-            .await
-            .expect("busy harness");
+async fn busy_unmount_keeps_actionable_error_and_does_not_refresh(
+    #[from(common::workflow)]
+    #[with("physical/busy-unmount.toml")]
+    #[future(awt)]
+    harness: WorkflowHarness,
+) {
+    let mut harness = harness;
     harness
         .dispatch_physical(PhysicalIntent::Unmount {
             device: "/dev/ui-disk0p1".into(),
@@ -193,9 +200,7 @@ async fn busy_unmount_keeps_actionable_error_and_does_not_refresh() {
 
 #[tokio::test(flavor = "current_thread")]
 async fn luks_unlock_uses_secret_input_and_redacts_every_projection() {
-    let mut success = WorkflowHarness::from_fixture("physical/luks.toml", luks_secrets())
-        .await
-        .expect("luks harness");
+    let mut success = common::workflow("physical/luks.toml", luks_secrets()).await;
     success
         .dispatch_physical(PhysicalIntent::Unlock {
             device: "/dev/ui-disk0p1".into(),
@@ -223,9 +228,7 @@ async fn luks_unlock_uses_secret_input_and_redacts_every_projection() {
         .assert_trace_redacted_for(SecretInput::new("fixture-passphrase".into()))
         .expect("trace has no secret");
 
-    let mut failure = WorkflowHarness::from_fixture("physical/luks.toml", luks_secrets())
-        .await
-        .expect("luks failure harness");
+    let mut failure = common::workflow("physical/luks.toml", luks_secrets()).await;
     failure
         .dispatch_physical(PhysicalIntent::Unlock {
             device: "/dev/ui-disk0p1".into(),
@@ -247,11 +250,15 @@ async fn luks_unlock_uses_secret_input_and_redacts_every_projection() {
     );
 }
 
+#[rstest::rstest]
 #[tokio::test(flavor = "current_thread")]
-async fn network_create_mount_and_status_are_reduced_from_one_flow() {
-    let mut harness = WorkflowHarness::from_fixture("network/mount.toml", FixtureSecrets::none())
-        .await
-        .expect("network harness");
+async fn network_create_mount_and_status_are_reduced_from_one_flow(
+    #[from(common::workflow)]
+    #[with("network/mount.toml")]
+    #[future(awt)]
+    harness: WorkflowHarness,
+) {
+    let mut harness = harness;
     harness
         .dispatch_network(NetworkIntent {
             config_id: "workflow-remote".into(),
@@ -280,12 +287,15 @@ async fn network_create_mount_and_status_are_reduced_from_one_flow() {
     );
 }
 
+#[rstest::rstest]
 #[tokio::test(flavor = "current_thread")]
-async fn image_progress_cancel_and_terminal_state_are_virtual_clock_driven() {
-    let mut harness =
-        WorkflowHarness::from_fixture("workflows/image-usage.toml", FixtureSecrets::none())
-            .await
-            .expect("image harness");
+async fn image_progress_cancel_and_terminal_state_are_virtual_clock_driven(
+    #[from(common::workflow)]
+    #[with("workflows/image-usage.toml")]
+    #[future(awt)]
+    harness: WorkflowHarness,
+) {
+    let mut harness = harness;
     harness
         .dispatch_image_usage(ImageUsageIntent::StartImage {
             asset: ImageAssetRef::new("asset:image").expect("asset"),
@@ -332,12 +342,15 @@ async fn image_progress_cancel_and_terminal_state_are_virtual_clock_driven() {
     );
 }
 
+#[rstest::rstest]
 #[tokio::test(flavor = "current_thread")]
-async fn image_usage_stale_completion_cannot_replace_newer_workflow_state() {
-    let mut harness =
-        WorkflowHarness::from_fixture("workflows/image-usage.toml", FixtureSecrets::none())
-            .await
-            .expect("image harness");
+async fn image_usage_stale_completion_cannot_replace_newer_workflow_state(
+    #[from(common::workflow)]
+    #[with("workflows/image-usage.toml")]
+    #[future(awt)]
+    harness: WorkflowHarness,
+) {
+    let mut harness = harness;
     harness
         .dispatch_image_usage(ImageUsageIntent::StartImage {
             asset: ImageAssetRef::new("asset:image").expect("asset"),
@@ -373,12 +386,15 @@ async fn image_usage_stale_completion_cannot_replace_newer_workflow_state() {
     assert_eq!(snapshot.usage_scan_id.as_deref(), Some("workflow-scan"));
 }
 
+#[rstest::rstest]
 #[tokio::test(flavor = "current_thread")]
-async fn usage_scan_and_delete_map_results_without_host_file_access() {
-    let mut harness =
-        WorkflowHarness::from_fixture("workflows/image-usage.toml", FixtureSecrets::none())
-            .await
-            .expect("usage harness");
+async fn usage_scan_and_delete_map_results_without_host_file_access(
+    #[from(common::workflow)]
+    #[with("workflows/image-usage.toml")]
+    #[future(awt)]
+    harness: WorkflowHarness,
+) {
+    let mut harness = harness;
     harness
         .dispatch_image_usage(ImageUsageIntent::StartUsage {
             scan_id: "workflow-scan".into(),
@@ -410,11 +426,15 @@ async fn usage_scan_and_delete_map_results_without_host_file_access() {
     assert_eq!(snapshot.deleted_paths, vec!["/mnt/ui-data/cache-file"]);
 }
 
+#[rstest::rstest]
 #[tokio::test(flavor = "current_thread")]
-async fn scenario_reload_is_atomic_and_generation_checked_by_the_application() {
-    let mut harness = WorkflowHarness::from_fixture("reload/live.toml", FixtureSecrets::none())
-        .await
-        .expect("reload harness");
+async fn scenario_reload_is_atomic_and_generation_checked_by_the_application(
+    #[from(common::workflow)]
+    #[with("reload/live.toml")]
+    #[future(awt)]
+    harness: WorkflowHarness,
+) {
+    let mut harness = harness;
     harness
         .stage_overlay_from_fixture(
             "scenario:reload/after.toml",
@@ -450,11 +470,15 @@ async fn scenario_reload_is_atomic_and_generation_checked_by_the_application() {
     assert_eq!(harness.reload_snapshot().generation, 1);
 }
 
+#[rstest::rstest]
 #[tokio::test(flavor = "current_thread")]
-async fn reload_stale_completion_cannot_move_virtual_time_backwards() {
-    let mut harness = WorkflowHarness::from_fixture("reload/live.toml", FixtureSecrets::none())
-        .await
-        .expect("reload harness");
+async fn reload_stale_completion_cannot_move_virtual_time_backwards(
+    #[from(common::workflow)]
+    #[with("reload/live.toml")]
+    #[future(awt)]
+    harness: WorkflowHarness,
+) {
+    let mut harness = harness;
     harness
         .dispatch_reload(ReloadIntent::AdvanceTo { tick: 250 })
         .expect("first advance");
@@ -476,11 +500,14 @@ async fn reload_stale_completion_cannot_move_virtual_time_backwards() {
     assert_eq!(harness.reload_snapshot().virtual_tick, 500);
 }
 
+#[rstest::rstest]
 #[tokio::test(flavor = "current_thread")]
-async fn workflow_effects_do_not_call_global_operations_context() {
-    let harness = WorkflowHarness::from_fixture("empty.toml", FixtureSecrets::none())
-        .await
-        .expect("guarded harness");
+async fn workflow_effects_do_not_call_global_operations_context(
+    #[from(common::workflow)]
+    #[with("empty.toml")]
+    #[future(awt)]
+    harness: WorkflowHarness,
+) {
     assert!(harness.global_operations_lookup_is_rejected().await);
 }
 

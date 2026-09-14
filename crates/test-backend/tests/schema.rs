@@ -1,13 +1,9 @@
-use std::{fs, path::Path};
+mod common;
+use common::fixture;
+use std::fs;
 
 use storage_contracts::{PartitionOperations, ScenarioControl};
 use test_backend::{ScenarioRuntime, ScenarioStore, parse_fixture};
-
-fn fixture(name: &str) -> std::path::PathBuf {
-    Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("../../tests/ui/scenarios")
-        .join(name)
-}
 
 #[test]
 fn rejects_unknown_or_unsupported_schema() {
@@ -48,13 +44,12 @@ fn scenario_round_trip_is_deterministic() {
     assert_eq!(first_hash, second_hash);
 }
 
-#[test]
-fn overlay_write_is_atomic_and_never_rewrites_fixture() {
-    let unique = format!("test-backend-overlay-{}", std::process::id());
-    let root = std::env::temp_dir().join(unique);
-    let fixture_path = root.join("fixture.toml");
-    let overlay_path = root.join("overlay.toml");
-    fs::create_dir_all(&root).expect("temp directory");
+#[rstest::rstest]
+fn overlay_write_is_atomic_and_never_rewrites_fixture(
+    #[from(common::paths::scratch)] root: tempfile::TempDir,
+) {
+    let fixture_path = root.path().join("fixture.toml");
+    let overlay_path = root.path().join("overlay.toml");
     let original = b"schema_version = 2\nid = 'overlay'\ndescription = 'overlay'\n";
     fs::write(&fixture_path, original).expect("fixture");
     let store = ScenarioStore::new(&fixture_path, Some(overlay_path.clone()), None);
@@ -66,13 +61,16 @@ fn overlay_write_is_atomic_and_never_rewrites_fixture() {
         fs::read(&overlay_path).expect("overlay read"),
         b"overlay bytes"
     );
-    fs::remove_dir_all(root).expect("cleanup");
 }
 
+#[rstest::rstest]
 #[tokio::test]
-async fn query_snapshot_and_subscription_cutover_are_linearized() {
-    let runtime = ScenarioRuntime::load(fixture("physical/partition-format.toml"), None, None)
-        .expect("runtime");
+async fn query_snapshot_and_subscription_cutover_are_linearized(
+    #[from(common::scenario)]
+    #[with("physical/partition-format.toml")]
+    #[future(awt)]
+    runtime: ScenarioRuntime,
+) {
     let backend = runtime.backend();
     let device = backend
         .create_partition("/dev/ui-disk0", 0, 1024, "linux")
@@ -86,9 +84,14 @@ async fn query_snapshot_and_subscription_cutover_are_linearized() {
     assert_eq!(partitions.len(), 1);
 }
 
+#[rstest::rstest]
 #[tokio::test]
-async fn scenario_control_is_actor_serialized() {
-    let runtime = ScenarioRuntime::load(fixture("empty.toml"), None, None).expect("runtime");
+async fn scenario_control_is_actor_serialized(
+    #[from(common::scenario)]
+    #[with("empty.toml")]
+    #[future(awt)]
+    runtime: ScenarioRuntime,
+) {
     let backend = runtime.backend();
     let first = backend.advance_to(2).await.expect("advance");
     let second = backend.advance_to(3).await.expect("advance");

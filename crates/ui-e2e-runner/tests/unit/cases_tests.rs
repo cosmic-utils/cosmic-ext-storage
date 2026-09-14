@@ -1,4 +1,5 @@
 use super::*;
+use rstest::{fixture, rstest};
 
 #[tokio::test]
 async fn shutdown_wait_preserves_nonzero_exit_and_times_out() {
@@ -42,21 +43,22 @@ fn node(name: &str, depth: usize) -> Node {
     }
 }
 
+#[rstest]
+#[case::schema("schema_version = 2", "schema_version = 1")]
+#[case::timeout("timeout_ms = 15000", "timeout_ms = 15001")]
+#[case::action("kind = \"invoke\"", "kind = \"shell\"")]
+#[case::duplicate_step("id = \"one_revision\"", "id = \"select_before\"")]
+#[case::unknown_field("kind = \"invoke\"", "unexpected = true\nkind = \"invoke\"")]
+fn executable_case_rejects_invalid_mutation(#[case] from: &str, #[case] to: &str) {
+    let source = include_str!("../../../../tests/ui/cases/live_scenario_reload.toml");
+    assert!(source.contains(from), "mutation must change the fixture");
+    assert!(parse_case(&source.replace(from, to)).is_err());
+}
+
 #[test]
 fn executable_cases_require_actions_postconditions_hashes_and_closed_fields() {
     let source = include_str!("../../../../tests/ui/cases/live_scenario_reload.toml");
-    let case = parse_case(source).expect("executable reload case");
-    assert_eq!(case.id, "live_scenario_reload");
-    assert!(parse_case(&source.replace("schema_version = 2", "schema_version = 1")).is_err());
-    assert!(parse_case(&source.replace("timeout_ms = 15000", "timeout_ms = 15001")).is_err());
-    assert!(parse_case(&source.replace("kind = \"invoke\"", "kind = \"shell\"")).is_err());
-    assert!(
-        parse_case(&source.replace("id = \"one_revision\"", "id = \"select_before\"")).is_err()
-    );
-    assert!(
-        parse_case(&source.replace("kind = \"invoke\"", "unexpected = true\nkind = \"invoke\""))
-            .is_err()
-    );
+    assert_eq!(parse_case(source).unwrap().id, "live_scenario_reload");
     assert!(parse_case("schema_version = 2\nid = 'empty'\n").is_err());
 }
 
@@ -127,44 +129,6 @@ fn semantic_assertions_require_observed_state_and_exact_focus() {
         )
         .is_err()
     );
-    for (property, value) in [
-        ("name", "Open"),
-        ("description", "description"),
-        ("role", "button"),
-        ("automation_id", "test.control"),
-    ] {
-        assert_tree(
-            &nodes,
-            &Assertion::PropertyEquals {
-                selector: target.clone(),
-                property: property.into(),
-                value: value.into(),
-            },
-        )
-        .unwrap();
-    }
-    assert!(
-        assert_tree(
-            &nodes,
-            &Assertion::PropertyEquals {
-                selector: target.clone(),
-                property: "pid".into(),
-                value: "42".into()
-            }
-        )
-        .is_err()
-    );
-    assert!(
-        assert_tree(
-            &nodes,
-            &Assertion::PropertyEquals {
-                selector: target.clone(),
-                property: "name".into(),
-                value: "Other".into()
-            }
-        )
-        .is_err()
-    );
     let focused = Assertion::Focused { selector: target };
     assert!(assert_tree(&nodes, &focused).is_err());
     nodes[0].states.push("focused".into());
@@ -183,33 +147,80 @@ fn semantic_assertions_require_observed_state_and_exact_focus() {
     );
 }
 
-#[test]
-fn keyboard_and_fixture_inputs_cannot_inject_arguments_or_escape_root() {
-    for key in [
-        "Tab",
-        "Return",
-        "Escape",
-        "BackSpace",
-        "space",
-        "Left",
-        "Right",
-        "Up",
-        "Down",
-        "Shift+Tab",
-        "a",
-        "é",
-        "-",
-    ] {
-        assert!(!keyboard_arguments(key).unwrap().is_empty());
+#[rstest]
+#[case::tab("Tab", true)]
+#[case::return_key("Return", true)]
+#[case::escape("Escape", true)]
+#[case::backspace("BackSpace", true)]
+#[case::space("space", true)]
+#[case::left("Left", true)]
+#[case::right("Right", true)]
+#[case::up("Up", true)]
+#[case::down("Down", true)]
+#[case::shift_tab("Shift+Tab", true)]
+#[case::letter("a", true)]
+#[case::unicode("é", true)]
+#[case::hyphen("-", true)]
+#[case::empty("", false)]
+#[case::newline("\n", false)]
+#[case::option("--delay=10", false)]
+#[case::shell("sh -c whatever", false)]
+fn keyboard_arguments_are_bounded(#[case] key: &str, #[case] valid: bool) {
+    let result = keyboard_arguments(key);
+    if valid {
+        assert!(!result.unwrap().is_empty());
+    } else {
+        assert!(result.is_err());
     }
-    for key in ["", "\n", "--delay=10", "sh -c whatever"] {
-        assert!(keyboard_arguments(key).is_err());
-    }
+}
+
+#[fixture]
+fn fixture_root() -> tempfile::TempDir {
     let root = tempfile::tempdir().unwrap();
     fs::write(root.path().join("fixture.toml"), "fixture").unwrap();
-    assert!(checked_fixture(root.path(), Path::new("fixture.toml")).is_ok());
-    assert!(checked_fixture(root.path(), Path::new("../fixture.toml")).is_err());
-    assert!(checked_fixture(root.path(), Path::new("/etc/passwd")).is_err());
     std::os::unix::fs::symlink("/etc/passwd", root.path().join("escape")).unwrap();
-    assert!(checked_fixture(root.path(), Path::new("escape")).is_err());
+    root
+}
+
+#[rstest]
+#[case::local("fixture.toml", true)]
+#[case::parent("../fixture.toml", false)]
+#[case::absolute("/etc/passwd", false)]
+#[case::symlink("escape", false)]
+fn fixture_paths_stay_within_root(
+    fixture_root: tempfile::TempDir,
+    #[case] path: &str,
+    #[case] valid: bool,
+) {
+    assert_eq!(
+        checked_fixture(fixture_root.path(), Path::new(path)).is_ok(),
+        valid
+    );
+}
+
+#[rstest]
+#[case::name("name", "Open", true)]
+#[case::description("description", "description", true)]
+#[case::role("role", "button", true)]
+#[case::automation_id("automation_id", "test.control", true)]
+#[case::unknown_property("pid", "42", false)]
+#[case::wrong_value("name", "Other", false)]
+fn semantic_properties_require_observed_values(
+    #[case] property: &str,
+    #[case] value: &str,
+    #[case] valid: bool,
+) {
+    let nodes = vec![node("Open", 0), node("Cancel", 0)];
+    assert_eq!(
+        assert_tree(
+            &nodes,
+            &Assertion::PropertyEquals {
+                selector: selector("Open"),
+                property: property.into(),
+                value: value.into(),
+            }
+        )
+        .is_ok(),
+        valid,
+    );
 }
