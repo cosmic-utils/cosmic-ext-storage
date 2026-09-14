@@ -81,7 +81,3 @@ pub fn build_volume_tree(
 
     Ok(roots)
 }
-
-#[path = "../../tests/unit/models/helpers_tests.rs"]
-#[cfg(test)]
-mod tests;

@@ -3,6 +3,22 @@
 schema_version = 1
 
 [[target]]
+phase = "testing-v2-completion"
+package = "cosmic-ext-storage"
+kind = "rust-integration"
+name = "volume_models"
+features = ["test-backend"]
+tests = [
+  "test_build_simple_tree",
+  "test_build_nested_tree",
+  "tree_filters_roots::case_1_empty",
+  "tree_filters_roots::case_2_other_disk",
+  "tree_filters_roots::case_3_orphan",
+  "tree_filters_roots::case_4_no_device",
+  "nested_mutation_search_mount_and_clone_preserve_ownership"
+]
+
+[[target]]
 phase = "rstest"
 package = "test-backend"
 kind = "rust-integration"

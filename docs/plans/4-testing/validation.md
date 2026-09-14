@@ -114,3 +114,22 @@ scenario indicator before beginning.
 Record screenshots and the scenario trace with the validation result. Run the
 existing disposable-fixture harness separately when validating changes that
 also affect real-adapter behaviour.
+
+## Testing V2 remaining-work regression additions (2026-09-14)
+
+`cosmic-ext-storage --features test-backend --test volume_models` uses the
+owned rstest scenario fixture without requiring host D-Bus. Its first two
+tests retain the old simple/nested tree assertions, replacing silent early
+returns when a system bus was unavailable. All names below are mandatory:
+
+- `test_build_simple_tree`
+- `test_build_nested_tree`
+- `tree_filters_roots::case_1_empty`
+- `tree_filters_roots::case_2_other_disk`
+- `tree_filters_roots::case_3_orphan`
+- `tree_filters_roots::case_4_no_device`
+- `nested_mutation_search_mount_and_clone_preserve_ownership`
+
+The target is explicitly scenario-feature-gated; it does not silently pass
+without running assertions. Native resource ownership and all destructive
+tests remain in the private storage lab.
