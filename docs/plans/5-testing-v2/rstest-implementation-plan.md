@@ -1,6 +1,6 @@
 # Implementation plan: rstest adoption
 
-Status: implementation and local gates complete; hosted CI awaits hosted CI.
+Status: implementation and local gates complete; hosted CI pending.
 
 Date: 2026-09-14. Working branch: `codex/rstest-adoption`, based on
 `4-ui-testing` at `12fb884e2d462b91cacb1b097e8fa35826f84345`.

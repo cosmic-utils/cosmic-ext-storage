@@ -1,6 +1,6 @@
 # rstest adoption execution record
 
-Status: implementation and local acceptance complete; hosted CI pending hosted CI.
+Status: implementation and local acceptance complete; hosted CI pending.
 
 Started 2026-09-14 on `codex/rstest-adoption`, from
 `12fb884e2d462b91cacb1b097e8fa35826f84345`. Starting worktree contained only the

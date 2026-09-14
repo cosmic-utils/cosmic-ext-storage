@@ -1,6 +1,6 @@
 # Specification: adopt rstest for test composition
 
-Status: implemented and locally verified; hosted acceptance pending hosted CI.
+Status: implemented and locally verified; hosted CI acceptance pending.
 
 Execution sequence and validation gates:
 [rstest implementation plan](rstest-implementation-plan.md).
