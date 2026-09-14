@@ -388,8 +388,9 @@ new test, fixture, source, dependency, image or collector changes.
 Execute in this order, recording progress in a new
 `docs/plans/5-testing-v2/remaining-execution-record.md` during implementation:
 
-1. Create a `codex/` implementation branch from current `4-ui-testing`, record
-   its starting SHA, discover current tests, and run the baseline gates below.
+1. Continue directly on `4-ui-testing`, as explicitly requested on 2026-09-14;
+   do not create another implementation/prototype branch. Record its starting
+   SHA, discover current tests, and run the baseline gates below.
    Preserve unrelated work. Read the linked rstest records before composing
    new tests; do not rerun the completed adoption project.
 2. Audit the current report and build a per-package/file gap ledger: uncovered
@@ -560,14 +561,14 @@ cargo nextest run --workspace --all-features --locked
 python3 -m unittest discover -s tools/testing -p 'test_*.py'
 python3 tools/ui-testing/assert_tests.py --phase all
 STORAGE_LAB=1 just test-lab
-just coverage origin/4-ui-testing
-python3 tools/testing/coverage.py --base origin/4-ui-testing --summary target/coverage/summary.json
+just coverage origin/main
+python3 tools/testing/coverage.py --base origin/main --summary target/coverage/summary.json
 ```
 
-The commands above assume the implementation PR targets `4-ui-testing`.
-Fetch and record its exact base SHA; use that SHA consistently if the base
-moves during a run. For the later `4-ui-testing` to `main` PR, run fresh
-acceptance against its actual `origin/main` base too. Never compare a branch
+The commands above assume the existing `4-ui-testing` PR targets `main`.
+Verify that actual PR base, fetch and record its exact SHA, and use that SHA
+consistently if the base moves during a run. Never compare `4-ui-testing`
+to `origin/4-ui-testing` for final changed-code acceptance, or compare a branch
 to itself to erase changed-code obligations. Initial diagnostic coverage may
 fail on recorded gaps; final acceptance must exit zero, including the added
 non-Rust checks. Preserve default/scenario-disabled and no-default-feature
@@ -645,7 +646,7 @@ build contracts from the rstest gate, not just all-feature success.
 ```sh
 just ui-e2e
 bash tools/ui-testing/run-case.sh tests/ui/cases/live_scenario_reload.toml
-just coverage origin/4-ui-testing
+just coverage origin/main
 python3 tools/ui-testing/assert_tests.py --phase all
 ```
 
@@ -660,7 +661,7 @@ instrumented success and reviewed visual acceptance are separate exit gates.
 
 Before declaring Testing V2 complete:
 
-1. Run all required CI jobs on a PR targeting `4-ui-testing` and retain their
+1. Run all required CI jobs on the existing `4-ui-testing` PR and retain their
    artifact links. Check the exact final head SHA, not a superseded green run.
    Keep existing job coverage and add the complete UI/coverage gates; do not
    weaken or bypass checks. Re-run after any code/test/input change.
@@ -670,7 +671,8 @@ Before declaring Testing V2 complete:
 4. Force one inner-lab failure and one cleanup failure in a non-merge PR to
    verify failure propagation and artifact retention. The passing rstest
    parent regressions are not a substitute for a deliberately red hosted job.
-   Use a separate temporary branch and two identifiable runs so one failure
+   Obtain explicit permission before creating any temporary probe branch/PR;
+   normal implementation stays on `4-ui-testing`. Use two identifiable runs so one failure
    cannot mask the other. Inject faults only after lab ownership is established;
    ensure actual safe cleanup still occurs, no host device is targeted, the
    intended CI job fails and diagnostic artifacts survive. Never merge the

@@ -10,6 +10,14 @@ Started on 2026-09-14 from `4-ui-testing` commit
 remaining-phase implementation-plan update; it is preserved on this branch.
 Completed phases and historical evidence are not being rewritten.
 
+Branch correction (2026-09-14): at the user's request, fast-forwarded both
+local commits (`455fff7`, `9cec518`) into `4-ui-testing` and deleted the local
+`codex/testing-v2-completion` branch. It had never been pushed and had no
+remote branch or PR. All subsequent implementation belongs directly on
+`4-ui-testing`; another branch requires an explicit request. The active plan
+now reflects this, including final coverage comparison against the existing
+PR's actual base rather than against `4-ui-testing` itself.
+
 ## Baseline and early feasibility
 
 Evidence is saved under ignored `target/testing-v2-completion/`.
