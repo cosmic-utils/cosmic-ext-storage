@@ -11,6 +11,9 @@ use storage_types::CreatePartitionInfo;
 #[path = "production_logical_tests.rs"]
 mod logical;
 
+#[path = "production_encryption_tests.rs"]
+mod encryption;
+
 async fn outputs(task: Task<Message>) -> Vec<Message> {
     let Some(mut stream) = cosmic::iced::runtime::task::into_stream(task) else {
         return Vec::new();

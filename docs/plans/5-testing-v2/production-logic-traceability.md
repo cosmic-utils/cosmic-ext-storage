@@ -147,3 +147,29 @@ before validation (`/tmp/production-logical-mutation.log`). The normal run passe
 82 library tests, 10 remaining integration workflows and 8 logical-state tests
 (`/tmp/production-logical-final.log`). Remaining families and full coverage/CI
 are still outstanding.
+
+### Encryption slice — 2026-09-16
+
+Four required production-handler cases cover wrong secret → error/retry → correct
+secret → refreshed mapper child → lock, duplicate submit, cancel/missing target,
+and a late failed unlock after cancellation. All use an owned scenario runtime
+with the fixture secret supplied in memory, and prohibit global client lookup.
+The old parallel physical Unlock intent/effect/test has been removed.
+
+The tests exposed a Debug disclosure in `UnlockMessage` and
+`UnlockEncryptedDialog`, now explicitly redacted, and a stale error completion
+that reopened a cancelled secret dialog. The operation-ID completion boundary
+is now shared by create/format/unlock and rejects that completion before state
+changes. The selected operations context is passed through unlock, lock and
+their refreshes; no global adapter installation is used.
+
+Red/green evidence: `/tmp/production-encryption-{red,green}.log`. Deliberately
+disabling the production Unlock dispatch failed the real retry-state assertion
+(`/tmp/production-encryption-mutation.log`); restored immediately. These tests
+prove message/dialog debug redaction, not a new serialized UI secret transport
+or all possible backend log strings. Existing backend out-of-band secret tests
+remain; rendered transport and its end-to-end claims remain deferred.
+
+Final slice validation: 86 library tests, 9 remaining workflow integration tests,
+exact required-name execution, strict app Clippy, formatting and scenario-disabled
+build pass (`/tmp/production-encryption-{final,names,clippy,normal}.log`).

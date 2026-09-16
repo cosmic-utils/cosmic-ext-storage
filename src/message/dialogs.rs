@@ -99,11 +99,21 @@ pub enum CreateMessage {
     Partition,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Clone, PartialEq, Eq)]
 pub enum UnlockMessage {
     PassphraseUpdate(String),
     Confirm,
     Cancel,
+}
+
+impl std::fmt::Debug for UnlockMessage {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter.write_str(match self {
+            Self::PassphraseUpdate(_) => "PassphraseUpdate(<redacted>)",
+            Self::Confirm => "Confirm",
+            Self::Cancel => "Cancel",
+        })
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]

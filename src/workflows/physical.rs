@@ -1,4 +1,4 @@
-use super::{SecretInput, WorkflowCapabilities, WorkflowError};
+use super::{WorkflowCapabilities, WorkflowError};
 
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub enum Phase {
@@ -19,7 +19,6 @@ pub struct PhysicalSnapshot {
 
 pub enum PhysicalIntent {
     Unmount { device: String },
-    Unlock { device: String, secret: SecretInput },
 }
 
 #[derive(Debug, Default)]
@@ -43,33 +42,24 @@ impl State {
 }
 
 pub(crate) enum Effect {
-    Unmount {
-        device: String,
-        generation: u64,
-    },
-    Unlock {
-        device: String,
-        secret: SecretInput,
-        generation: u64,
-    },
+    Unmount { device: String, generation: u64 },
 }
 
 impl Effect {
     pub(crate) const fn operation(&self) -> &'static str {
         match self {
             Self::Unmount { .. } => "filesystem.unmount",
-            Self::Unlock { .. } => "encryption.unlock_luks",
         }
     }
 
     pub(crate) const fn generation(&self) -> u64 {
         match self {
-            Self::Unmount { generation, .. } | Self::Unlock { generation, .. } => *generation,
+            Self::Unmount { generation, .. } => *generation,
         }
     }
 
     pub(crate) const fn has_secret(&self) -> bool {
-        matches!(self, Self::Unlock { .. })
+        false
     }
 }
 
@@ -93,14 +83,6 @@ pub(crate) fn reduce_intent(
         PhysicalIntent::Unmount { device } => {
             state.selected_device = Some(device.clone());
             vec![Effect::Unmount { device, generation }]
-        }
-        PhysicalIntent::Unlock { device, secret } => {
-            state.selected_device = Some(device.clone());
-            vec![Effect::Unlock {
-                device,
-                secret,
-                generation,
-            }]
         }
     }
 }
@@ -140,33 +122,6 @@ pub(crate) async fn execute(capabilities: &WorkflowCapabilities, effect: Effect)
                 .map_err(|error| {
                     WorkflowError::from(crate::operations::OperationError::from(error))
                 });
-            Completion::Finished {
-                generation,
-                device,
-                result,
-            }
-        }
-        Effect::Unlock {
-            device,
-            secret,
-            generation,
-        } => {
-            // Keep the sensitive bytes owned by this future until the async
-            // adapter call completes; do not make a second String copy.
-            let result = secret.expose();
-            let result = match result {
-                Ok(secret) => capabilities
-                    .operations
-                    .registry
-                    .block
-                    .unlock_luks(&device, secret)
-                    .await
-                    .map(|_| ())
-                    .map_err(|error| {
-                        WorkflowError::from(crate::operations::OperationError::from(error))
-                    }),
-                Err(error) => Err(error),
-            };
             Completion::Finished {
                 generation,
                 device,

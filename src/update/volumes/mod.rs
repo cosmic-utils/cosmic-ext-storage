@@ -72,7 +72,7 @@ impl VolumesControl {
                 mount::child_unmount(self, device_path)
             }
 
-            VolumesControlMessage::LockContainer => encryption::lock_container(self),
+            VolumesControlMessage::LockContainer => encryption::lock_container(self, operations),
             VolumesControlMessage::Delete => partition::delete(self, dialog),
             VolumesControlMessage::OpenFormatPartition => {
                 partition::open_format_partition(self, dialog)
@@ -115,7 +115,7 @@ impl VolumesControl {
                 create::create_message(self, msg, dialog, operations)
             }
             VolumesControlMessage::UnlockMessage(unlock_message) => {
-                encryption::unlock_message(self, unlock_message, dialog)
+                encryption::unlock_message(self, unlock_message, dialog, operations)
             }
             VolumesControlMessage::EditPartitionMessage(msg) => {
                 partition::edit_partition_message(self, msg, dialog)

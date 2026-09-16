@@ -3,20 +3,9 @@ use std::collections::BTreeMap;
 
 use cosmic_ext_storage::testing::{
     FixtureSecrets, ImageUsageIntent, ImageUsagePhase, NetworkIntent, NetworkPhase, PhysicalIntent,
-    PhysicalPhase, ReloadIntent, ReloadPhase, SecretInput, WorkflowHarness,
+    PhysicalPhase, ReloadIntent, ReloadPhase, WorkflowHarness,
 };
 use storage_types::ImageAssetRef;
-
-fn luks_secrets() -> FixtureSecrets {
-    let mut secrets = FixtureSecrets::none();
-    secrets
-        .insert(
-            "luks0".into(),
-            SecretInput::new("fixture-passphrase".into()),
-        )
-        .expect("fixture secret is accepted");
-    secrets
-}
 
 #[tokio::test(flavor = "current_thread")]
 async fn workflow_harness_uses_only_selected_scenario_runtime() {
@@ -55,58 +44,6 @@ async fn busy_unmount_keeps_actionable_error_and_does_not_refresh(
     assert_eq!(
         snapshot.error.as_ref().map(|error| error.reason.as_str()),
         Some("Fixture user is active")
-    );
-}
-
-#[tokio::test(flavor = "current_thread")]
-async fn luks_unlock_uses_secret_input_and_redacts_every_projection() {
-    let mut success = common::workflow("physical/luks.toml", luks_secrets()).await;
-    success
-        .dispatch_physical(PhysicalIntent::Unlock {
-            device: "/dev/ui-disk0p1".into(),
-            secret: SecretInput::new("fixture-passphrase".into()),
-        })
-        .expect("unlock intent");
-    success.drive_until_idle().await.expect("unlock success");
-    assert_eq!(success.physical_snapshot().phase, PhysicalPhase::Completed);
-    assert!(
-        success
-            .effect_records()
-            .iter()
-            .any(|record| record.has_secret)
-    );
-    assert_eq!(
-        success
-            .trace()
-            .expect("trace projection")
-            .iter()
-            .map(|entry| entry.operation.as_str())
-            .collect::<Vec<_>>(),
-        vec!["encryption.unlock_luks"]
-    );
-    success
-        .assert_trace_redacted_for(SecretInput::new("fixture-passphrase".into()))
-        .expect("trace has no secret");
-
-    let mut failure = common::workflow("physical/luks.toml", luks_secrets()).await;
-    failure
-        .dispatch_physical(PhysicalIntent::Unlock {
-            device: "/dev/ui-disk0p1".into(),
-            secret: SecretInput::new("wrong-passphrase".into()),
-        })
-        .expect("unlock failure intent");
-    failure
-        .drive_until_idle()
-        .await
-        .expect("unlock failure completion");
-    assert_eq!(failure.physical_snapshot().phase, PhysicalPhase::Failed);
-    assert_eq!(
-        failure
-            .physical_snapshot()
-            .error
-            .as_ref()
-            .map(|error| error.kind),
-        Some("permission_denied")
     );
 }
 

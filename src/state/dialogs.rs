@@ -317,13 +317,28 @@ pub struct FormatDiskDialog {
     pub running: bool,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub struct UnlockEncryptedDialog {
+    pub operation_id: Option<uuid::Uuid>,
     pub partition_path: String,
     pub partition_name: String,
     pub passphrase: String,
     pub error: Option<String>,
     pub running: bool,
+}
+
+impl std::fmt::Debug for UnlockEncryptedDialog {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter
+            .debug_struct("UnlockEncryptedDialog")
+            .field("operation_id", &self.operation_id)
+            .field("partition_path", &self.partition_path)
+            .field("partition_name", &self.partition_name)
+            .field("passphrase", &"<redacted>")
+            .field("has_error", &self.error.is_some())
+            .field("running", &self.running)
+            .finish()
+    }
 }
 
 #[derive(Debug, Clone)]

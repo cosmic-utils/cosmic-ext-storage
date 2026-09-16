@@ -1223,7 +1223,7 @@ pub(crate) fn update(app: &mut AppModel, message: Message) -> Task<Message> {
             return Task::done(cosmic::Action::App(Message::LoadDrivesIncremental));
         }
         Message::None => {}
-        Message::PartitionOperationCompleted {
+        Message::VolumeDialogOperationCompleted {
             operation_id,
             message,
         } => {
@@ -1232,6 +1232,9 @@ pub(crate) fn update(app: &mut AppModel, message: Message) -> Task<Message> {
                     state.running && state.operation_id == Some(operation_id)
                 }
                 Some(ShowDialog::FormatPartition(state)) => {
+                    state.running && state.operation_id == Some(operation_id)
+                }
+                Some(ShowDialog::UnlockEncrypted(state)) => {
                     state.running && state.operation_id == Some(operation_id)
                 }
                 _ => false,

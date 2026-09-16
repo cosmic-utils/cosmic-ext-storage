@@ -46,7 +46,7 @@ pub enum Message {
     None,
     UpdateNav(Vec<UiDrive>, Option<String>),
     /// Completion belongs only to the dialog that submitted this operation.
-    PartitionOperationCompleted {
+    VolumeDialogOperationCompleted {
         operation_id: uuid::Uuid,
         message: Box<Message>,
     },

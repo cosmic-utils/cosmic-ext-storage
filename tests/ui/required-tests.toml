@@ -31,7 +31,11 @@ tests = [
   "update::production_handler_tests::logical::stale_candidate_capture_cannot_change_current_selection::case_2_left_view",
   "update::production_handler_tests::logical::stale_topology_does_not_replace_current_candidate_resolution",
   "update::production_handler_tests::logical::operation_failure_clears_pending_without_success_refresh",
-  "update::production_handler_tests::logical::action_form_validates_input_and_cancel_clears_actual_dialog"
+  "update::production_handler_tests::logical::action_form_validates_input_and_cancel_clears_actual_dialog",
+  "update::production_handler_tests::encryption::wrong_secret_retries_successfully_then_locks_actual_model",
+  "update::production_handler_tests::encryption::cancelled_or_missing_target_never_unlocks::case_1_cancel",
+  "update::production_handler_tests::encryption::cancelled_or_missing_target_never_unlocks::case_2_missing_partition",
+  "update::production_handler_tests::encryption::cancelled_unlock_failure_cannot_reopen_a_secret_dialog"
 ]
 
 [[target]]
@@ -218,7 +222,6 @@ features = ["test-backend"]
 tests = [
   "workflow_harness_uses_only_selected_scenario_runtime",
   "busy_unmount_keeps_actionable_error_and_does_not_refresh",
-  "luks_unlock_uses_secret_input_and_redacts_every_projection",
   "network_create_mount_and_status_are_reduced_from_one_flow",
   "image_progress_cancel_and_terminal_state_are_virtual_clock_driven",
   "image_usage_stale_completion_cannot_replace_newer_workflow_state",

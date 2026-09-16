@@ -166,6 +166,12 @@ Keyboard cases retain an owned virtual keyboard device for the case lifetime;
 its regression rejects early process exit and verifies child termination/reaping.
 # Non-rendered production-handler migration (2026-09-16)
 
+Required encryption production-route cases:
+- `update::production_handler_tests::encryption::wrong_secret_retries_successfully_then_locks_actual_model`
+- `update::production_handler_tests::encryption::cancelled_or_missing_target_never_unlocks::case_1_cancel`
+- `update::production_handler_tests::encryption::cancelled_or_missing_target_never_unlocks::case_2_missing_partition`
+- `update::production_handler_tests::encryption::cancelled_unlock_failure_cannot_reopen_a_secret_dialog`
+
 Required logical production-route cases (replace the parallel logical workflow):
 - `update::production_handler_tests::logical::confirmation_executes_once_and_schedules_both_real_refreshes`
 - `update::production_handler_tests::logical::cancelled_confirmation_and_changed_identity_cannot_execute`

@@ -1452,6 +1452,7 @@ fn build_partition_info<'a>(
                     widget::button::icon(icon::from_name("changes-allow-symbolic")).on_press(
                         Message::Dialog(Box::new(ShowDialog::UnlockEncrypted(
                             crate::state::dialogs::UnlockEncryptedDialog {
+                                operation_id: None,
                                 partition_path: p.device.to_string(),
                                 partition_name: partition_name.clone(),
                                 passphrase: String::new(),

@@ -195,7 +195,7 @@ pub(super) fn create_message(
                             .map_err(|e| e.into())
                     },
                     move |result: Result<Vec<UiDrive>, anyhow::Error>| {
-                        Message::PartitionOperationCompleted {
+                        Message::VolumeDialogOperationCompleted {
                             operation_id,
                             message: Box::new(match result {
                                 Ok(drives) => Message::UpdateNav(drives, None),
@@ -294,7 +294,7 @@ pub(super) fn create_message(
                             .map_err(|e| e.into())
                     },
                     move |result: Result<Vec<UiDrive>, anyhow::Error>| {
-                        Message::PartitionOperationCompleted {
+                        Message::VolumeDialogOperationCompleted {
                             operation_id,
                             message: Box::new(match result {
                                 Ok(drives) => Message::UpdateNav(drives, None),
