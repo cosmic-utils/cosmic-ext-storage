@@ -7,6 +7,10 @@ mod network;
 mod smart;
 pub(crate) mod volumes;
 
+#[cfg(all(test, feature = "test-backend"))]
+#[path = "../../tests/unit/update/production_handler_tests.rs"]
+mod production_handler_tests;
+
 use std::collections::HashSet;
 
 use crate::app::APP_ID;
@@ -1193,7 +1197,7 @@ pub(crate) fn update(app: &mut AppModel, message: Message) -> Task<Message> {
                 return Task::none();
             };
 
-            return volumes_control.update(message, &mut app.dialog);
+            return volumes_control.update(message, &mut app.dialog, app.runtime.operations());
         }
 
         Message::FormatDisk(msg) => {
@@ -1206,6 +1210,23 @@ pub(crate) fn update(app: &mut AppModel, message: Message) -> Task<Message> {
             return Task::done(cosmic::Action::App(Message::LoadDrivesIncremental));
         }
         Message::None => {}
+        Message::PartitionOperationCompleted {
+            operation_id,
+            message,
+        } => {
+            let active = match app.dialog.as_ref() {
+                Some(ShowDialog::AddPartition(state)) => {
+                    state.running && state.operation_id == Some(operation_id)
+                }
+                Some(ShowDialog::FormatPartition(state)) => {
+                    state.running && state.operation_id == Some(operation_id)
+                }
+                _ => false,
+            };
+            if active {
+                return update(app, *message);
+            }
+        }
         Message::UpdateNav(drive_models, selected) => {
             return nav::update_nav(app, drive_models, selected);
         }

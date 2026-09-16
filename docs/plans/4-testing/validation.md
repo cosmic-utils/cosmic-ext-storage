@@ -164,3 +164,26 @@ runtime directory, even with long artifact paths. They verify runtime/token
 cleanup while preserving evidence and rejecting existing artifact directories.
 Keyboard cases retain an owned virtual keyboard device for the case lifetime;
 its regression rejects early process exit and verifies child termination/reaping.
+# Non-rendered production-handler migration (2026-09-16)
+
+Required stale/duplicate completion cases:
+- `update::production_handler_tests::old_partition_completion_cannot_replace_a_new_running_dialog::case_1_success`
+- `update::production_handler_tests::old_partition_completion_cannot_replace_a_new_running_dialog::case_2_failure`
+
+The parallel partition workflow assertion is superseded by these required
+production-handler tests. They execute real messages and typed task outputs
+against the selected scenario runtime without rendering:
+
+- `update::production_handler_tests::create_routes_to_selected_runtime_and_refreshes_actual_models`
+- `update::production_handler_tests::create_cancel_and_missing_dialog_have_no_effect::case_1_cancel`
+- `update::production_handler_tests::create_cancel_and_missing_dialog_have_no_effect::case_2_no_dialog`
+- `update::production_handler_tests::create_submission_revalidates_form_without_side_effects::case_1_zero_size`
+- `update::production_handler_tests::create_submission_revalidates_form_without_side_effects::case_2_oversized`
+- `update::production_handler_tests::create_submission_revalidates_form_without_side_effects::case_3_missing_tool`
+- `update::production_handler_tests::create_submission_revalidates_form_without_side_effects::case_4_missing_secret`
+- `update::production_handler_tests::create_submission_revalidates_form_without_side_effects::case_5_mismatched_secret`
+- `update::production_handler_tests::create_failure_surfaces_error_without_refreshing_navigation`
+- `update::production_handler_tests::format_uses_selected_runtime_and_handles_invalid_targets::case_1_success`
+- `update::production_handler_tests::format_uses_selected_runtime_and_handles_invalid_targets::case_2_missing_device`
+- `update::production_handler_tests::format_uses_selected_runtime_and_handles_invalid_targets::case_3_missing_tool`
+- `update::production_handler_tests::create_completion_does_not_close_a_replacement_idle_dialog`

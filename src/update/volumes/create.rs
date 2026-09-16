@@ -1,4 +1,4 @@
-use crate::models::{UiDrive, load_all_drives};
+use crate::models::{UiDrive, load::load_all_drives_with_operations};
 use cosmic::Task;
 
 use crate::app::Message;
@@ -20,17 +20,7 @@ mod tests;
 fn create_partition_step_can_advance(state: &crate::state::dialogs::CreatePartitionDialog) -> bool {
     match state.step {
         CreatePartitionStep::Basics => {
-            let filesystem_type = crate::utils::partition_types::common_partition_filesystem_type(
-                &state.info.table_type,
-                state.info.selected_partition_type_index,
-            );
-
-            filesystem_type.is_some_and(|fs_type| {
-                state
-                    .filesystem_tools
-                    .iter()
-                    .any(|tool| tool.fs_type == fs_type && tool.available)
-            })
+            selected_filesystem_available(&state.info, &state.filesystem_tools)
         }
         CreatePartitionStep::Sizing => {
             state.info.size > 0 && state.info.size <= state.info.max_size
@@ -39,10 +29,26 @@ fn create_partition_step_can_advance(state: &crate::state::dialogs::CreatePartit
     }
 }
 
+fn selected_filesystem_available(
+    info: &CreatePartitionInfo,
+    tools: &[storage_types::FilesystemToolInfo],
+) -> bool {
+    crate::utils::partition_types::common_partition_filesystem_type(
+        &info.table_type,
+        info.selected_partition_type_index,
+    )
+    .is_some_and(|fs| {
+        tools
+            .iter()
+            .any(|tool| tool.fs_type == fs && tool.available)
+    })
+}
+
 pub(super) fn create_message(
     control: &mut VolumesControl,
     create_message: CreateMessage,
     dialog: &mut Option<ShowDialog>,
+    operations: std::sync::Arc<crate::operations::StorageOperations>,
 ) -> Task<cosmic::Action<Message>> {
     let d = match dialog.as_mut() {
         Some(d) => d,
@@ -130,6 +136,19 @@ pub(super) fn create_message(
                     return Task::none();
                 }
 
+                // Navigation/button state is not a submission boundary: stale
+                // or directly delivered messages must obey the same constraints.
+                if !selected_filesystem_available(&state.info, &state.filesystem_tools) {
+                    state.step = CreatePartitionStep::Basics;
+                    state.error = Some(fl!("fs-tools-warning"));
+                    return Task::none();
+                }
+                if state.info.size == 0 || state.info.size > state.info.max_size {
+                    state.step = CreatePartitionStep::Sizing;
+                    state.error = Some(fl!("partition-size-invalid"));
+                    return Task::none();
+                }
+
                 // UI-side validation for encrypted partition creation.
                 if state.info.password_protected {
                     if state.info.password.is_empty() {
@@ -146,6 +165,8 @@ pub(super) fn create_message(
 
                 state.running = true;
                 state.error = None;
+                let operation_id = uuid::Uuid::new_v4();
+                state.operation_id = Some(operation_id);
 
                 let mut create_partition_info: CreatePartitionInfo = state.info.clone();
                 if create_partition_info.name.is_empty() {
@@ -153,33 +174,42 @@ pub(super) fn create_message(
                 }
 
                 // Populate filesystem_type from selected partition type index
-                if create_partition_info.filesystem_type.is_empty() {
-                    create_partition_info.filesystem_type =
-                        crate::utils::partition_types::common_partition_filesystem_type(
-                            &create_partition_info.table_type,
-                            create_partition_info.selected_partition_type_index,
-                        )
-                        .unwrap_or_default();
-                }
+                create_partition_info.filesystem_type =
+                    crate::utils::partition_types::common_partition_filesystem_type(
+                        &create_partition_info.table_type,
+                        create_partition_info.selected_partition_type_index,
+                    )
+                    .expect("submission validated the selected filesystem");
 
                 let device = control.device.clone();
                 return Task::perform(
                     async move {
-                        let partitions_client = PartitionsClient::new().await.map_err(|e| {
-                            anyhow::anyhow!("Failed to create partitions client: {}", e)
-                        })?;
+                        let partitions_client =
+                            PartitionsClient::with_operations(operations.clone());
                         partitions_client
                             .create_partition_with_filesystem(&device, &create_partition_info)
                             .await
                             .map_err(|e| anyhow::anyhow!("Failed to create partition: {}", e))?;
-                        load_all_drives().await.map_err(|e| e.into())
+                        load_all_drives_with_operations(operations)
+                            .await
+                            .map_err(|e| e.into())
                     },
-                    |result: Result<Vec<UiDrive>, anyhow::Error>| match result {
-                        Ok(drives) => Message::UpdateNav(drives, None).into(),
-                        Err(e) => {
-                            let ctx = UiErrorContext::new("create_partition");
-                            log_error_and_show_dialog(fl!("create-partition-failed"), e, ctx).into()
+                    move |result: Result<Vec<UiDrive>, anyhow::Error>| {
+                        Message::PartitionOperationCompleted {
+                            operation_id,
+                            message: Box::new(match result {
+                                Ok(drives) => Message::UpdateNav(drives, None),
+                                Err(e) => {
+                                    let ctx = UiErrorContext::new("create_partition");
+                                    log_error_and_show_dialog(
+                                        fl!("create-partition-failed"),
+                                        e,
+                                        ctx,
+                                    )
+                                }
+                            }),
                         }
+                        .into()
                     },
                 );
             }
@@ -227,8 +257,13 @@ pub(super) fn create_message(
                 if state.running {
                     return Task::none();
                 }
+                if !selected_filesystem_available(&state.info, &state.filesystem_tools) {
+                    state.step = FormatPartitionStep::Basics;
+                    return Task::none();
+                }
                 state.running = true;
-
+                let operation_id = uuid::Uuid::new_v4();
+                state.operation_id = Some(operation_id);
                 let volume = state.volume.clone();
                 let info = state.info.clone();
                 return Task::perform(
@@ -240,9 +275,8 @@ pub(super) fn create_message(
                             )
                             .ok_or_else(|| anyhow::anyhow!("Invalid filesystem selection"))?;
 
-                        let filesystems_client = FilesystemsClient::new().await.map_err(|e| {
-                            anyhow::anyhow!("Failed to create filesystems client: {}", e)
-                        })?;
+                        let filesystems_client =
+                            FilesystemsClient::with_operations(operations.clone());
                         let options = FormatOptions {
                             erase: info.erase,
                             ..FormatOptions::default()
@@ -255,15 +289,26 @@ pub(super) fn create_message(
                             .format(device, &fs_type, &info.name, options)
                             .await
                             .map_err(|e| anyhow::anyhow!("Failed to format: {}", e))?;
-                        load_all_drives().await.map_err(|e| e.into())
+                        load_all_drives_with_operations(operations)
+                            .await
+                            .map_err(|e| e.into())
                     },
-                    |result: Result<Vec<UiDrive>, anyhow::Error>| match result {
-                        Ok(drives) => Message::UpdateNav(drives, None).into(),
-                        Err(e) => {
-                            let ctx = UiErrorContext::new("format_partition");
-                            log_error_and_show_dialog(fl!("format-partition").to_string(), e, ctx)
-                                .into()
+                    move |result: Result<Vec<UiDrive>, anyhow::Error>| {
+                        Message::PartitionOperationCompleted {
+                            operation_id,
+                            message: Box::new(match result {
+                                Ok(drives) => Message::UpdateNav(drives, None),
+                                Err(e) => {
+                                    let ctx = UiErrorContext::new("format_partition");
+                                    log_error_and_show_dialog(
+                                        fl!("format-partition").to_string(),
+                                        e,
+                                        ctx,
+                                    )
+                                }
+                            }),
                         }
+                        .into()
                     },
                 );
             }

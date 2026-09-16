@@ -162,6 +162,7 @@ pub(super) fn open_format_partition(
     };
 
     *dialog = Some(ShowDialog::FormatPartition(FormatPartitionDialog {
+        operation_id: None,
         volume,
         info,
         step: FormatPartitionStep::Basics,

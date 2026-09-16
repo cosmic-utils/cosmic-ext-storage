@@ -141,16 +141,18 @@ def main() -> int:
     workflow_target = [
         target for target in manifest.get("target", []) if target["phase"] == "workflow-v2"
     ]
-    if len(workflow_target) != 1:
-        fail("workflow-v2 requires exactly one required-test target")
-    workflow_target = workflow_target[0]
-    if (
-        workflow_target["kind"] != "rust-integration"
-        or workflow_target["package"] != "cosmic-ext-storage"
-        or workflow_target["name"] != "application_workflows"
-        or workflow_target.get("features") != ["test-backend"]
+    expected_workflow_targets = {
+        ("rust-integration", "application_workflows"),
+        ("rust-lib", "cosmic_ext_storage"),
+    }
+    if len(workflow_target) != 2 or {
+        (target["kind"], target["name"]) for target in workflow_target
+    } != expected_workflow_targets or any(
+        target["package"] != "cosmic-ext-storage"
+        or target.get("features") != ["test-backend"] for target in workflow_target
     ):
-        fail("workflow-v2 must select the feature-gated application_workflows integration target")
+        fail("workflow-v2 must select the production library tests and remaining integration workflows")
+    workflow_tests = {test for target in workflow_target for test in target["tests"]}
 
     workflow_names = list(matrix.get("workflow_v2_cross_cutting_tests", []))
     if len(workflow_names) != len(set(workflow_names)):
@@ -164,9 +166,9 @@ def main() -> int:
         workflow_names.extend(tests)
     if len(workflow_names) != len(set(workflow_names)):
         fail("workflow-v2 tests must map to exactly one traceability source")
-    if set(workflow_target["tests"]) != set(workflow_names):
-        missing = sorted(set(workflow_names) - set(workflow_target["tests"]))
-        extra = sorted(set(workflow_target["tests"]) - set(workflow_names))
+    if workflow_tests != set(workflow_names):
+        missing = sorted(set(workflow_names) - workflow_tests)
+        extra = sorted(workflow_tests - set(workflow_names))
         fail(f"workflow-v2 target/traceability mismatch; missing={missing}, extra={extra}")
 
     validation = validation_path.read_text(encoding="utf-8")

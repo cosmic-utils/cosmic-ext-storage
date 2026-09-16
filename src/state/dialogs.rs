@@ -45,6 +45,7 @@ pub enum ShowDialog {
 
 #[derive(Debug, Clone)]
 pub struct FormatPartitionDialog {
+    pub operation_id: Option<uuid::Uuid>,
     pub volume: VolumeInfo,
     pub info: CreatePartitionInfo,
     pub step: FormatPartitionStep,
@@ -283,6 +284,7 @@ pub struct DeletePartitionDialog {
 
 #[derive(Debug, Clone)]
 pub struct CreatePartitionDialog {
+    pub operation_id: Option<uuid::Uuid>,
     pub info: CreatePartitionInfo,
     pub step: CreatePartitionStep,
     pub running: bool,

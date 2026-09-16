@@ -268,8 +268,9 @@ validation; instrumented provenance; and human visual/accessibility review.
 - [ ] Fresh coverage, build contracts and final-head CI evidence are recorded.
 - [ ] Unmet numerical gates remain failures; rendered/visual acceptance remains deferred.
 
-Next action: implement Phase A/B, then C/D before undertaking the family-by-family
-logic migrations. This document itself changes no execution setting or source code.
+Next action: finish the family-by-family production-logic migrations and final
+coverage/CI verification. See `production-logic-traceability.md` for actual
+callers, slice evidence and remaining state-ordering gaps.
 
 ### Execution checkpoint — 2026-09-16
 
@@ -286,5 +287,22 @@ launch guards, manual-only CI opt-in and explicit coverage modes are in place.
 contracts: 39 pass, two explicitly container-only checks skip. Strict runner
 Clippy and formatting pass. The UI-only invocations fail before file access or
 process launch when disabled. No rendered run has been started.
-Host+lab baseline collection, CI validation and production-flow migrations are
-still outstanding; this is not completion of the plan.
+Baseline at `95b4f66`: host tests and all 17 native outer cases passed (one
+unselected bridge test). Collection returned 1 because numerical gates remain
+unmet, not because UI was required. `ui_status=deferred`; no UI profiles were
+used. Evidence: `target/coverage/non-rendered/run-m59zg3yg`, `evidence.json`,
+`acceptance.json`, `summary.json`, `lcov.info` and HTML in that mode directory.
+Comparison base was origin/main `0ba27cc2caac19acb7a8d98747f8b65058dab877`.
+
+Measured Rust baseline: workspace lines 9,352/29,510 (31.69%), functions
+1,131/3,490 (32.41%); app lines 2,110/16,944 (12.45%), functions 230/1,678
+(13.71%). There are also 49 inventory sources without LLVM mappings, explicitly
+reported for review (many declaration/module-only files). These percentages
+describe mapped Rust code, not support-script coverage or full acceptance.
+The 98–100% and changed-code gates remain unchanged and failing. Final-head
+measurement must be regenerated after source changes.
+
+Phase D caller audit is recorded in `production-logic-traceability.md`. The
+create/format slice is being migrated to production handlers and has exposed
+actual validation/adapter gaps; remaining families and final CI are outstanding.
+This is not completion of the plan.

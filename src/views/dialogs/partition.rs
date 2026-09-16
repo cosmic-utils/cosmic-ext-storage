@@ -344,6 +344,7 @@ pub fn format_partition<'a>(state: FormatPartitionDialog) -> Element<'a, Message
         step,
         running,
         filesystem_tools,
+        ..
     } = state;
 
     let size_pretty = bytes_to_pretty(&create.size, false);

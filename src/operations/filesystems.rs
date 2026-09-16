@@ -311,8 +311,8 @@ impl FilesystemsClient {
         options: FormatOptions,
     ) -> Result<(), OperationError> {
         if !self
-            .0
-            .filesystem_tools
+            .get_filesystem_tools()
+            .await?
             .iter()
             .any(|tool| tool.fs_type == fs_type && tool.available)
         {

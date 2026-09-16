@@ -625,7 +625,67 @@ impl DiskDiscovery for ScenarioBackend {
         Ok(self.state.lock().await.disks.clone())
     }
     async fn list_volumes(&self) -> Result<Vec<storage_types::VolumeInfo>, StorageError> {
-        Ok(Vec::new())
+        use storage_types::{VolumeInfo, VolumeKind};
+        let state = self.state.lock().await;
+        let mut volumes = Vec::new();
+        for partition in &state.partitions {
+            let filesystem = state
+                .filesystems
+                .iter()
+                .find(|fs| fs.device == partition.device);
+            let luks = state
+                .luks
+                .values()
+                .find(|luks| luks.info.device == partition.device);
+            let volume = VolumeInfo {
+                kind: if luks.is_some() {
+                    VolumeKind::CryptoContainer
+                } else {
+                    VolumeKind::Partition
+                },
+                label: filesystem.map_or_else(|| partition.name.clone(), |fs| fs.label.clone()),
+                size: partition.size,
+                offset: partition.offset,
+                partition_number: partition.number,
+                id_type: filesystem.map_or_else(
+                    || {
+                        if luks.is_some() {
+                            "crypto_LUKS".into()
+                        } else {
+                            String::new()
+                        }
+                    },
+                    |fs| fs.fs_type.clone(),
+                ),
+                device_path: Some(partition.device.clone()),
+                parent_path: Some(partition.parent_path.clone()),
+                has_filesystem: filesystem.is_some(),
+                mount_points: filesystem.map_or_else(Vec::new, |fs| fs.mount_points.clone()),
+                usage: None,
+                locked: luks.is_some_and(|luks| !luks.info.unlocked),
+                children: Vec::new(),
+            };
+            if let Some(mapper) = luks.and_then(|luks| luks.info.cleartext_device.as_ref()) {
+                let fs = state.filesystems.iter().find(|fs| &fs.device == mapper);
+                volumes.push(VolumeInfo {
+                    kind: VolumeKind::Block,
+                    label: fs.map_or_else(String::new, |fs| fs.label.clone()),
+                    size: partition.size,
+                    offset: 0,
+                    partition_number: 0,
+                    id_type: fs.map_or_else(String::new, |fs| fs.fs_type.clone()),
+                    device_path: Some(mapper.clone()),
+                    parent_path: Some(partition.device.clone()),
+                    has_filesystem: fs.is_some(),
+                    mount_points: fs.map_or_else(Vec::new, |fs| fs.mount_points.clone()),
+                    usage: None,
+                    locked: false,
+                    children: Vec::new(),
+                });
+            }
+            volumes.push(volume);
+        }
+        Ok(volumes)
     }
 }
 

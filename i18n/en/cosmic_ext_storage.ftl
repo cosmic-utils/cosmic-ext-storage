@@ -76,6 +76,7 @@ format-partition-description = This will format the selected volume. Size: { $si
 volume-name = Volume Name
 partition-name = Partition Name
 partition-size = Partition Size
+partition-size-invalid = Choose a non-zero size within the available free space.
 free-space = Free Space
 erase = Erase
 password-protected = Password Protected

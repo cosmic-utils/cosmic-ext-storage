@@ -69,7 +69,6 @@ impl BackendRegistry {
 /// root.  It deliberately exposes contracts, never UDisks2/rclone internals.
 pub struct StorageOperations {
     pub registry: BackendRegistry,
-    pub filesystem_tools: Vec<storage_types::FilesystemToolInfo>,
     pub filesystem_tool_discovery: Arc<dyn FilesystemToolDiscovery>,
     pub usage_operations: Arc<dyn UsageOperations>,
     pub image_workflows: Arc<dyn ImageWorkflowOperations>,
@@ -138,7 +137,6 @@ impl StorageOperations {
                 logical_topology_sources,
                 logical_operations,
             },
-            filesystem_tools: filesystems::detect_filesystem_tools(),
             filesystem_tool_discovery: Arc::new(StaticFilesystemTools(
                 filesystems::detect_filesystem_tools(),
             )),
@@ -164,7 +162,6 @@ impl StorageOperations {
                 logical_topology_sources: adapters.logical_topology_sources,
                 logical_operations: adapters.logical_operations,
             },
-            filesystem_tools: Vec::new(),
             filesystem_tool_discovery: adapters.filesystem_tools,
             usage_operations: adapters.usage,
             image_workflows: adapters.image,

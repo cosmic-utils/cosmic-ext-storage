@@ -1753,6 +1753,7 @@ fn build_free_space_info<'a>(
             .id("partition.create".into())
             .on_press(Message::Dialog(Box::new(ShowDialog::AddPartition(
                 crate::state::dialogs::CreatePartitionDialog {
+                    operation_id: None,
                     info: segment.get_create_info(),
                     step: crate::state::dialogs::CreatePartitionStep::Basics,
                     running: false,

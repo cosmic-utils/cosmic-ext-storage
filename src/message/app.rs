@@ -45,6 +45,11 @@ pub enum Message {
     DriveLoadFinished,
     None,
     UpdateNav(Vec<UiDrive>, Option<String>),
+    /// Completion belongs only to the dialog that submitted this operation.
+    PartitionOperationCompleted {
+        operation_id: uuid::Uuid,
+        message: Box<Message>,
+    },
     UpdateNavWithChildSelection(Vec<UiDrive>, Option<String>),
     Dialog(Box<ShowDialog>),
     CloseDialog,

@@ -6,20 +6,7 @@ use cosmic_ext_storage::testing::{
     NetworkPhase, PhysicalIntent, PhysicalPhase, ReloadIntent, ReloadPhase, SecretInput,
     WorkflowHarness, verify_workflow_facade_contract,
 };
-use storage_types::{CreatePartitionInfo, ImageAssetRef};
-
-fn partition_info() -> CreatePartitionInfo {
-    CreatePartitionInfo {
-        name: "Scenario data".into(),
-        size: 268_435_456,
-        max_size: 268_435_456,
-        offset: 1_048_576,
-        selected_type: "8300".into(),
-        filesystem_type: "ext4".into(),
-        table_type: "gpt".into(),
-        ..Default::default()
-    }
-}
+use storage_types::ImageAssetRef;
 
 fn luks_secrets() -> FixtureSecrets {
     let mut secrets = FixtureSecrets::none();
@@ -128,44 +115,6 @@ async fn logical_stale_preflight_completion_is_rejected(
             .filter(|record| record.operation == "logical.preflight")
             .count(),
         1
-    );
-}
-
-#[rstest::rstest]
-#[tokio::test(flavor = "current_thread")]
-async fn partition_format_validation_and_completion_preserve_effect_order(
-    #[from(common::workflow)]
-    #[with("physical/partition-format.toml")]
-    #[future(awt)]
-    harness: WorkflowHarness,
-) {
-    let mut harness = harness;
-    let mut invalid = partition_info();
-    invalid.size = 0;
-    harness
-        .dispatch_physical(PhysicalIntent::FormatPartition {
-            disk: "/dev/ui-disk0".into(),
-            info: invalid,
-        })
-        .expect("invalid intent");
-    assert_eq!(harness.physical_snapshot().phase, PhysicalPhase::Failed);
-    assert!(harness.effect_records().is_empty());
-
-    harness
-        .dispatch_physical(PhysicalIntent::FormatPartition {
-            disk: "/dev/ui-disk0".into(),
-            info: partition_info(),
-        })
-        .expect("valid intent");
-    harness.drive_until_idle().await.expect("format flow");
-    assert_eq!(harness.physical_snapshot().phase, PhysicalPhase::Completed);
-    assert_eq!(harness.physical_snapshot().refresh_generation, 1);
-    assert_eq!(
-        harness
-            .effect_records()
-            .last()
-            .map(|record| record.operation),
-        Some("partition.create_partition_with_filesystem")
     );
 }
 

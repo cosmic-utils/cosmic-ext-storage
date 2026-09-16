@@ -3,6 +3,30 @@
 schema_version = 1
 
 [[target]]
+phase = "workflow-v2"
+package = "cosmic-ext-storage"
+kind = "rust-lib"
+name = "cosmic_ext_storage"
+features = ["test-backend"]
+tests = [
+  "update::production_handler_tests::create_routes_to_selected_runtime_and_refreshes_actual_models",
+  "update::production_handler_tests::create_cancel_and_missing_dialog_have_no_effect::case_1_cancel",
+  "update::production_handler_tests::create_cancel_and_missing_dialog_have_no_effect::case_2_no_dialog",
+  "update::production_handler_tests::create_submission_revalidates_form_without_side_effects::case_1_zero_size",
+  "update::production_handler_tests::create_submission_revalidates_form_without_side_effects::case_2_oversized",
+  "update::production_handler_tests::create_submission_revalidates_form_without_side_effects::case_3_missing_tool",
+  "update::production_handler_tests::create_submission_revalidates_form_without_side_effects::case_4_missing_secret",
+  "update::production_handler_tests::create_submission_revalidates_form_without_side_effects::case_5_mismatched_secret",
+  "update::production_handler_tests::create_failure_surfaces_error_without_refreshing_navigation",
+  "update::production_handler_tests::format_uses_selected_runtime_and_handles_invalid_targets::case_1_success",
+  "update::production_handler_tests::format_uses_selected_runtime_and_handles_invalid_targets::case_2_missing_device",
+  "update::production_handler_tests::format_uses_selected_runtime_and_handles_invalid_targets::case_3_missing_tool",
+  "update::production_handler_tests::create_completion_does_not_close_a_replacement_idle_dialog",
+  "update::production_handler_tests::old_partition_completion_cannot_replace_a_new_running_dialog::case_1_success",
+  "update::production_handler_tests::old_partition_completion_cannot_replace_a_new_running_dialog::case_2_failure"
+]
+
+[[target]]
 phase = "testing-v2-completion"
 package = "cosmic-ext-storage"
 kind = "rust-lib"
@@ -187,7 +211,6 @@ tests = [
   "workflow_harness_uses_only_selected_scenario_runtime",
   "logical_open_preflight_confirm_executes_once_and_refreshes_once",
   "logical_stale_preflight_completion_is_rejected",
-  "partition_format_validation_and_completion_preserve_effect_order",
   "busy_unmount_keeps_actionable_error_and_does_not_refresh",
   "luks_unlock_uses_secret_input_and_redacts_every_projection",
   "network_create_mount_and_status_are_reduced_from_one_flow",

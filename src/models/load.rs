@@ -35,11 +35,20 @@ pub async fn build_drive_timed(disk: DiskInfo) -> (Result<UiDrive, String>, u128
 /// }
 /// ```
 pub async fn load_all_drives() -> Result<Vec<UiDrive>, OperationError> {
-    let disks = load_drive_candidates().await?;
+    load_all_drives_with_operations(crate::operations::shared().await?).await
+}
+
+/// Refresh the same UI models without falling back to a global adapter context.
+pub async fn load_all_drives_with_operations(
+    operations: std::sync::Arc<crate::operations::StorageOperations>,
+) -> Result<Vec<UiDrive>, OperationError> {
+    let disks = DisksClient::with_operations(operations.clone())
+        .list_disks()
+        .await?;
 
     let mut drives = Vec::new();
     for disk in disks {
-        match UiDrive::new(disk).await {
+        match UiDrive::with_operations(disk, operations.clone()).await {
             Ok(drive) => drives.push(drive),
             Err(e) => {
                 tracing::warn!("Failed to load drive data: {}", e);

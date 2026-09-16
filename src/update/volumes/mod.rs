@@ -19,6 +19,7 @@ impl VolumesControl {
         &mut self,
         message: VolumesControlMessage,
         dialog: &mut Option<ShowDialog>,
+        operations: std::sync::Arc<crate::operations::StorageOperations>,
     ) -> Task<cosmic::Action<Message>> {
         match message {
             VolumesControlMessage::SegmentSelected(index) => {
@@ -110,7 +111,9 @@ impl VolumesControl {
                 encryption::open_edit_encryption_options(self, dialog)
             }
 
-            VolumesControlMessage::CreateMessage(msg) => create::create_message(self, msg, dialog),
+            VolumesControlMessage::CreateMessage(msg) => {
+                create::create_message(self, msg, dialog, operations)
+            }
             VolumesControlMessage::UnlockMessage(unlock_message) => {
                 encryption::unlock_message(self, unlock_message, dialog)
             }

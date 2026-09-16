@@ -1,5 +1,3 @@
-use storage_types::CreatePartitionInfo;
-
 use super::{SecretInput, WorkflowCapabilities, WorkflowError};
 
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
@@ -20,17 +18,8 @@ pub struct PhysicalSnapshot {
 }
 
 pub enum PhysicalIntent {
-    FormatPartition {
-        disk: String,
-        info: CreatePartitionInfo,
-    },
-    Unmount {
-        device: String,
-    },
-    Unlock {
-        device: String,
-        secret: SecretInput,
-    },
+    Unmount { device: String },
+    Unlock { device: String, secret: SecretInput },
 }
 
 #[derive(Debug, Default)]
@@ -54,11 +43,6 @@ impl State {
 }
 
 pub(crate) enum Effect {
-    CreatePartition {
-        disk: String,
-        info: CreatePartitionInfo,
-        generation: u64,
-    },
     Unmount {
         device: String,
         generation: u64,
@@ -73,7 +57,6 @@ pub(crate) enum Effect {
 impl Effect {
     pub(crate) const fn operation(&self) -> &'static str {
         match self {
-            Self::CreatePartition { .. } => "partition.create_partition_with_filesystem",
             Self::Unmount { .. } => "filesystem.unmount",
             Self::Unlock { .. } => "encryption.unlock_luks",
         }
@@ -81,9 +64,7 @@ impl Effect {
 
     pub(crate) const fn generation(&self) -> u64 {
         match self {
-            Self::CreatePartition { generation, .. }
-            | Self::Unmount { generation, .. }
-            | Self::Unlock { generation, .. } => *generation,
+            Self::Unmount { generation, .. } | Self::Unlock { generation, .. } => *generation,
         }
     }
 
@@ -109,23 +90,6 @@ pub(crate) fn reduce_intent(
     state.error = None;
     state.phase = Phase::Running;
     match intent {
-        PhysicalIntent::FormatPartition { disk, info } => {
-            state.selected_device = Some(disk.clone());
-            if info.size == 0 || info.offset == 0 || info.selected_type.trim().is_empty() {
-                state.phase = Phase::Failed;
-                state.error = Some(WorkflowError {
-                    kind: "invalid_input",
-                    reason: "partition size, offset, and type are required".into(),
-                });
-                Vec::new()
-            } else {
-                vec![Effect::CreatePartition {
-                    disk,
-                    info,
-                    generation,
-                }]
-            }
-        }
         PhysicalIntent::Unmount { device } => {
             state.selected_device = Some(device.clone());
             vec![Effect::Unmount { device, generation }]
@@ -166,27 +130,6 @@ pub(crate) fn reduce_completion(state: &mut State, completion: Completion) {
 
 pub(crate) async fn execute(capabilities: &WorkflowCapabilities, effect: Effect) -> Completion {
     match effect {
-        Effect::CreatePartition {
-            disk,
-            info,
-            generation,
-        } => {
-            let result = capabilities
-                .operations
-                .registry
-                .block
-                .create_partition_with_filesystem(&disk, &info)
-                .await
-                .map(|_| ())
-                .map_err(|error| {
-                    WorkflowError::from(crate::operations::OperationError::from(error))
-                });
-            Completion::Finished {
-                generation,
-                device: disk,
-                result,
-            }
-        }
         Effect::Unmount { device, generation } => {
             let result = capabilities
                 .operations

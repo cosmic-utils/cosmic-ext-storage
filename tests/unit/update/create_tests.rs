@@ -6,6 +6,7 @@ use storage_types::FilesystemToolInfo;
 #[fixture]
 fn create_dialog() -> CreatePartitionDialog {
     CreatePartitionDialog {
+        operation_id: None,
         info: CreatePartitionInfo {
             table_type: "gpt".into(),
             selected_partition_type_index: storage_types::COMMON_GPT_TYPES
