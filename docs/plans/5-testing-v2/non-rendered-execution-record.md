@@ -1,5 +1,11 @@
 # Non-rendered regrouping: execution record
 
+Latest pass and acceptance decision: [non-rendered closing pass](non-rendered-closing-pass.md).
+The user approved measured no-regression acceptance for this paused-UI merge;
+98–100%, complete support measurement and rendered acceptance remain long-term
+obligations. Historical figures and stricter blocking statements below describe
+their recorded checkpoints, not the newly approved merge policy.
+
 2026-09-16, branch `4-ui-testing`. Implementation/source revision:
 `1b3aec6ddc2a6cc67eb5d9472f728df926a11bec`. PR #117 comparison base:
 `0ba27cc2caac19acb7a8d98747f8b65058dab877` (`main`, not this branch).

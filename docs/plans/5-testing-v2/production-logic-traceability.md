@@ -1,5 +1,11 @@
 # Production business-logic audit
 
+Latest pass and acceptance decision: [non-rendered closing pass](non-rendered-closing-pass.md).
+The user approved measured no-regression acceptance for this paused-UI merge;
+98–100%, complete support measurement and rendered acceptance remain long-term
+obligations. Historical figures and stricter blocking statements below describe
+their recorded checkpoints, not the newly approved merge policy.
+
 2026-09-16. The starting audit below describes checkpoint `95b4f66`, not current
 code. The seven production-handler families have since been migrated and the
 parallel harness removed; per-family changes and validation follow below.

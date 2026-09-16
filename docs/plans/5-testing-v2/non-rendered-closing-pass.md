@@ -79,5 +79,42 @@ Aggregate coverage is not a proof of all storage safety behaviors.
 
 ## Final evidence
 
-Pending fresh host/native measurement, recorded baseline, and implementation-head
-CI. Do not interpret this document's existence as a green merge recommendation.
+Source checkpoint: `9553a6f9e199304febaba15c9048f76682a0438f`.
+Fresh non-rendered run `run-3dbfptjx`: 448 host tests and all 17 selected native
+bridge cases passed, including the expanded LUKS test and private-container
+shell contract. The native bridge's one non-selected host contract is not a
+missing native case. Host-only runs intentionally leave opt-in/native tests
+ignored; the collector runs the selected native cases separately.
+
+There are now 77 real production-handler cases (61 before this pass) and 57 new
+storage-value cases. All 213 required names resolve against built test targets.
+Strict all-feature/all-target Clippy, formatting and the normal no-default-feature
+build pass. Python policy/support regressions: 45 pass, two explicit container-only
+checks skipped in host invocation; the lab runs its container shell contract.
+
+Repeat `run-7h35tjgf` passed the same 448 host / 17 native cases. Both runs used
+the actual PR base `0ba27cc2caac19acb7a8d98747f8b65058dab877`, no display/bus
+environment, and `UI_E2E_ENABLED=0`. Both have successful host/lab evidence,
+deferred UI, valid provenance and only expected long-term acceptance failures.
+The target-policy exit code is 1 because those targets are unmet, not a test failure.
+
+| Mapped Rust scope | Lines | Functions |
+| --- | --- | --- |
+| Workspace | 12,424/28,518 (43.57%) | 1,467/3,358 (43.69%) |
+| Application | 4,871/15,930 (30.58%) | 482/1,533 (31.44%) |
+| storage-types | 661/1,056 (62.59%) | 113/182 (62.09%) |
+
+The previous workspace/app line results were 40.04% / 25.61%. The repeat adds
+one covered UDisks line (3,243 versus 3,242); all other counters are identical.
+The committed baseline takes the lower observed ratio for each package and
+workspace, with no rounding allowance. `coverage-baseline.json` records every
+scope, source inventory, reviewed hashes and both acceptance-report digests.
+47 unmapped Rust files and 15 unmeasured support scripts remain visible.
+
+Saved local reports: `target/coverage/baseline-evidence/run-3dbfptjx/` and
+`target/coverage/non-rendered/` for the repeat, with raw evidence in their
+respective `run-*` directories. The first is an artifact copy, not a new run.
+Fresh CI will execute using the committed baseline; target-policy evidence is
+not relabeled as a passing baseline-policy run.
+
+Pending implementation-head CI. This checkpoint is not yet a green merge recommendation.

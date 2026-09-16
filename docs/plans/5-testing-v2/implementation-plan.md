@@ -1,5 +1,11 @@
 # Testing V2 implementation plan
 
+Latest pass and acceptance decision: [non-rendered closing pass](non-rendered-closing-pass.md).
+The user approved measured no-regression acceptance for this paused-UI merge;
+98–100%, complete support measurement and rendered acceptance remain long-term
+obligations. Historical figures and stricter blocking statements below describe
+their recorded checkpoints, not the newly approved merge policy.
+
 ## Current execution direction — 2026-09-15
 
 Implementation checkpoint (2026-09-16): the regrouping's UI guards, real-handler
