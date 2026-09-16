@@ -11,7 +11,7 @@ use storage_contracts::ScenarioDiagnostics;
 use crate::{
     AppModel, AppRuntime,
     operations::GlobalOperationsGuard,
-    workflows::{EffectRecord, SecretInput, WorkflowCapabilities, image_usage, network, reload},
+    workflows::{EffectRecord, SecretInput, WorkflowCapabilities, image_usage, reload},
 };
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -85,7 +85,6 @@ pub struct TraceProjection {
 }
 
 enum ScheduledEffect {
-    Network(network::Effect),
     ImageUsage(image_usage::Effect),
     Reload(reload::Effect),
 }
@@ -93,7 +92,6 @@ enum ScheduledEffect {
 impl ScheduledEffect {
     fn workflow(&self) -> &'static str {
         match self {
-            Self::Network(_) => "network",
             Self::ImageUsage(_) => "image_usage",
             Self::Reload(_) => "reload",
         }
@@ -101,7 +99,6 @@ impl ScheduledEffect {
 
     fn operation(&self) -> &'static str {
         match self {
-            Self::Network(effect) => effect.operation(),
             Self::ImageUsage(effect) => effect.operation(),
             Self::Reload(effect) => effect.operation(),
         }
@@ -109,7 +106,6 @@ impl ScheduledEffect {
 
     fn generation(&self) -> u64 {
         match self {
-            Self::Network(effect) => effect.generation(),
             Self::ImageUsage(effect) => effect.generation(),
             Self::Reload(effect) => effect.generation(),
         }
@@ -117,7 +113,6 @@ impl ScheduledEffect {
 }
 
 enum ScheduledCompletion {
-    Network(network::Completion),
     ImageUsage(image_usage::Completion),
     Reload(reload::Completion),
 }
@@ -125,10 +120,6 @@ enum ScheduledCompletion {
 impl ScheduledCompletion {
     fn status(&self) -> &'static str {
         match self {
-            Self::Network(network::Completion::Created { result, .. }) => status(result),
-            Self::Network(network::Completion::Tested { result, .. }) => status(result),
-            Self::Network(network::Completion::Mounted { result, .. }) => status(result),
-            Self::Network(network::Completion::Statused { result, .. }) => status(result),
             Self::ImageUsage(image_usage::Completion::ImageStarted { result, .. }) => {
                 status(result)
             }
@@ -221,16 +212,6 @@ impl WorkflowHarness {
         self.runtime.operations().registry.block.id().0
     }
 
-    pub fn dispatch_network(
-        &mut self,
-        intent: network::NetworkIntent,
-    ) -> Result<(), WorkflowHarnessError> {
-        let generation = self.next_generation();
-        let effects = self.model.reduce_network_workflow(intent, generation);
-        self.enqueue_network(effects);
-        Ok(())
-    }
-
     pub fn dispatch_image_usage(
         &mut self,
         intent: image_usage::ImageUsageIntent,
@@ -249,10 +230,6 @@ impl WorkflowHarness {
         let effects = self.model.reduce_reload_workflow(intent, generation);
         self.enqueue_reload(effects);
         Ok(())
-    }
-
-    pub fn network_snapshot(&self) -> network::NetworkSnapshot {
-        self.model.workflows.network.snapshot()
     }
 
     pub fn image_usage_snapshot(&self) -> image_usage::ImageUsageSnapshot {
@@ -287,9 +264,6 @@ impl WorkflowHarness {
             has_secret: false,
         });
         let completion = match effect {
-            ScheduledEffect::Network(effect) => {
-                ScheduledCompletion::Network(network::execute(&self.capabilities, effect).await)
-            }
             ScheduledEffect::ImageUsage(effect) => ScheduledCompletion::ImageUsage(
                 image_usage::execute(&self.capabilities, effect).await,
             ),
@@ -307,11 +281,6 @@ impl WorkflowHarness {
             return Ok(false);
         };
         match completion {
-            ScheduledCompletion::Network(completion) => {
-                let effects =
-                    network::reduce_completion(&mut self.model.workflows.network, completion);
-                self.enqueue_network(effects);
-            }
             ScheduledCompletion::ImageUsage(completion) => {
                 image_usage::reduce_completion(&mut self.model.workflows.image_usage, completion);
             }
@@ -428,11 +397,6 @@ impl WorkflowHarness {
         let bytes = serde_json::to_vec(&entries)
             .map_err(|_| WorkflowHarnessError::TemporaryRootUnavailable)?;
         fs::write(&self.trace, bytes).map_err(|_| WorkflowHarnessError::TemporaryRootUnavailable)
-    }
-
-    fn enqueue_network(&mut self, effects: Vec<network::Effect>) {
-        self.queue
-            .extend(effects.into_iter().map(ScheduledEffect::Network));
     }
 
     fn enqueue_image_usage(&mut self, effects: Vec<image_usage::Effect>) {

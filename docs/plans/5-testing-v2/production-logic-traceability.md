@@ -198,3 +198,27 @@ disabling the real segment-unmount route made its case fail, then the route was
 restored (`/tmp/production-mount-{red,green,mutation}.log`). Final slice validation
 passed 91 library tests, eight remaining integration workflows, strict Clippy
 and scenario-disabled builds; full coverage and final-head CI remain outstanding.
+
+### Network slice — 2026-09-16
+
+Eight real-handler cases now cover wizard/editor schema validation, duplicate
+submission, conflict/retry, persisted option updates, selection after create,
+mount/status/unmount, and controlled stale create/save/status completions.
+Every Rclone client in the handler receives the selected runtime explicitly.
+Removed the parallel network reducer, executor, harness methods/state and test.
+
+The red tests reproduced duplicate saves and late create results replacing a
+new form. Submitted forms now carry operation IDs. A successful create publishes
+the returned configuration before selecting it: chaining LoadRemotes and Select
+does not wait for the asynchronous load spawned by the first message. Per-mount
+request IDs also prevent old status results overwriting newer mount results;
+status failures stay visible as errors instead of becoming false "unmounted"
+successes. These are app fixes, not dependency patches.
+
+Evidence: `/tmp/production-network-red.log` (three real failures),
+`/tmp/production-network-suite.log` (99 library and seven remaining integration
+tests), and `/tmp/production-network-clippy.log` (strict Clippy). Disabling the
+production WizardCreate route made the real state assertion fail in
+`/tmp/production-network-mutation.log`; the intentional fault was restored.
+Network delete/rename transactionality and overlapping list reloads remain
+follow-up coverage gaps; these eight tests do not imply complete network coverage.

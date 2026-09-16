@@ -1,9 +1,7 @@
 mod common;
-use std::collections::BTreeMap;
 
 use cosmic_ext_storage::testing::{
-    FixtureSecrets, ImageUsageIntent, ImageUsagePhase, NetworkIntent, NetworkPhase, ReloadIntent,
-    ReloadPhase, WorkflowHarness,
+    FixtureSecrets, ImageUsageIntent, ImageUsagePhase, ReloadIntent, ReloadPhase, WorkflowHarness,
 };
 use storage_types::ImageAssetRef;
 
@@ -16,43 +14,6 @@ async fn workflow_harness_uses_only_selected_scenario_runtime() {
     assert_eq!(second.selected_block_backend_id(), "ui-scenario");
     assert!(first.global_operations_lookup_is_rejected().await);
     assert!(second.global_operations_lookup_is_rejected().await);
-}
-
-#[rstest::rstest]
-#[tokio::test(flavor = "current_thread")]
-async fn network_create_mount_and_status_are_reduced_from_one_flow(
-    #[from(common::workflow)]
-    #[with("network/mount.toml")]
-    #[future(awt)]
-    harness: WorkflowHarness,
-) {
-    let mut harness = harness;
-    harness
-        .dispatch_network(NetworkIntent {
-            config_id: "workflow-remote".into(),
-            provider_id: "s3".into(),
-            options: BTreeMap::from([
-                ("endpoint".into(), "https://fixture.invalid".into()),
-                ("bucket".into(), "storage".into()),
-            ]),
-        })
-        .expect("network create");
-    harness.drive_until_idle().await.expect("network workflow");
-    assert_eq!(harness.network_snapshot().phase, NetworkPhase::Completed);
-    assert_eq!(harness.network_snapshot().mounted, Some(true));
-    assert_eq!(
-        harness
-            .effect_records()
-            .iter()
-            .map(|record| record.operation)
-            .collect::<Vec<_>>(),
-        vec![
-            "network.create_config",
-            "network.test_config",
-            "network.mount",
-            "network.mount_status",
-        ]
-    );
 }
 
 #[rstest::rstest]

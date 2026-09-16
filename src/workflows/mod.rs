@@ -13,7 +13,6 @@ use storage_contracts::{DesktopServices, ScenarioControl};
 use crate::{operations::StorageOperations, runtime::AppRuntime};
 
 pub(crate) mod image_usage;
-pub(crate) mod network;
 pub(crate) mod reload;
 
 /// The only capabilities workflow executors may use.
@@ -117,7 +116,6 @@ impl Drop for SecretInput {
 /// harness. It contains no mock backend or parallel application model.
 #[derive(Default)]
 pub(crate) struct ApplicationWorkflowState {
-    pub(crate) network: network::State,
     pub(crate) image_usage: image_usage::State,
     pub(crate) reload: reload::State,
 }

@@ -210,3 +210,15 @@ against the selected scenario runtime without rendering:
 - `update::production_handler_tests::format_uses_selected_runtime_and_handles_invalid_targets::case_2_missing_device`
 - `update::production_handler_tests::format_uses_selected_runtime_and_handles_invalid_targets::case_3_missing_tool`
 - `update::production_handler_tests::create_completion_does_not_close_a_replacement_idle_dialog`
+# Production network handler migration (2026-09-16)
+
+The parallel network workflow is replaced by these real message-handler tests:
+
+- `update::production_handler_tests::network::create_select_mount_status_unmount_use_real_handlers`
+- `update::production_handler_tests::network::create_validation_conflict_and_retry_preserve_form`
+- `update::production_handler_tests::network::cancelled_create_completion_cannot_replace_new_wizard`
+- `update::production_handler_tests::network::editor_save_rejects_duplicate_and_stale_completion`
+- `update::production_handler_tests::network::old_status_cannot_overwrite_mount_and_errors_are_visible`
+- `update::production_handler_tests::network::invalid_provider_or_missing_schema_field_never_submits::case_1_unsupported`
+- `update::production_handler_tests::network::invalid_provider_or_missing_schema_field_never_submits::case_2_missing_required`
+- `update::production_handler_tests::network::editor_conflict_retry_updates_backend_and_completion_is_once`

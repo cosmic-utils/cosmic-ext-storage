@@ -17,6 +17,9 @@ mod encryption;
 #[path = "production_mount_tests.rs"]
 mod mount;
 
+#[path = "production_network_tests.rs"]
+mod network;
+
 async fn outputs(task: Task<Message>) -> Vec<Message> {
     let Some(mut stream) = cosmic::iced::runtime::task::into_stream(task) else {
         return Vec::new();

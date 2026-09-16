@@ -21,6 +21,9 @@ use super::{OperationError, StorageOperations, shared};
 pub struct RcloneClient(Arc<StorageOperations>);
 
 impl RcloneClient {
+    pub fn with_operations(operations: Arc<StorageOperations>) -> Self {
+        Self(operations)
+    }
     pub async fn new() -> Result<Self, OperationError> {
         Ok(Self(shared().await?))
     }

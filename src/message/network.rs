@@ -2,7 +2,7 @@
 
 //! Messages for network mount management
 
-use storage_types::rclone::{ConfigScope, RemoteConfig};
+use storage_types::rclone::{ConfigScope, MountStatus, RemoteConfig};
 
 /// Messages for network mount operations
 #[derive(Debug, Clone)]
@@ -39,7 +39,10 @@ pub enum NetworkMessage {
     /// Save remote configuration
     SaveRemote,
     /// Save completed
-    SaveCompleted(Result<(), String>),
+    SaveCompleted {
+        operation_id: uuid::Uuid,
+        result: Result<(), String>,
+    },
 
     // -- Wizard messages --
     /// User selected a provider type in the wizard grid
@@ -60,7 +63,10 @@ pub enum NetworkMessage {
     /// Cancel and close the wizard
     WizardCancel,
     /// Wizard create completed (with name and scope on success)
-    WizardCreateCompleted(Result<(String, ConfigScope), String>),
+    WizardCreateCompleted {
+        operation_id: uuid::Uuid,
+        result: Result<RemoteConfig, String>,
+    },
     /// Load mount-on-boot status for a remote
     LoadMountOnBoot { name: String, scope: ConfigScope },
     /// Mount-on-boot status loaded
@@ -87,17 +93,12 @@ pub enum NetworkMessage {
     UnmountRemote { name: String, scope: ConfigScope },
     /// Restart a remote (unmount then mount)
     RestartRemote { name: String, scope: ConfigScope },
-    /// Mount operation completed
-    MountCompleted {
+    /// Result belongs to one status or mutation request for this mount.
+    MountResult {
         name: String,
         scope: ConfigScope,
-        result: Result<(), String>,
-    },
-    /// Unmount operation completed
-    UnmountCompleted {
-        name: String,
-        scope: ConfigScope,
-        result: Result<(), String>,
+        request_id: uuid::Uuid,
+        result: Result<MountStatus, String>,
     },
     /// Test remote configuration
     TestRemote { name: String, scope: ConfigScope },
@@ -105,12 +106,6 @@ pub enum NetworkMessage {
     TestCompleted { result: Result<String, String> },
     /// Refresh mount status for a remote
     RefreshStatus { name: String, scope: ConfigScope },
-    /// Status refreshed
-    StatusRefreshed {
-        name: String,
-        scope: ConfigScope,
-        mounted: bool,
-    },
     /// Delete remote (with confirmation)
     DeleteRemote { name: String, scope: ConfigScope },
     /// Confirm delete remote

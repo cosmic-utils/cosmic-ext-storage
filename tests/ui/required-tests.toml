@@ -40,7 +40,15 @@ tests = [
   "update::production_handler_tests::mount::busy_result_routes_to_dialog_and_retry_preserves_mounted_state::case_2_child",
   "update::production_handler_tests::mount::busy_result_routes_to_dialog_and_retry_preserves_mounted_state::case_3_sidebar",
   "update::production_handler_tests::mount::unsupported_kill_is_an_error_not_a_fake_unmount_success",
-  "update::production_handler_tests::mount::child_mount_and_unmount_refresh_real_state"
+  "update::production_handler_tests::mount::child_mount_and_unmount_refresh_real_state",
+  "update::production_handler_tests::network::create_select_mount_status_unmount_use_real_handlers",
+  "update::production_handler_tests::network::create_validation_conflict_and_retry_preserve_form",
+  "update::production_handler_tests::network::cancelled_create_completion_cannot_replace_new_wizard",
+  "update::production_handler_tests::network::editor_save_rejects_duplicate_and_stale_completion",
+  "update::production_handler_tests::network::old_status_cannot_overwrite_mount_and_errors_are_visible",
+  "update::production_handler_tests::network::invalid_provider_or_missing_schema_field_never_submits::case_1_unsupported",
+  "update::production_handler_tests::network::invalid_provider_or_missing_schema_field_never_submits::case_2_missing_required",
+  "update::production_handler_tests::network::editor_conflict_retry_updates_backend_and_completion_is_once"
 ]
 
 [[target]]
@@ -226,7 +234,6 @@ name = "application_workflows"
 features = ["test-backend"]
 tests = [
   "workflow_harness_uses_only_selected_scenario_runtime",
-  "network_create_mount_and_status_are_reduced_from_one_flow",
   "image_progress_cancel_and_terminal_state_are_virtual_clock_driven",
   "image_usage_stale_completion_cannot_replace_newer_workflow_state",
   "usage_scan_and_delete_map_results_without_host_file_access",

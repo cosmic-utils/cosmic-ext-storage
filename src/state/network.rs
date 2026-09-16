@@ -8,6 +8,7 @@ use storage_types::rclone::{ConfigScope, MountStatus, RemoteConfig};
 /// Runtime state of a network mount
 #[derive(Debug, Clone)]
 pub struct NetworkMountState {
+    pub request_id: Option<uuid::Uuid>,
     /// The remote configuration
     pub config: RemoteConfig,
     /// Current mount status
@@ -21,6 +22,7 @@ pub struct NetworkMountState {
 impl NetworkMountState {
     pub fn new(config: RemoteConfig) -> Self {
         Self {
+            request_id: None,
             config,
             status: MountStatus::Unmounted,
             loading: false,
@@ -140,6 +142,8 @@ pub const QUICK_SETUP_PROVIDERS: &[QuickSetupProvider] = &[
 /// State for the creation wizard
 #[derive(Debug, Clone)]
 pub struct NetworkWizardState {
+    /// Identity of the submitted form, invalidated when it is replaced.
+    pub operation_id: Option<uuid::Uuid>,
     /// Current wizard step
     pub step: WizardStep,
     /// Selected remote type
@@ -160,6 +164,7 @@ impl NetworkWizardState {
     /// Create a new wizard starting at the type selection step
     pub fn new() -> Self {
         Self {
+            operation_id: None,
             step: WizardStep::SelectType,
             remote_type: String::new(),
             name: String::new(),
@@ -319,9 +324,7 @@ impl NetworkState {
                 // Preserve status and loading state
                 NetworkMountState {
                     config,
-                    status: existing.status.clone(),
-                    loading: existing.loading,
-                    error: None,
+                    ..existing.clone()
                 }
             } else {
                 NetworkMountState::new(config)
@@ -346,24 +349,27 @@ impl NetworkState {
     }
 
     /// Update mount status
-    pub fn set_mount_status(&mut self, name: &str, scope: ConfigScope, status: MountStatus) {
-        if let Some(mount) = self.mounts.get_mut(&(name.to_string(), scope)) {
-            mount.status = status;
-            mount.loading = false;
+    pub fn begin_mount_request(
+        &mut self,
+        name: &str,
+        scope: ConfigScope,
+        mutating: bool,
+    ) -> Option<uuid::Uuid> {
+        let mount = self.get_mount_mut(name, scope)?;
+        if mount.loading {
+            return None;
         }
+        let id = uuid::Uuid::new_v4();
+        mount.request_id = Some(id);
+        mount.loading = mutating;
+        mount.error = None;
+        Some(id)
     }
 
     /// Set loading state for a mount
     pub fn set_loading(&mut self, name: &str, scope: ConfigScope, loading: bool) {
         if let Some(mount) = self.mounts.get_mut(&(name.to_string(), scope)) {
             mount.loading = loading;
-        }
-    }
-
-    /// Set error for a mount
-    pub fn set_error(&mut self, name: &str, scope: ConfigScope, error: Option<String>) {
-        if let Some(mount) = self.mounts.get_mut(&(name.to_string(), scope)) {
-            mount.error = error;
         }
     }
 
@@ -419,6 +425,7 @@ impl NetworkState {
 
 #[derive(Debug, Clone)]
 pub struct NetworkEditorState {
+    pub operation_id: Option<uuid::Uuid>,
     pub name: String,
     pub remote_type: String,
     pub scope: ConfigScope,
@@ -448,6 +455,7 @@ impl NetworkEditorState {
 
     pub fn new(default_type: String) -> Self {
         Self {
+            operation_id: None,
             name: String::new(),
             remote_type: default_type,
             scope: ConfigScope::User,
@@ -468,6 +476,7 @@ impl NetworkEditorState {
 
     pub fn from_config(config: RemoteConfig) -> Self {
         Self {
+            operation_id: None,
             name: config.name.clone(),
             remote_type: config.remote_type.clone(),
             scope: config.scope,

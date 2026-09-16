@@ -114,7 +114,16 @@ branches = ["open", "validation", "configured_error", "success", "refresh"]
 in_process_test = "network_scenario_exercises_crud_and_mount_state"
 e2e_case = "network_mount"
 runtime_field = "AppRuntime.operations"
-application_workflow_tests = ["network_create_mount_and_status_are_reduced_from_one_flow"]
+application_workflow_tests = [
+  "update::production_handler_tests::network::create_select_mount_status_unmount_use_real_handlers",
+  "update::production_handler_tests::network::create_validation_conflict_and_retry_preserve_form",
+  "update::production_handler_tests::network::cancelled_create_completion_cannot_replace_new_wizard",
+  "update::production_handler_tests::network::editor_save_rejects_duplicate_and_stale_completion",
+  "update::production_handler_tests::network::old_status_cannot_overwrite_mount_and_errors_are_visible",
+  "update::production_handler_tests::network::invalid_provider_or_missing_schema_field_never_submits::case_1_unsupported",
+  "update::production_handler_tests::network::invalid_provider_or_missing_schema_field_never_submits::case_2_missing_required",
+  "update::production_handler_tests::network::editor_conflict_retry_updates_backend_and_completion_is_once"
+]
 
 [[flow]]
 id = "image_usage_progress"

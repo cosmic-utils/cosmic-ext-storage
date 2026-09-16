@@ -93,15 +93,6 @@ impl AppModel {
     }
 
     #[cfg(feature = "test-backend")]
-    pub(crate) fn reduce_network_workflow(
-        &mut self,
-        intent: crate::workflows::network::NetworkIntent,
-        generation: u64,
-    ) -> Vec<crate::workflows::network::Effect> {
-        crate::workflows::network::reduce_intent(&mut self.workflows.network, intent, generation)
-    }
-
-    #[cfg(feature = "test-backend")]
     pub(crate) fn reduce_image_usage_workflow(
         &mut self,
         intent: crate::workflows::image_usage::ImageUsageIntent,
