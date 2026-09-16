@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """Fail-closed first-party coverage gate; consumes LLVM JSON and matching LCOV.
 
-No thresholds can be overridden on the command line. Container and interactive
-UI evidence are mandatory; a host-only report is never an acceptance report.
+No thresholds can be overridden on the command line. Host and native-lab
+evidence are mandatory; full-ui mode additionally requires every UI case.
 """
 from __future__ import annotations
 
@@ -16,6 +16,7 @@ import re
 import subprocess
 import sys
 import tomllib
+import execution_policy
 
 UI_CASES = {
     "physical_partition_format", "busy_unmount", "luks_unlock",
@@ -148,7 +149,9 @@ def changed_lines(root: Path, base: str) -> dict[str, set[int]]:
     return dict(result)
 
 
-def validate_evidence(document: dict, root: Path) -> set[str]:
+def validate_evidence(document: dict, root: Path, mode: str = "full-ui") -> set[str]:
+    if mode not in execution_policy.MODES:
+        raise ValueError("unknown coverage execution mode")
     sources = set()
     tests = set()
     seen = set()
@@ -167,6 +170,8 @@ def validate_evidence(document: dict, root: Path) -> set[str]:
         sources.add(source)
         tests.update(profile["tests"])
         if source == "ui":
+            if mode != "full-ui":
+                raise ValueError("UI profiles cannot enter a non-rendered report")
             proof = profile.get("execution", {})
             report_path = root / proof.get("path", "")
             if not report_path.is_file() or hashlib.sha256(report_path.read_bytes()).hexdigest() != proof.get("sha256"):
@@ -182,17 +187,23 @@ def validate_evidence(document: dict, root: Path) -> set[str]:
             if report.get("case_sha256") != hashlib.sha256(manifest.read_bytes()).hexdigest() or report.get("completed_steps") != [step["id"] for step in program["step"]]:
                 raise ValueError("UI report case changed or steps were not executed")
             ui.update(profile["tests"])
-    if sources != {"host", "lab", "ui"}:
+    if mode == "non-rendered" and sources != {"host", "lab"}:
+        raise ValueError("host and lab profiles are required for non-rendered coverage")
+    if mode == "full-ui" and sources != {"host", "lab", "ui"}:
         raise ValueError("host, lab and executed UI profiles are required for the final report")
-    if not UI_CASES <= ui:
+    if mode == "full-ui" and not UI_CASES <= ui:
         raise ValueError(f"missing executed UI coverage sources: {sorted(UI_CASES - ui)}")
     return tests
 
 
-def validate_provenance(document: dict, root: Path) -> None:
+def validate_provenance(document: dict, root: Path, mode: str = "full-ui") -> None:
+    if mode not in execution_policy.MODES:
+        raise ValueError("unknown coverage execution mode")
     if document.get("host_exit") != 0 or document.get("lab_exit") != 0:
         raise ValueError("failed or missing test-run exit status")
-    if document.get("ui_exit") != 0:
+    if mode == "non-rendered" and (document.get("ui_exit") is not None or document.get("ui_status") != "deferred"):
+        raise ValueError("non-rendered UI evidence must be explicitly deferred, not passed")
+    if mode == "full-ui" and document.get("ui_exit") != 0:
         raise ValueError("failed or missing interactive UI run exit status")
     if document.get("input_sha256") != workspace_inputs(root):
         raise ValueError("build/test inputs changed or were omitted after instrumentation")
@@ -285,11 +296,16 @@ def evaluate(lines: dict, functions: dict, changed: dict, exempt: dict) -> tuple
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--base", required=True)
-    parser.add_argument("--summary", type=Path, default=Path("target/coverage/summary.json"))
-    parser.add_argument("--lcov", type=Path, default=Path("target/coverage/lcov.info"))
-    parser.add_argument("--evidence", type=Path, default=Path("target/coverage/evidence.json"))
+    parser.add_argument("--mode", choices=execution_policy.MODES, default="non-rendered")
+    parser.add_argument("--summary", type=Path)
+    parser.add_argument("--lcov", type=Path)
+    parser.add_argument("--evidence", type=Path)
     parser.add_argument("--exceptions", type=Path, default=Path("docs/plans/5-testing-v2/coverage-exceptions.toml"))
     args = parser.parse_args()
+    output = Path("target/coverage") / args.mode
+    args.summary = args.summary or output / "summary.json"
+    args.lcov = args.lcov or output / "lcov.info"
+    args.evidence = args.evidence or output / "evidence.json"
     root = Path(__file__).resolve().parents[2]
     lines = read_lcov(args.lcov.read_text(), root)
     functions = read_functions(json.loads(args.summary.read_text()), root)
@@ -297,13 +313,17 @@ def main() -> int:
         raise ValueError("LLVM and LCOV source inventories differ")
     evidence = json.loads(args.evidence.read_text())
     evidence_failures = []
+    try:
+        execution_policy.validate(evidence, root, args.mode)
+    except (KeyError, ValueError, OSError) as error:
+        evidence_failures.append(str(error))
     for name, path in (("summary.json", args.summary), ("lcov.info", args.lcov)):
         if evidence.get("reports", {}).get(name) != hashlib.sha256(path.read_bytes()).hexdigest():
             evidence_failures.append(f"report hash missing or stale: {name}")
     tests = set()
     for check in (validate_provenance, validate_evidence):
         try:
-            result = check(evidence, root)
+            result = check(evidence, root, args.mode)
             if result is not None:
                 tests = result
         except (KeyError, ValueError, OSError) as error:
@@ -314,7 +334,13 @@ def main() -> int:
     for missing in sorted(expected_scopes - report.keys()):
         failures.append(f"missing workspace package coverage: {missing}")
     failures = evidence_failures + failures
-    print(json.dumps({"scopes": report, "failures": failures}, indent=2))
+    unmapped = sorted(set(workspace_sources(root)) - set(lines))
+    # Files can contain only type declarations: do not invent executable line
+    # counts, but expose every absent mapping for review instead of hiding it.
+    if unmapped:
+        failures.append("unmeasured workspace sources require mapping review: " + ", ".join(unmapped))
+    print(json.dumps({"mode": args.mode, "ui_status": evidence.get("ui_status"),
+                      "scopes": report, "unmapped_sources": unmapped, "failures": failures}, indent=2))
     return bool(failures)
 
 

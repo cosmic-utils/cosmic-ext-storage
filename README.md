@@ -50,8 +50,8 @@ just install            # Install the app binary and desktop assets
 just uninstall          # Remove installed app files
 STORAGE_LAB=1 just test-lab # Run real storage tests in private Testcontainers
 just app-workflow-check    # Run deterministic application workflow tests
-just ui-e2e                # Prove the headless UI/accessibility environment
-just coverage              # Collect coverage; currently fails incomplete acceptance
+UI_E2E_ENABLED=1 just ui-e2e # Opt-in rendered diagnostics; paused by default
+just coverage              # Host+native coverage; thresholds/gaps still enforced
 ```
 
 `just install` installs the application binary, desktop entry, metainfo, and icon. It does not install service, policy, or socket files.

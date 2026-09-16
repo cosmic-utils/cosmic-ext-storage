@@ -1,5 +1,19 @@
 use super::*;
 
+#[rstest::rstest]
+#[case(None, false)]
+#[case(Some("0"), false)]
+#[case(Some("1"), true)]
+#[case(Some(""), false)]
+#[case(Some("true"), false)]
+#[case(Some(" 1"), false)]
+fn rendered_ui_requires_explicit_opt_in(#[case] value: Option<&str>, #[case] enabled: bool) {
+    assert_eq!(
+        require_rendered_ui(value.map(std::ffi::OsStr::new)).is_ok(),
+        enabled
+    );
+}
+
 #[rstest::fixture]
 fn locked_environment() -> EnvironmentLock {
     toml::from_str(include_str!(concat!(

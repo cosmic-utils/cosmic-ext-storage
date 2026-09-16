@@ -20,6 +20,7 @@ case "${1:-}" in
     *) echo 'expected capability or execute' >&2; exit 64 ;;
 esac
 
+bash "$(dirname "${BASH_SOURCE[0]}")/require-enabled.sh"
 ui_runner_uid=$(stat -c %u /workspace/ui-artifacts)
 ui_runner_gid=$(stat -c %g /workspace/ui-artifacts)
 printf 'ui-e2e:x:%s:%s:UI E2E:/tmp/ui-e2e-home:/usr/sbin/nologin\n' \

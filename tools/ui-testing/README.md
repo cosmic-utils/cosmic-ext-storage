@@ -1,6 +1,12 @@
 # UI testing commands
 
-`just ui-e2e` is the environment capability check, not the eight-case suite.
+Rendered UI execution is **paused by default** while upstream compatibility
+remains under review. UI-only commands require `UI_E2E_ENABLED=1` (exactly `0`
+or `1`); disabled commands exit without launching Docker or desktop processes.
+Scenario, production-logic and native storage tests remain active. Do not add
+dependency patches or refresh shutdown exceptions as part of this pause.
+
+`UI_E2E_ENABLED=1 just ui-e2e` is the environment capability check, not the eight-case suite.
 It proves the image-built application exposes an accessibility tree and that
 the private Sway session can capture pixels and receive virtual keyboard input.
 

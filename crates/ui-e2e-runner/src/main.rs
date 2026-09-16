@@ -236,6 +236,12 @@ async fn main() {
 }
 
 async fn run(arguments: Arguments) -> Result<()> {
+    if matches!(
+        arguments.command,
+        RunnerCommand::Execute(_) | RunnerCommand::Capability(_)
+    ) {
+        require_rendered_ui(std::env::var_os("UI_E2E_ENABLED").as_deref())?;
+    }
     match arguments.command {
         RunnerCommand::Execute(arguments) => cases::execute(arguments).await,
         RunnerCommand::Capability(arguments) => run_capability(arguments).await,
@@ -245,6 +251,15 @@ async fn run(arguments: Arguments) -> Result<()> {
             }
             Ok(())
         }
+    }
+}
+
+fn require_rendered_ui(value: Option<&std::ffi::OsStr>) -> Result<()> {
+    match value.and_then(std::ffi::OsStr::to_str) {
+        Some("1") => Ok(()),
+        None if value.is_none() => bail!("Rendered UI is deferred; opt in with UI_E2E_ENABLED=1"),
+        Some("0") => bail!("Rendered UI is deferred; opt in with UI_E2E_ENABLED=1"),
+        _ => bail!("UI_E2E_ENABLED must be exactly 0 or 1"),
     }
 }
 

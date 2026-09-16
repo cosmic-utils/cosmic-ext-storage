@@ -258,7 +258,7 @@ validation; instrumented provenance; and human visual/accessibility review.
 
 ## Completion checklist for this regrouping
 
-- [ ] Checkpoint preserved; dependency work frozen and proposals marked paused.
+- [x] Checkpoint preserved; dependency work frozen and proposals marked paused.
 - [ ] Default local/CI execution launches no rendered-UI infrastructure.
 - [ ] Explicit opt-in and disabled/error paths are regression-tested.
 - [ ] Non-rendered coverage has validated provenance and honest unchanged scope.
@@ -270,3 +270,21 @@ validation; instrumented provenance; and human visual/accessibility review.
 
 Next action: implement Phase A/B, then C/D before undertaking the family-by-family
 logic migrations. This document itself changes no execution setting or source code.
+
+### Execution checkpoint — 2026-09-16
+
+Phase A checkpoint `eb359d5` preserves the previous app/fork integration and
+incomplete rendered-test work, with its recorded verification limits. No live
+task-owned builds or UI runs remained. Both dependency worktrees are clean at
+libcosmic `2ca5a417` / iced `d38647d7a`; pins and quarantine are frozen.
+PR #117 still targets `main`. Read-only GitHub inspection reports no classic
+branch protection on `main`; no repository setting was changed.
+
+Phase B/C implementation is under validation: shell/recipe/container/runner
+launch guards, manual-only CI opt-in and explicit coverage modes are in place.
+92 runner unit tests plus three real runner-process guard tests pass. Python
+contracts: 39 pass, two explicitly container-only checks skip. Strict runner
+Clippy and formatting pass. The UI-only invocations fail before file access or
+process launch when disabled. No rendered run has been started.
+Host+lab baseline collection, CI validation and production-flow migrations are
+still outstanding; this is not completion of the plan.

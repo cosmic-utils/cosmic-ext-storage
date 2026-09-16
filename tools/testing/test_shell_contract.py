@@ -23,9 +23,30 @@ def run_script(path, *args, env=None):
 
 
 class ShellContractTests(unittest.TestCase):
+    def test_rendered_launchers_fail_closed_before_process_launch(self):
+        with tempfile.TemporaryDirectory() as directory:
+            for command in ("docker", "sway", "gdb", "setpriv", "stat"):
+                (Path(directory) / command).symlink_to(CAPTURE)
+            env = dict(os.environ, PATH=directory + os.pathsep + os.environ["PATH"],
+                       SCRIPT_TEST_EXIT="99", UI_COVERAGE="0")
+            env.pop("UI_E2E_ENABLED", None)
+            for value, status in [(None, 2), ("0", 2), ("", 64), ("true", 64), (" 1", 64)]:
+                selected = dict(env)
+                if value is not None:
+                    selected["UI_E2E_ENABLED"] = value
+                for script, args in [
+                    ("run-capability.sh", []),
+                    ("run-case.sh", ["tests/ui/cases/live_scenario_reload.toml"]),
+                    ("container-runner.sh", ["capability"]),
+                ]:
+                    with self.subTest(value=value, script=script):
+                        result = run_script(UI + script, *args, env=selected)
+                        self.assertEqual(result.returncode, status, result.stderr)
+                        self.assertEqual(result.stdout, b"")
+
     def test_named_scripts_use_bash_and_parse(self):
         scripts = [*ROOT.glob(f"{UI}*.sh"), *ROOT.glob(f"{LAB}*.sh")]
-        self.assertEqual(len(scripts), 7)
+        self.assertEqual(len(scripts), 8)
         for script in scripts:
             with self.subTest(script=script.name):
                 self.assertIn(script.read_text().splitlines()[0],
@@ -43,12 +64,12 @@ class ShellContractTests(unittest.TestCase):
                 for status in (0, 7, 139):
                     with self.subTest(script=script, status=status):
                         env = dict(os.environ, PATH=directory + os.pathsep + os.environ["PATH"],
-                                   UI_COVERAGE="0", SCRIPT_TEST_EXIT=str(status))
+                                   UI_COVERAGE="0", UI_E2E_ENABLED="1", SCRIPT_TEST_EXIT=str(status))
                         result = run_script(UI + script, *args, env=env)
                         self.assertEqual(result.returncode, status, result.stderr)
                         argv = result.stdout.decode().rstrip("\0").split("\0")
                         self.assertEqual(argv, [
-                            "run", "--rm", "--network", "none", "--mount",
+                            "run", "--rm", "--network", "none", "--env", "UI_E2E_ENABLED=1", "--mount",
                             f"type=bind,src={ROOT},dst=/workspace,readonly", "--mount",
                             f"type=bind,src={ROOT}/ui-artifacts,dst=/workspace/ui-artifacts",
                             "-w", "/workspace", "cosmic-storage-ui-e2e:local", "/bin/bash",
@@ -96,7 +117,7 @@ class ContainerShellContractTests(unittest.TestCase):
     def container(self, image, command, mounts=(), status=0):
         argv = ["docker", "run", "--rm", "--network", "none", "--entrypoint", "/bin/bash",
                 "--mount", f"type=bind,src={ROOT},dst=/workspace,readonly",
-                "-e", f"SCRIPT_TEST_EXIT={status}"]
+                "-e", f"SCRIPT_TEST_EXIT={status}", "-e", "UI_E2E_ENABLED=1"]
         for source, destination, readonly in mounts:
             argv += ["--mount", f"type=bind,src={source},dst={destination}" +
                      (",readonly" if readonly else "")]

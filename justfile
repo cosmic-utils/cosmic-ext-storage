@@ -24,6 +24,7 @@ release *args:
     cargo build --workspace --release --locked {{ args }}
 
 check:
+    @case "${UI_E2E_ENABLED-0}" in 0) echo 'Rendered UI: deferred (disabled)' ;; 1) echo 'Rendered UI: opted in; run ui-e2e separately' ;; *) echo 'UI_E2E_ENABLED must be exactly 0 or 1' >&2; exit 64 ;; esac
     cargo fmt --all -- --check
     cargo clippy --workspace --all-features --locked
     cargo test --workspace --all-features --locked
@@ -53,19 +54,20 @@ test-lab:
     cargo nextest run --locked --profile storage-lab -p storage-lab-tests --features outer-bridge --test bridge --run-ignored ignored-only
     STORAGE_SCRIPT_CONTAINER_TESTS=1 python3 -m unittest tools.testing.test_shell_contract.LabContainerShellContractTests
 
-# Produces an explicitly incomplete report until every acceptance source and
-# threshold passes. A host-only or host+lab-only result is never green.
-coverage base='origin/main':
-    python3 tools/testing/run_coverage.py --base {{ quote(base) }}
+# Host+native coverage by default; unchanged thresholds may still fail.
+coverage base='origin/main' mode='non-rendered':
+    python3 tools/testing/run_coverage.py --base {{ quote(base) }} --mode {{ quote(mode) }}
 
 ui-scenario-check:
     python3 tools/ui-testing/assert_tests.py --plan-only
     @find tests/ui/scenarios -name '*.toml' -print0 | sort -z | xargs -0 -n1 cargo run -p test-backend --locked --bin ui-scenario -- validate
 
 ui-test scenario:
+    bash tools/ui-testing/require-enabled.sh
     cargo run --features test-backend --locked -- --backend scenario --scenario {{ scenario }}
 
 ui-e2e:
+    bash tools/ui-testing/require-enabled.sh
     docker build --build-arg "VERGEN_GIT_SHA=$(git rev-parse HEAD)" --build-arg "VERGEN_GIT_COMMIT_DATE=$(git show -s --format=%cI HEAD)" --file tools/ui-testing/Containerfile --tag cosmic-storage-ui-e2e:local .
     bash tools/ui-testing/run-capability.sh
     STORAGE_SCRIPT_CONTAINER_TESTS=1 python3 -m unittest tools.testing.test_shell_contract.UiContainerShellContractTests
@@ -77,6 +79,7 @@ ui-e2e-update:
 # Execute semantic actions/assertions from a v2 case. Pixel acceptance remains
 # a separate reviewed gate; this command cannot approve its own screenshots.
 ui-e2e-case case:
+    bash tools/ui-testing/require-enabled.sh
     docker build --build-arg "VERGEN_GIT_SHA=$(git rev-parse HEAD)" --build-arg "VERGEN_GIT_COMMIT_DATE=$(git show -s --format=%cI HEAD)" --file tools/ui-testing/Containerfile --tag cosmic-storage-ui-e2e:local .
     bash tools/ui-testing/run-case.sh {{ quote(case) }}
 

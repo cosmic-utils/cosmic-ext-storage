@@ -1,8 +1,11 @@
 # Testing V2 coverage tools
 
 Status: collection and acceptance tooling is under validation. This is **not**
-a completed near-100% coverage migration. Eight interactive UI cases and their
-profiles are still required; a capability probe does not satisfy that gate.
+a completed near-100% coverage migration. Default `non-rendered` coverage requires
+real host and native-lab evidence, with rendered UI explicitly deferred.
+Opt-in `full-ui` coverage still requires all eight UI cases and their profiles;
+a capability probe does not satisfy that gate. Both modes retain the same
+production source inventory and numerical thresholds.
 
 ## Run
 
@@ -25,11 +28,17 @@ profiles and matching executables are archived through Testcontainers,
 including after a failing inner test; there is no profile bind mount or
 Docker CLI copy step.
 
-Outputs are under `target/coverage`: `summary.json`, `lcov.info`,
+Outputs are under `target/coverage/<mode>`: `summary.json`, `lcov.info`,
 `html/index.html`, `evidence.json`, `acceptance.json`, and a fresh `run-*`
 directory containing the raw profiles and execution/build evidence. A failed
 test or missing source of coverage never becomes a successful acceptance run.
 The checker still reports diagnostic counts when acceptance fails.
+Each run captures a hashed execution policy before instrumentation; report
+reuse validates that policy and the expected mode. UI-off is not a successful
+UI run, and a non-rendered report cannot satisfy full-UI acceptance. Sources
+without LLVM mappings are listed as unmeasured and fail pending mapping review;
+this includes distinguishing declaration-only files from missing executable
+code without inventing line counts.
 
 ELFs from different build roots/features are exported in matching groups.
 Combining every ELF in a single LLVM export can select one build's line
@@ -54,6 +63,18 @@ python3 tools/testing/run_coverage.py --report-only --base origin/main
 This checks source inventory, source hashes, executable hashes, and raw profile
 hashes first. It refuses changed sources or a failed underlying test run.
 Regeneration is not another test execution and cannot supply missing UI cases.
+
+For explicitly requested rendered coverage (currently blocked/incomplete):
+
+```sh
+UI_E2E_ENABLED=1 just coverage origin/main full-ui
+```
+
+The flag accepts only `0` or `1` and defaults to `0`. Full mode rejects a disabled
+flag before building images or executing tests. The Rust runner, shell launchers
+and local recipes independently guard their launch boundaries. `--all-features`
+does not opt in. Default CI keeps the UI check context with a deferred summary;
+manual workflow dispatch offers the explicit rendered diagnostic opt-in.
 
 Do not lower thresholds, create broad exceptions, or interpret an absent
 profile/package as zero executable code. The exception manifest remains

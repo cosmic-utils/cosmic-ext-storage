@@ -2,8 +2,8 @@
 """Build, execute and merge real host/container coverage before acceptance.
 
 Uses cargo-llvm-cov's compiler environment and the existing Testcontainers
-suite, not a second storage case runner. Missing interactive UI execution is a
-hard acceptance failure even when an intermediate report can be generated.
+suite, not a second storage case runner. Rendered UI is deferred by default;
+explicit full-ui mode retains the complete interactive acceptance contract.
 """
 from __future__ import annotations
 
@@ -23,6 +23,7 @@ import tempfile
 import tomllib
 import xml.etree.ElementTree as ET
 from functools import lru_cache
+import execution_policy
 
 ROOT = Path(__file__).resolve().parents[2]
 _gate_spec = importlib.util.spec_from_file_location("storage_coverage_gate", Path(__file__).with_name("coverage.py"))
@@ -76,7 +77,7 @@ def unpack_lab(archive: Path, destination: Path, target: str) -> tuple[list[Path
     return profiles, executable
 
 
-def write_html(output: Path, lines: dict, functions: dict) -> None:
+def write_html(output: Path, lines: dict, functions: dict, mode: str = "non-rendered") -> None:
     """Render the same union as the gate, never an arbitrary ELF's line view."""
     directory = output / "html"
     directory.mkdir(exist_ok=True)
@@ -96,7 +97,8 @@ def write_html(output: Path, lines: dict, functions: dict) -> None:
             cls = f' class="{state}"' if line in entries else ""
             source.append(f'<span id="L{line}"{cls}>{line:5} {html.escape(text)}</span>')
         (directory / page).write_text(f"<!doctype html><meta charset=utf-8>{style}<title>{html.escape(path)}</title><h1>{html.escape(path)}</h1><pre>" + "\n".join(source) + "</pre>")
-    (directory / "index.html").write_text("<!doctype html><meta charset=utf-8>" + style + "<title>Executed coverage</title><h1>Executed coverage</h1><p>Raw union of executed profiles, before exceptions. Acceptance also requires every test source and all thresholds; see acceptance.json.</p><table><tr><th>Scope</th><th>Lines</th><th>Functions</th></tr>" + "".join(rows) + "</table><ul>" + "".join(links) + "</ul>")
+    status = "Rendered UI deferred; not full UI acceptance." if mode == "non-rendered" else "Full UI evidence required; consult acceptance.json."
+    (directory / "index.html").write_text("<!doctype html><meta charset=utf-8>" + style + "<title>Executed coverage</title><h1>Executed coverage</h1><p>Mode: " + html.escape(mode) + ". " + status + "</p><p>Raw union of executed profiles, before exceptions. Acceptance also requires every test source and all thresholds; see acceptance.json.</p><table><tr><th>Scope</th><th>Lines</th><th>Functions</th></tr>" + "".join(rows) + "</table><ul>" + "".join(links) + "</ul>")
 
 
 def scope_export(document: dict, root: Path) -> dict:
@@ -119,7 +121,7 @@ def scope_export(document: dict, root: Path) -> dict:
     } for unit in document["data"]]}
 
 
-def export_reports(output: Path, run: Path, llvm: Path, groups: list[dict]) -> None:
+def export_reports(output: Path, run: Path, llvm: Path, groups: list[dict], mode: str = "non-rendered") -> None:
     # Different feature/build roots can use the same symbol with different
     # coverage mappings. Feeding all ELFs to one llvm-cov invocation silently
     # chooses one file's line mapping. Export matching build groups separately
@@ -147,14 +149,17 @@ def export_reports(output: Path, run: Path, llvm: Path, groups: list[dict]) -> N
     (output / "lcov.info").write_text("\n".join(lcov))
     lines = gate.read_lcov("\n".join(lcov), ROOT)
     functions = gate.read_functions(document, ROOT)
-    write_html(output, lines, functions)
+    write_html(output, lines, functions, mode)
 
 
 def finish_report(output: Path, run: Path, llvm: Path, groups: list[dict], evidence: dict, base: str) -> int:
-    export_reports(output, run, llvm, groups)
+    export_reports(output, run, llvm, groups, evidence["mode"])
     evidence["reports"] = {name: digest(output / name) for name in ("summary.json", "lcov.info")}
     (output / "evidence.json").write_text(json.dumps(evidence, indent=2) + "\n")
-    acceptance = command(["python3", "tools/testing/coverage.py", "--base", base], output=output / "acceptance.json", check=False)
+    acceptance = command(["python3", "tools/testing/coverage.py", "--base", base,
+                          "--mode", evidence["mode"], "--summary", output / "summary.json",
+                          "--lcov", output / "lcov.info", "--evidence", output / "evidence.json"],
+                         output=output / "acceptance.json", check=False)
     print(f"Reports: {output}. Host exit={evidence['host_exit']}; lab exit={evidence['lab_exit']}; acceptance={acceptance}")
     return int(bool(evidence["host_exit"] or evidence["lab_exit"] or evidence["ui_exit"] or acceptance))
 
@@ -208,6 +213,7 @@ def collect_ui(directory: Path, destination: Path, case: Path) -> tuple[dict, li
 
 
 def run_ui(run: Path) -> tuple[int, list[dict], list[dict]]:
+    execution_policy.resolve("full-ui")
     code = command(["docker", "build", "--build-arg", "UI_COVERAGE=1",
                     "--build-arg", "VERGEN_GIT_SHA=" + subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=ROOT, text=True).strip(),
                     "--build-arg", "VERGEN_GIT_COMMIT_DATE=" + subprocess.check_output(["git", "show", "-s", "--format=%cI", "HEAD"], cwd=ROOT, text=True).strip(),
@@ -241,13 +247,16 @@ def run_ui(run: Path) -> tuple[int, list[dict], list[dict]]:
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--base", required=True)
+    parser.add_argument("--mode", choices=execution_policy.MODES, default="non-rendered")
     parser.add_argument("--report-only", action="store_true", help="Re-export the last successful host/lab run only if its sources, profiles and ELFs are unchanged")
     args = parser.parse_args()
-    output = ROOT / "target/coverage"
+    policy = execution_policy.resolve(args.mode)
+    output = ROOT / "target/coverage" / args.mode
     output.mkdir(parents=True, exist_ok=True)
     if args.report_only:
         evidence = json.loads((output / "evidence.json").read_text())
-        gate.validate_provenance(evidence, ROOT)
+        execution_policy.validate(evidence, ROOT, args.mode)
+        gate.validate_provenance(evidence, ROOT, args.mode)
         # validate_evidence also requires UI execution. Validate raw bytes here
         # without claiming the incomplete source set passes acceptance.
         for profile in evidence["profiles"]:
@@ -259,13 +268,15 @@ def main() -> int:
         groups = [{key: [ROOT / path for path in paths] for key, paths in group.items()} for group in evidence["groups"]]
         return finish_report(output, run, llvm_directory(), groups, evidence, args.base)
     run = Path(tempfile.mkdtemp(prefix="run-", dir=output))
+    policy_file = run / "execution-policy.json"
+    policy_file.write_text(json.dumps(policy, sort_keys=True) + "\n")
     (output / "acceptance.json").write_text(json.dumps({"run": run.name, "scopes": {}, "failures": ["coverage run has not finished"]}) + "\n")
     source_hashes = {relative: digest(path) for relative, path in gate.workspace_sources(ROOT).items()}
     input_hashes = gate.workspace_inputs(ROOT)
     host_profiles = run / "host-profiles"
     host_profiles.mkdir()
     # Reuse compilation cache, but never reuse raw profiles from an earlier run.
-    build_env = os.environ | {"CARGO_TARGET_DIR": str(output / "host-build")}
+    build_env = os.environ | {"CARGO_TARGET_DIR": str(output.parent / "host-build")}
     compiler_env = subprocess.check_output(["cargo", "llvm-cov", "show-env"], cwd=ROOT, env=build_env, text=True)
     for line in compiler_env.splitlines():
         key, value = line.split("=", 1)
@@ -286,7 +297,8 @@ def main() -> int:
     profiles = list(host_profiles.glob("*.profraw"))
     groups = [{"profiles": profiles.copy(), "objects": objects.copy()}]
     lab_groups = {}
-    evidence = {"profiles": []}
+    evidence = {"profiles": [], "mode": args.mode,
+                "execution_policy": {"path": str(policy_file.relative_to(ROOT)), "sha256": digest(policy_file)}}
     before = set((ROOT / "target/storage-lab-artifacts").glob("run-*"))
     junit = ROOT / "target/nextest/storage-lab/junit.xml"
     previous_junit = digest(junit) if junit.is_file() else None
@@ -338,9 +350,9 @@ def main() -> int:
     evidence["lab_exit"] = lab_code
     groups.extend(lab_groups.values())
     evidence["groups"] = [{key: [str(path.relative_to(ROOT)) for path in paths] for key, paths in group.items()} for group in groups]
-    ui_code, ui_groups, ui_profiles = run_ui(run)
+    ui_code, ui_groups, ui_profiles = run_ui(run) if args.mode == "full-ui" else (None, [], [])
     evidence["ui_exit"] = ui_code
-    evidence["ui_status"] = "executed available v2 cases; required case/profile inventory is enforced by acceptance"
+    evidence["ui_status"] = "executed available v2 cases; required case/profile inventory is enforced by acceptance" if args.mode == "full-ui" else "deferred"
     evidence["profiles"].extend(ui_profiles)
     groups.extend(ui_groups)
     for group in ui_groups:

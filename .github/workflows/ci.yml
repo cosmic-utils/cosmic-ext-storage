@@ -2,6 +2,11 @@ name: CI
 
 on:
   workflow_dispatch:
+    inputs:
+      ui_e2e:
+        description: 'Opt in to rendered UI diagnostics (upstream blockers remain)'
+        type: boolean
+        default: false
   pull_request:
     types: [opened, synchronize, reopened, ready_for_review]
 
@@ -11,11 +16,12 @@ concurrency:
 
 env:
   CARGO_TERM_COLOR: always
+  UI_E2E_ENABLED: ${{ inputs.ui_e2e && '1' || '0' }}
 
 jobs:
   build:
     name: Rust tests on ${{ matrix.os }}
-    if: github.event.pull_request.draft == false
+    if: github.event_name == 'workflow_dispatch' || github.event.pull_request.draft == false
     strategy:
       fail-fast: false
       matrix:
@@ -40,7 +46,7 @@ jobs:
 
   clippy:
     name: Clippy on ${{ matrix.os }}
-    if: github.event.pull_request.draft == false
+    if: github.event_name == 'workflow_dispatch' || github.event.pull_request.draft == false
     strategy:
       fail-fast: false
       matrix:
@@ -63,7 +69,7 @@ jobs:
 
   fmt:
     name: Rustfmt
-    if: github.event.pull_request.draft == false
+    if: github.event_name == 'workflow_dispatch' || github.event.pull_request.draft == false
     strategy:
       fail-fast: false
     runs-on: ubuntu-latest
@@ -77,7 +83,7 @@ jobs:
 
   ui-scenario-contract:
     name: UI scenario contract
-    if: github.event.pull_request.draft == false
+    if: github.event_name == 'workflow_dispatch' || github.event.pull_request.draft == false
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -92,7 +98,7 @@ jobs:
 
   application-workflow-integration:
     name: Application workflow integration
-    if: github.event.pull_request.draft == false
+    if: github.event_name == 'workflow_dispatch' || github.event.pull_request.draft == false
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -106,7 +112,7 @@ jobs:
 
   storage-lab:
     name: Storage lab
-    if: github.event.pull_request.draft == false
+    if: github.event_name == 'workflow_dispatch' || github.event.pull_request.draft == false
     runs-on: ubuntu-latest
     # Includes the cold root-application build for real registry/image cases.
     # Each native lab case retains Nextest's separate five-minute hard limit.
@@ -133,18 +139,63 @@ jobs:
             target/nextest/storage-lab/junit.xml
           if-no-files-found: warn
 
+  coverage:
+    name: Non-rendered coverage
+    if: github.event_name == 'workflow_dispatch' || github.event.pull_request.draft == false
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - run: rustup component add llvm-tools-preview
+      - uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: coverage-${{ runner.os }}
+          workspaces: '. -> target/coverage/host-build'
+      - uses: taiki-e/install-action@nextest
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-llvm-cov@0.9.1
+      - run: sudo apt-get update && sudo apt-get install -y just libxkbcommon-dev libbtrfsutil-dev libclang-dev
+      - name: Collect host and private native-lab coverage
+        env:
+          COVERAGE_BASE: ${{ github.event.pull_request.base.sha || 'origin/main' }}
+        run: just coverage "$COVERAGE_BASE" non-rendered
+      - name: Upload coverage evidence even when thresholds fail
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: non-rendered-coverage
+          path: |
+            target/coverage/non-rendered/acceptance.json
+            target/coverage/non-rendered/evidence.json
+            target/coverage/non-rendered/summary.json
+            target/coverage/non-rendered/lcov.info
+            target/coverage/non-rendered/html
+            target/coverage/non-rendered/run-*/*.log
+            target/coverage/non-rendered/run-*/execution-policy.json
+            target/nextest/storage-lab/junit.xml
+          if-no-files-found: warn
+
   ui-e2e:
     name: UI E2E capability
-    if: github.event.pull_request.draft == false
+    if: github.event_name == 'workflow_dispatch' || github.event.pull_request.draft == false
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - run: sudo apt-get update && sudo apt-get install -y just
-      - run: just ui-e2e
+      - name: Record deferred rendered UI
+        if: env.UI_E2E_ENABLED == '0'
+        run: echo 'Rendered UI is deferred by policy. No capability probe or UI cases were executed.' >> "$GITHUB_STEP_SUMMARY"
+      - if: env.UI_E2E_ENABLED == '1'
+        run: sudo apt-get update && sudo apt-get install -y just
+      - if: env.UI_E2E_ENABLED == '1'
+        run: just ui-e2e
       - name: Execute reload regression with separate shutdown evidence
+        if: env.UI_E2E_ENABLED == '1'
         run: bash tools/ui-testing/run-case.sh tests/ui/cases/live_scenario_reload.toml
       - name: Upload UI evidence
-        if: always()
+        if: always() && env.UI_E2E_ENABLED == '1'
         uses: actions/upload-artifact@v4
         with:
           name: ui-artifacts
