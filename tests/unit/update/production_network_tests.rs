@@ -146,7 +146,7 @@ async fn network_app() -> AppModel {
         None,
     )
     .unwrap();
-    let mut app = AppModel::for_workflow_test(runtime);
+    let mut app = AppModel::for_handler_test(runtime);
     let task = network(&mut app, N::LoadRemotes);
     settle(&mut app, task).await;
     assert!(app.network.get_mount("remote", ConfigScope::User).is_some());

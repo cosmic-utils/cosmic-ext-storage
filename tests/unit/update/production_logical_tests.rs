@@ -10,7 +10,7 @@ fn logical_app() -> AppModel {
         None,
     )
     .unwrap();
-    AppModel::for_workflow_test(runtime)
+    AppModel::for_handler_test(runtime)
 }
 
 #[rstest]
@@ -100,6 +100,12 @@ async fn operation_failure_clears_pending_without_success_refresh(mut logical_ap
 async fn action_form_validates_input_and_cancel_clears_actual_dialog(mut logical_app: AppModel) {
     use crate::message::dialogs::LogicalActionFormMessage;
     use crate::state::dialogs::LogicalActionForm;
+    let action = storage_contracts::LogicalAction::ResizeBtrfsFilesystem {
+        filesystem: storage_types::LogicalEntityId::new("btrfs-fs:fixture").unwrap(),
+        request: storage_contracts::BtrfsResizeRequest::AbsoluteBytes(4096),
+    };
+    let reopened = LogicalActionForm::from_action(&action).unwrap();
+    assert_eq!(reopened.action().unwrap(), action);
     let app = &mut logical_app;
     let form = LogicalActionForm::CreateLvmLogicalVolume {
         volume_group: storage_types::LogicalEntityId::new("lvm-vg:fixture").unwrap(),

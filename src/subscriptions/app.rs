@@ -31,24 +31,27 @@ pub(crate) fn subscription(app: &AppModel) -> Subscription<Message> {
         // Disk hotplug comes directly from the block backend rather than a
         // project-owned D-Bus signal protocol.
         Subscription::run_with(
-            std::any::TypeId::of::<DiskEventSubscription>(),
-            |_: &std::any::TypeId| {
+            (
+                std::any::TypeId::of::<DiskEventSubscription>(),
+                OperationContext(app.runtime.operations()),
+            ),
+            |(_, operations): &(std::any::TypeId, OperationContext)| {
+                let operations = operations.0.clone();
                 cosmic::iced::stream::channel::<Message>(
                     4,
                     move |mut output: cosmic::iced::futures::channel::mpsc::Sender<Message>| async move {
-                        let Ok(operations) = crate::operations::shared().await else {
+                        let Ok(mut events) = device_messages(operations).await else {
                             return;
                         };
-                        let Ok(mut events) = operations.registry.block.device_events().await else {
-                            return;
-                        };
-                        while let Some(Ok(event)) = events.next().await {
-                            let message = match event {
-                                DeviceEvent::Added(device) => Message::DriveAdded(device),
-                                DeviceEvent::Removed(device) => Message::DriveRemoved(device),
-                                DeviceEvent::Refresh => Message::LoadDrivesIncremental,
-                            };
-                            _ = output.send(message).await;
+                        while let Some(event) = events.next().await {
+                            match event {
+                                Ok(message) => {
+                                    if output.send(message).await.is_err() {
+                                        break;
+                                    }
+                                }
+                                Err(error) => tracing::warn!(%error, "Device event stream failed"),
+                            }
                         }
                     },
                 )
@@ -132,4 +135,27 @@ pub(crate) async fn image_status_message(
         }),
         true,
     )
+}
+
+type DeviceMessages = std::pin::Pin<
+    Box<dyn futures_util::Stream<Item = Result<Message, storage_contracts::StorageError>> + Send>,
+>;
+
+pub(crate) async fn device_messages(
+    operations: std::sync::Arc<crate::operations::StorageOperations>,
+) -> Result<DeviceMessages, storage_contracts::StorageError> {
+    Ok(Box::pin(
+        operations
+            .registry
+            .block
+            .device_events()
+            .await?
+            .map(|event| {
+                event.map(|event| match event {
+                    DeviceEvent::Added(device) => Message::DriveAdded(device),
+                    DeviceEvent::Removed(device) => Message::DriveRemoved(device),
+                    DeviceEvent::Refresh => Message::LoadDrivesIncremental,
+                })
+            }),
+    ))
 }

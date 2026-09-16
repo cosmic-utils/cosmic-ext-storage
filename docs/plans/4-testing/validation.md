@@ -237,3 +237,24 @@ The parallel network workflow is replaced by these real message-handler tests:
 - `update::production_handler_tests::image_usage::usage_cancelled_wizard_and_invalid_selection_never_start`
 - `update::production_handler_tests::image_usage::usage_running_adapter_waits_for_virtual_completion`
 - `update::production_handler_tests::image_usage::usage_unsupported_adapter_surfaces_error_without_success`
+# Production reload/selection migration (2026-09-16)
+
+- `update::production_handler_tests::reload::late_list_cannot_restart_or_replace_completed_refresh`
+- `update::production_handler_tests::reload::refresh_keeps_published_models_until_all_builds_succeed`
+- `update::production_handler_tests::reload::background_refresh_preserves_running_dialog`
+- `update::production_handler_tests::reload::scenario_reload_event_refreshes_actual_models_and_rejects_invalid_overlay`
+- `update::production_handler_tests::reload::duplicate_build_and_old_finish_cannot_publish_over_new_refresh`
+- `update::production_handler_tests::reload::duplicate_device_candidates_are_rejected_without_publishing`
+- `update::production_handler_tests::reload::refresh_preserves_valid_selection_and_drops_missing_identity`
+- `update::production_handler_tests::reload::selected_runtimes_remain_isolated_through_real_handlers`
+# Test naming correction (2026-09-16)
+
+The parser-only checks are now named `runtime_request_parses_explicit_real_backend`,
+`runtime_request_parses_scenario_fixture_without_bootstrapping` and
+`scenario_secret_stdin_requires_explicit_scenario_mode`. Duplicate parser checks
+and a factory-function-reference assertion were removed, not counted as wiring
+tests. Real runtime isolation and subscription tests are in the handler suite.
+The literal-default assertion was removed; `raid_source_name_is_normalized`
+retains the real parser check, while
+the real logical handler's form-validation test also exercises an action/form
+round trip, preserving identity and size.

@@ -15,11 +15,6 @@ pub mod subscriptions;
 pub mod update;
 pub mod utils;
 pub mod views;
-#[cfg(feature = "test-backend")]
-mod workflows;
-
-#[cfg(feature = "test-backend")]
-pub mod testing;
 
 pub use app::AppModel;
 pub use runtime::{AppRuntime, RuntimeRequest};

@@ -1,6 +1,7 @@
 # Testing V2 regrouping: production logic first, rendered UI opt-in
 
-Status: agreed direction; implementation plan, not completed work.
+Status: production-handler migration implemented; final host/native coverage and
+CI verification in progress. Numerical/full-UI acceptance is not complete.
 Date: 2026-09-15. Continue on `4-ui-testing`; no new prototype branch.
 
 ## Decision and precedence
@@ -25,7 +26,7 @@ that a future release will automatically fix every blocker.
 | Layer | Current implementation | Keep active? |
 | --- | --- | --- |
 | Rust units and contracts | Backend parsing/value tests; application models, validators and some real update helpers | Yes; deepen assertion quality and production-path coverage |
-| Scenario workflows | `test-backend`, `WorkflowHarness`, rstest fixtures and `tests/application_workflows.rs` | Yes; migrate away from parallel test-only orchestration |
+| Scenario workflows | `test-backend`, rstest fixtures and real production-handler tests under `tests/unit/update` | Yes; parallel WorkflowHarness/reducers removed |
 | Native integration | `storage-lab-tests`, private Testcontainers services and owned loop-backed devices | Yes; keep one local/CI mechanism |
 | Rendered UI | `ui-e2e-runner`, Sway, AT-SPI, virtual input, screenshots and instrumented UI runs | Default off; preserve as opt-in diagnostic infrastructure |
 
@@ -35,7 +36,7 @@ E2E execution switch; `test-backend` remains available. Compiling libcosmic and
 its system libraries may still be necessary for root application tests. This
 plan promises no rendering, not a GUI-dependency-free build.
 
-### Critical production-logic gap
+### Critical production-logic gap (starting audit; migration now removed it)
 
 `src/state/app.rs::reduce_*_workflow` methods are feature-gated by `test-backend`
 and their callers are in `src/testing/workflow_harness.rs`. The normal
@@ -260,16 +261,16 @@ validation; instrumented provenance; and human visual/accessibility review.
 
 - [x] Checkpoint preserved; dependency work frozen and proposals marked paused.
 - [ ] Default local/CI execution launches no rendered-UI infrastructure.
-- [ ] Explicit opt-in and disabled/error paths are regression-tested.
+- [x] Explicit opt-in and disabled/error paths are regression-tested.
 - [ ] Non-rendered coverage has validated provenance and honest unchanged scope.
-- [ ] Traceability identifies production callers and meaningful behavior tests.
-- [ ] Every migrated workflow is shared by production and tests; duplicates removed.
+- [x] Traceability identifies production callers and meaningful behavior tests.
+- [x] Every migrated workflow is shared by production and tests; duplicates removed.
 - [ ] Backend/native and application-logic gaps are tested at the correct layer.
 - [ ] Fresh coverage, build contracts and final-head CI evidence are recorded.
 - [ ] Unmet numerical gates remain failures; rendered/visual acceptance remains deferred.
 
-Next action: finish the family-by-family production-logic migrations and final
-coverage/CI verification. See `production-logic-traceability.md` for actual
+Next action: finish fresh coverage/CI verification and record remaining uncovered
+obligations. See `production-logic-traceability.md` for actual
 callers, slice evidence and remaining state-ordering gaps.
 
 ### Execution checkpoint — 2026-09-16

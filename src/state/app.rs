@@ -8,8 +8,6 @@ use crate::state::dialogs::ShowDialog;
 use crate::state::logical::LogicalState;
 use crate::state::network::NetworkState;
 use crate::state::sidebar::SidebarState;
-#[cfg(feature = "test-backend")]
-use crate::workflows::ApplicationWorkflowState;
 use cosmic::ApplicationExt;
 use cosmic::app::{Core, Task};
 use cosmic::widget::nav_bar;
@@ -51,15 +49,11 @@ pub struct AppModel {
     /// Network mounts state (RClone, Samba, FTP)
     pub(crate) network: NetworkState,
     pub(crate) logical: LogicalState,
-    /// Reducer state for deterministic application workflows. It contains no
-    /// widget, renderer, task, or backend object.
-    #[cfg(feature = "test-backend")]
-    pub(crate) workflows: ApplicationWorkflowState,
 }
 
 impl AppModel {
-    #[cfg(feature = "test-backend")]
-    pub(crate) fn for_workflow_test(runtime: AppRuntime) -> Self {
+    #[cfg(all(test, feature = "test-backend"))]
+    pub(crate) fn for_handler_test(runtime: AppRuntime) -> Self {
         Self {
             runtime,
             core: Core::default(),
@@ -72,7 +66,6 @@ impl AppModel {
             filesystem_tools: Vec::new(),
             network: NetworkState::new(),
             logical: LogicalState::default(),
-            workflows: ApplicationWorkflowState::default(),
         }
     }
 
@@ -90,14 +83,5 @@ impl AppModel {
         } else {
             Task::none()
         }
-    }
-
-    #[cfg(feature = "test-backend")]
-    pub(crate) fn reduce_reload_workflow(
-        &mut self,
-        intent: crate::workflows::reload::ReloadIntent,
-        generation: u64,
-    ) -> Vec<crate::workflows::reload::Effect> {
-        crate::workflows::reload::reduce_intent(&mut self.workflows.reload, intent, generation)
     }
 }

@@ -32,6 +32,11 @@ pub struct SidebarState {
     pub drives_loading: bool,
     pub network_loading: bool,
     pub drive_builds_pending: usize,
+    pub(crate) load_id: Option<uuid::Uuid>,
+    pub(crate) awaiting_drive_list: bool,
+    pub(crate) pending_drives: Vec<UiDrive>,
+    pub(crate) pending_devices: HashSet<String>,
+    pub drive_load_error: Option<String>,
 }
 
 impl SidebarState {
@@ -53,33 +58,31 @@ impl SidebarState {
         self.network_loading = loading;
     }
 
-    pub fn start_drive_loading(&mut self, total: usize) {
+    pub fn start_drive_loading(&mut self) -> uuid::Uuid {
+        let load_id = uuid::Uuid::new_v4();
+        self.load_id = Some(load_id);
+        self.awaiting_drive_list = true;
         self.drives_loading = true;
-        self.drive_builds_pending = total;
-        self.drives.clear();
+        self.drive_builds_pending = 0;
+        self.pending_drives.clear();
+        self.pending_devices.clear();
+        self.drive_load_error = None;
+        load_id
     }
 
     pub fn finish_drive_loading(&mut self) {
+        self.load_id = None;
+        self.awaiting_drive_list = false;
+        self.pending_devices.clear();
+        self.pending_drives.clear();
         self.drives_loading = false;
         self.drive_builds_pending = 0;
     }
 
-    pub fn mark_drive_build_finished(&mut self) -> bool {
-        self.drive_builds_pending = self.drive_builds_pending.saturating_sub(1);
-        self.drive_builds_pending == 0
-    }
-
-    pub fn upsert_drive_sorted(&mut self, drive: UiDrive) {
-        if let Some(index) = self
-            .drives
-            .iter()
-            .position(|current| current.device() == drive.device())
-        {
-            self.drives[index] = drive;
-        } else {
-            self.drives.push(drive);
-        }
-        self.drives.sort_by(compare_drive_sort_keys);
+    pub fn take_pending_drives(&mut self) -> Vec<UiDrive> {
+        let mut drives = std::mem::take(&mut self.pending_drives);
+        drives.sort_by(compare_drive_sort_keys);
+        drives
     }
 
     pub fn is_expanded(&self, key: &SidebarNodeKey) -> bool {

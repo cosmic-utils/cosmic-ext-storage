@@ -1,9 +1,6 @@
 #![cfg(feature = "test-backend")]
 
-use cosmic_ext_storage::{
-    AppRuntime,
-    testing::{FixtureSecrets, WorkflowHarness},
-};
+use cosmic_ext_storage::AppRuntime;
 use rstest::fixture;
 use std::path::{Path, PathBuf};
 
@@ -16,16 +13,6 @@ pub fn fixture(name: &str) -> PathBuf {
 #[fixture]
 pub fn scenario(#[default("empty.toml")] file: &str) -> AppRuntime {
     AppRuntime::scenario(fixture(file), None, None).expect("scenario runtime")
-}
-
-#[fixture]
-pub async fn workflow(
-    #[default("empty.toml")] file: &str,
-    #[default(FixtureSecrets::none())] secrets: FixtureSecrets,
-) -> WorkflowHarness {
-    WorkflowHarness::from_fixture(file, secrets)
-        .await
-        .expect("workflow fixture")
 }
 
 #[fixture]

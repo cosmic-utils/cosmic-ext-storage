@@ -4,9 +4,7 @@ use storage_types::{
 };
 
 #[test]
-fn logical_dialogs_preserve_source_defaults() {
-    let source_btrfs_size_default = "max";
-    assert_eq!(source_btrfs_size_default, "max");
+fn raid_source_name_is_normalized() {
     assert_eq!(
         storage_contracts::MdRaidName::from_source("/dev/md0")
             .unwrap()

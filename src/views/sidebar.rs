@@ -685,6 +685,15 @@ pub(crate) fn sidebar(
 
     let mut rows: Vec<Element<'static, Message>> = Vec::new();
     rows.extend(logical_section(sidebar, logical_state, controls_enabled));
+    if let Some(error) = &sidebar.drive_load_error {
+        rows.push(
+            widget::container(widget::text::caption(format!(
+                "Drive refresh failed: {error}"
+            )))
+            .padding([4, 12])
+            .into(),
+        );
+    }
     if sidebar.drives_loading {
         rows.push(
             widget::container(widget::text::caption("Loading drives…"))

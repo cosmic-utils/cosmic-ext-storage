@@ -62,10 +62,13 @@ tools, and local SFTP; mutations are restricted to ledger-owned file-backed
 loops. No host storage or D-Bus mounts and no VM are required. See the
 [lab contract](tools/storage-lab/README.md) for prerequisites and artifacts.
 
-Scenario workflow tests remain a separate deterministic layer. `just ui-e2e`
-currently proves capability only; the eight interactive cases are still
-planned, not executed. [Coverage tooling](tools/testing/README.md) collects
-real host/container profiles but does not yet meet Testing V2 acceptance.
+`just app-workflow-check` drives the real application message handlers against
+owned scenario adapters, without a window, compositor or desktop bus. It uses
+rstest fixtures and the app's actual tasks/state; the separate test-only workflow
+reducers have been removed. Rendered UI execution is paused and default-off;
+it remains an explicit diagnostic opt-in, not current acceptance evidence.
+[Coverage tooling](tools/testing/README.md) collects real host/container profiles
+and keeps unmet thresholds and unmeasured sources visible.
 
 ## Logging
 

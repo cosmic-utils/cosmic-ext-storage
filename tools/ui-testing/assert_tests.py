@@ -142,16 +142,15 @@ def main() -> int:
         target for target in manifest.get("target", []) if target["phase"] == "workflow-v2"
     ]
     expected_workflow_targets = {
-        ("rust-integration", "application_workflows"),
         ("rust-lib", "cosmic_ext_storage"),
     }
-    if len(workflow_target) != 2 or {
+    if len(workflow_target) != 1 or {
         (target["kind"], target["name"]) for target in workflow_target
     } != expected_workflow_targets or any(
         target["package"] != "cosmic-ext-storage"
         or target.get("features") != ["test-backend"] for target in workflow_target
     ):
-        fail("workflow-v2 must select the production library tests and remaining integration workflows")
+        fail("workflow-v2 must select the production library handler tests")
     workflow_tests = {test for target in workflow_target for test in target["tests"]}
 
     workflow_names = list(matrix.get("workflow_v2_cross_cutting_tests", []))

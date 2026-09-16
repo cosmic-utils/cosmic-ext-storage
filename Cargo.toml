@@ -9,10 +9,6 @@ repository = "https://github.com/cosmic-utils/cosmic-ext-storage"
 [lib]
 doctest = false
 
-[[test]]
-name = "application_workflows"
-required-features = ["test-backend"]
-
 [features]
 default = [
     "btrfs-tools",

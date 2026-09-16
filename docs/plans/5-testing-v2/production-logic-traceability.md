@@ -268,3 +268,38 @@ Both intentional faults were restored immediately; no fault was committed.
 
 Exact required-name execution, strict app Clippy, formatting and the
 scenario-disabled build pass (`/tmp/production-image-{names,clippy,normal}.log`).
+
+### Reload/selection and harness retirement — 2026-09-16
+
+Eight real-handler cases cover overlapping lists/builds/finish events, duplicate
+or invalid device identities, atomic publication, failed-build preservation,
+selection by stable identity, missing selections, and background refresh leaving
+a running dialog intact. A real scenario-overlay change is observed through the
+same selected-runtime event stream used by the production subscription, then
+fed through the real load/navigation handlers. Invalid overlays preserve the
+previous model/generation. Two independent apps remain isolated while the real
+create and reload handlers execute under the strict no-global-lookup guard.
+
+The initial three tests reproduced all three bugs: stale lists were accepted,
+loading cleared the visible models, and background refresh closed an unrelated
+running dialog (`/tmp/production-reload-red.log`). Load UUIDs and a staging set
+now require every distinct build to complete successfully before publication.
+Failures retain the last complete snapshot and expose a refresh error. Normal
+complete updates invalidate old incremental results. Child selection is restored
+only when its identity still exists. Device subscriptions now carry the selected
+operations context rather than looking it up globally.
+
+Removed the final parallel reload reducer, the whole WorkflowHarness and its
+application state/public test facade, unused secrets/effect wrappers, old
+integration target and fixture, and dead global load wrappers. The supported
+workflow command and exact-name validator now execute the real library-handler
+tests. Shared rstest scenario/scratch fixtures and scenario/backend tests remain.
+Deleted files are recoverable in Git. The headless AppModel constructor is now
+test-only and called `for_handler_test`.
+
+Corrected parser tests that claimed runtime wiring, removed duplicate parser and
+function-reference assertions, and replaced the literal logical-form assertion
+with a real action/form round trip. Historical specs are not used as evidence of
+these new tests. Eight reload tests and all 120 library tests passed; disabling
+the actual LoadDrivesIncremental dispatch failed four cases
+(`/tmp/production-reload-{final,suite,mutation}.log`), then the fault was restored.

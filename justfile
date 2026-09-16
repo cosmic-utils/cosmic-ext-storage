@@ -42,7 +42,7 @@ ui-assert-tests phase='all':
 # session, or accessibility stack.
 app-workflow-check:
     just ui-assert-tests phase='workflow-v2'
-    cargo test -p cosmic-ext-storage --features test-backend --locked --test application_workflows
+    cargo test -p cosmic-ext-storage --features test-backend --locked --lib production_handler_tests
 
 # Build and execute the same isolated Testcontainers storage lab used by CI.
 # The private lab, rather than the host, owns every loop-backed mutation.

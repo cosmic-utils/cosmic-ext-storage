@@ -332,7 +332,7 @@ async fn workflow_app() -> AppModel {
     let drives = load_all_drives_with_operations(runtime.operations())
         .await
         .unwrap();
-    let mut app = AppModel::for_workflow_test(runtime);
+    let mut app = AppModel::for_handler_test(runtime);
     assert!(
         outputs(update(&mut app, Message::UpdateNav(drives, None)))
             .await

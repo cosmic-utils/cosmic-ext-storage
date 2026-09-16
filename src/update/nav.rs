@@ -13,7 +13,10 @@ pub(super) fn update_nav(
     app: &mut AppModel,
     drive_models: Vec<UiDrive>,
     selected: Option<String>,
+    close_running_dialog: bool,
 ) -> Task<Message> {
+    // A complete explicit refresh supersedes any older incremental results.
+    app.sidebar.finish_drive_loading();
     // Cache drive models for the custom sidebar tree.
     app.sidebar.set_drives(drive_models.clone());
 
@@ -36,7 +39,7 @@ pub(super) fn update_nav(
         _ => false,
     };
 
-    if should_close {
+    if close_running_dialog && should_close {
         app.dialog = None;
     }
 
@@ -57,7 +60,9 @@ pub(super) fn update_nav(
 
     let mut drive_entities: HashMap<String, cosmic::widget::nav_bar::Id> = HashMap::new();
 
-    let selected = selected.or_else(|| drive_models.first().map(|d| d.device().to_string()));
+    let selected = selected
+        .filter(|device| drive_models.iter().any(|drive| drive.device() == device))
+        .or_else(|| drive_models.first().map(|d| d.device().to_string()));
 
     for drive in &drive_models {
         let icon_name = if drive.disk.removable {
@@ -114,6 +119,24 @@ pub(super) fn update_nav(
     }
 
     app.sidebar.set_drive_entities(drive_entities);
+
+    // Restore a selected volume by identity, never by its old segment index.
+    if let Some(crate::state::sidebar::SidebarNodeKey::Volume(device)) =
+        app.sidebar.selected_child.clone()
+    {
+        if let Some(control) = app.nav.active_data_mut::<VolumesControl>()
+            && let Some((index, is_child)) =
+                crate::state::volumes::find_segment_for_volume(control, &device)
+        {
+            control.selected_segment = index;
+            control.selected_volume = is_child.then_some(device);
+            for (segment_index, segment) in control.segments.iter_mut().enumerate() {
+                segment.state = segment_index == index;
+            }
+        } else {
+            app.sidebar.selected_child = None;
+        }
+    }
 
     //  Trigger BTRFS data loading for activated drive
     if let Some(volumes_control) = app.nav.active_data::<VolumesControl>()

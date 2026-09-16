@@ -143,49 +143,95 @@ pub(crate) fn update(app: &mut AppModel, message: Message) -> Task<Message> {
         }
         Message::LoadDrivesIncremental => {
             let operations = app.runtime.operations();
+            let load_id = app.sidebar.start_drive_loading();
             return Task::perform(
                 async move {
                     load_drive_candidates_with_operations(operations)
                         .await
                         .map_err(|error| error.to_string())
                 },
-                |result| Message::DriveListLoaded(result).into(),
+                move |result| Message::DriveListLoaded { load_id, result }.into(),
             );
         }
-        Message::DriveListLoaded(result) => match result {
-            Ok(disks) => {
-                app.sidebar.start_drive_loading(disks.len());
-                if disks.is_empty() {
-                    return Task::done(cosmic::Action::App(Message::DriveLoadFinished));
+        Message::DriveListLoaded { load_id, result } => {
+            if app.sidebar.load_id != Some(load_id) || !app.sidebar.awaiting_drive_list {
+                return Task::none();
+            }
+            app.sidebar.awaiting_drive_list = false;
+            match result {
+                Ok(disks) => {
+                    app.sidebar.pending_devices =
+                        disks.iter().map(|disk| disk.device.clone()).collect();
+                    if app.sidebar.pending_devices.len() != disks.len()
+                        || app.sidebar.pending_devices.contains("")
+                    {
+                        app.sidebar.drive_load_error =
+                            Some("Invalid or duplicate device identity in refresh".into());
+                        app.sidebar.finish_drive_loading();
+                        return Task::none();
+                    }
+                    app.sidebar.drive_builds_pending = disks.len();
+                    if disks.is_empty() {
+                        return Task::done(Message::DriveLoadFinished { load_id }.into());
+                    }
+                    return Task::batch(disks.into_iter().map(|disk| {
+                        let device = disk.device.clone();
+                        Task::perform(
+                            build_drive_timed_with_operations(disk, app.runtime.operations()),
+                            move |(result, elapsed_ms)| {
+                                Message::DriveLoaded {
+                                    load_id,
+                                    device: device.clone(),
+                                    result,
+                                    elapsed_ms,
+                                }
+                                .into()
+                            },
+                        )
+                    }));
                 }
-                return Task::batch(disks.into_iter().map(|disk| {
-                    Task::perform(
-                        build_drive_timed_with_operations(disk, app.runtime.operations()),
-                        |(result, elapsed_ms)| Message::DriveLoaded { result, elapsed_ms }.into(),
-                    )
-                }));
-            }
-            Err(error) => {
-                app.sidebar.finish_drive_loading();
-                tracing::error!(%error, "failed to load drive candidates");
-            }
-        },
-        Message::DriveLoadStarted { total } => app.sidebar.start_drive_loading(total),
-        Message::DriveLoaded { result, elapsed_ms } => {
-            tracing::debug!(elapsed_ms, "incremental drive load completed");
-            if let Ok(drive) = result {
-                app.sidebar.upsert_drive_sorted(drive);
-            }
-            if app.sidebar.mark_drive_build_finished() {
-                return Task::done(cosmic::Action::App(Message::DriveLoadFinished));
+                Err(error) => {
+                    app.sidebar.drive_load_error = Some(error);
+                    app.sidebar.finish_drive_loading();
+                }
             }
         }
-        Message::DriveLoadFinished => {
+        Message::DriveLoaded {
+            load_id,
+            device,
+            result,
+            elapsed_ms,
+        } => {
+            if app.sidebar.load_id != Some(load_id) || !app.sidebar.pending_devices.remove(&device)
+            {
+                return Task::none();
+            }
+            tracing::debug!(elapsed_ms, "incremental drive load completed");
+            match result {
+                Ok(drive) if drive.device() == device => app.sidebar.pending_drives.push(drive),
+                Ok(_) => {
+                    app.sidebar.drive_load_error =
+                        Some("Drive identity changed during refresh".into())
+                }
+                Err(error) => app.sidebar.drive_load_error = Some(error),
+            }
+            app.sidebar.drive_builds_pending = app.sidebar.pending_devices.len();
+            if app.sidebar.drive_builds_pending == 0 {
+                return Task::done(Message::DriveLoadFinished { load_id }.into());
+            }
+        }
+        Message::DriveLoadFinished { load_id } => {
+            if app.sidebar.load_id != Some(load_id)
+                || app.sidebar.awaiting_drive_list
+                || !app.sidebar.pending_devices.is_empty()
+            {
+                return Task::none();
+            }
+            let drives = app.sidebar.take_pending_drives();
             app.sidebar.finish_drive_loading();
-            return Task::done(cosmic::Action::App(Message::UpdateNav(
-                app.sidebar.drives.clone(),
-                None,
-            )));
+            if app.sidebar.drive_load_error.is_none() {
+                return nav::update_nav(app, drives, None, false);
+            }
         }
         Message::LogicalViewRequested { device_path } => {
             app.network.select(None, None);
@@ -1232,7 +1278,7 @@ pub(crate) fn update(app: &mut AppModel, message: Message) -> Task<Message> {
             }
         }
         Message::UpdateNav(drive_models, selected) => {
-            return nav::update_nav(app, drive_models, selected);
+            return nav::update_nav(app, drive_models, selected, true);
         }
 
         // BTRFS management
@@ -1265,18 +1311,19 @@ pub(crate) fn update(app: &mut AppModel, message: Message) -> Task<Message> {
                 .map(|v| (v.detail_tab, v.btrfs_state.clone(), v.usage_state.clone()));
 
             // Update drives while preserving child volume selection
-            let task = nav::update_nav(app, drive_models, None);
+            let task = nav::update_nav(app, drive_models, None, true);
 
             // Restore child selection if provided
             if let Some(device_path) = child_device_path {
-                app.sidebar.selected_child = Some(crate::state::sidebar::SidebarNodeKey::Volume(
-                    device_path.clone(),
-                ));
+                app.sidebar.selected_child = None;
 
                 if let Some(control) = app.nav.active_data_mut::<VolumesControl>()
                     && let Some((segment_idx, is_child)) =
                         crate::state::volumes::find_segment_for_volume(control, &device_path)
                 {
+                    app.sidebar.selected_child = Some(
+                        crate::state::sidebar::SidebarNodeKey::Volume(device_path.clone()),
+                    );
                     control.selected_volume = if is_child {
                         Some(device_path.clone())
                     } else {
@@ -1362,6 +1409,12 @@ pub(crate) fn update(app: &mut AppModel, message: Message) -> Task<Message> {
             app.sidebar.selected_child = None;
         }
         Message::SidebarSelectChild { device_path } => {
+            if !app.sidebar.drives.iter().any(|drive| {
+                crate::state::volumes::find_volume_in_ui_tree(&drive.volumes, &device_path)
+                    .is_some()
+            }) {
+                return Task::none();
+            }
             app.network.select(None, None);
             app.network.clear_editor();
             app.logical.leave_view();

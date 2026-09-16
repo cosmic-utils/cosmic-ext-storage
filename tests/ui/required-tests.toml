@@ -61,7 +61,15 @@ tests = [
   "update::production_handler_tests::image_usage::usage_old_scan_and_delete_cannot_change_replacement_state",
   "update::production_handler_tests::image_usage::usage_cancelled_wizard_and_invalid_selection_never_start",
   "update::production_handler_tests::image_usage::usage_running_adapter_waits_for_virtual_completion",
-  "update::production_handler_tests::image_usage::usage_unsupported_adapter_surfaces_error_without_success"
+  "update::production_handler_tests::image_usage::usage_unsupported_adapter_surfaces_error_without_success",
+  "update::production_handler_tests::reload::late_list_cannot_restart_or_replace_completed_refresh",
+  "update::production_handler_tests::reload::refresh_keeps_published_models_until_all_builds_succeed",
+  "update::production_handler_tests::reload::background_refresh_preserves_running_dialog",
+  "update::production_handler_tests::reload::scenario_reload_event_refreshes_actual_models_and_rejects_invalid_overlay",
+  "update::production_handler_tests::reload::duplicate_build_and_old_finish_cannot_publish_over_new_refresh",
+  "update::production_handler_tests::reload::duplicate_device_candidates_are_rejected_without_publishing",
+  "update::production_handler_tests::reload::refresh_preserves_valid_selection_and_drops_missing_identity",
+  "update::production_handler_tests::reload::selected_runtimes_remain_isolated_through_real_handlers"
 ]
 
 [[target]]
@@ -148,11 +156,9 @@ kind = "rust-integration"
 name = "ui_runtime_contract"
 features = ["ui-test"]
 tests = [
-  "app_runtime_uses_injected_operations_for_startup_and_updates",
-  "device_subscription_uses_selected_runtime",
-  "background_tasks_do_not_reconstruct_operations",
-  "production_runtime_constructs_real_registry_once",
-  "runtime_test_facade_dispatches_without_desktop_server"
+  "runtime_request_parses_explicit_real_backend",
+  "runtime_request_parses_scenario_fixture_without_bootstrapping",
+  "scenario_secret_stdin_requires_explicit_scenario_mode"
 ]
 
 [[target]]
@@ -238,19 +244,6 @@ package = "cosmic-ext-storage"
 kind = "rust-integration"
 name = "scenario_feature_disabled_contract"
 tests = ["feature_disabled_scenario_request_fails_before_real_factory"]
-
-[[target]]
-phase = "workflow-v2"
-package = "cosmic-ext-storage"
-kind = "rust-integration"
-name = "application_workflows"
-features = ["test-backend"]
-tests = [
-  "workflow_harness_uses_only_selected_scenario_runtime",
-  "scenario_reload_is_atomic_and_generation_checked_by_the_application",
-  "reload_stale_completion_cannot_move_virtual_time_backwards",
-  "workflow_effects_do_not_call_global_operations_context"
-]
 
 [[target]]
 phase = "8"

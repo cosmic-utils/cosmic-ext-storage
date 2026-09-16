@@ -123,7 +123,7 @@ impl AppRuntime {
     /// Test-only variant of scenario composition that receives fixture secret
     /// values out of band. The map is consumed by the scenario runtime; it is
     /// never written to a fixture, overlay, trace, socket, or environment.
-    #[cfg(feature = "test-backend")]
+    #[cfg(all(test, feature = "test-backend"))]
     pub(crate) fn scenario_with_fixture_secrets(
         fixture: PathBuf,
         overlay: Option<PathBuf>,

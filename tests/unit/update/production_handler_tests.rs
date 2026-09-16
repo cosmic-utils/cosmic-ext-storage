@@ -23,6 +23,9 @@ mod network;
 #[path = "production_image_usage_tests.rs"]
 mod image_usage;
 
+#[path = "production_reload_tests.rs"]
+mod reload;
+
 async fn outputs(task: Task<Message>) -> Vec<Message> {
     let Some(mut stream) = cosmic::iced::runtime::task::into_stream(task) else {
         return Vec::new();
@@ -73,7 +76,7 @@ async fn physical_app() -> AppModel {
     let drives = load_all_drives_with_operations(runtime.operations())
         .await
         .unwrap();
-    let mut app = AppModel::for_workflow_test(runtime);
+    let mut app = AppModel::for_handler_test(runtime);
     app.filesystem_tools =
         crate::operations::FilesystemsClient::with_operations(app.runtime.operations())
             .get_filesystem_tools()

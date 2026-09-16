@@ -7,22 +7,10 @@ use crate::operations::{DisksClient, error::OperationError};
 use std::time::Instant;
 use storage_types::DiskInfo;
 
-pub async fn load_drive_candidates() -> Result<Vec<DiskInfo>, OperationError> {
-    DisksClient::new().await?.list_disks().await
-}
-
 pub async fn load_drive_candidates_with_operations(
     operations: std::sync::Arc<crate::operations::StorageOperations>,
 ) -> Result<Vec<DiskInfo>, OperationError> {
     DisksClient::with_operations(operations).list_disks().await
-}
-
-pub async fn build_drive_timed(disk: DiskInfo) -> (Result<UiDrive, String>, u128) {
-    let operations = match crate::operations::shared().await {
-        Ok(operations) => operations,
-        Err(error) => return (Err(error.to_string()), 0),
-    };
-    build_drive_timed_with_operations(disk, operations).await
 }
 
 pub async fn build_drive_timed_with_operations(

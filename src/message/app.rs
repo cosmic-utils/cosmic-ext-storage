@@ -34,15 +34,19 @@ pub enum Message {
     DriveRemoved(String),
     DriveAdded(String),
     LoadDrivesIncremental,
-    DriveListLoaded(Result<Vec<DiskInfo>, String>),
-    DriveLoadStarted {
-        total: usize,
+    DriveListLoaded {
+        load_id: uuid::Uuid,
+        result: Result<Vec<DiskInfo>, String>,
     },
     DriveLoaded {
+        load_id: uuid::Uuid,
+        device: String,
         result: Result<UiDrive, String>,
         elapsed_ms: u128,
     },
-    DriveLoadFinished,
+    DriveLoadFinished {
+        load_id: uuid::Uuid,
+    },
     None,
     UpdateNav(Vec<UiDrive>, Option<String>),
     /// Completion belongs only to the dialog that submitted this operation.

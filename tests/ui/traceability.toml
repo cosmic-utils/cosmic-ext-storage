@@ -2,10 +2,7 @@
 # from contract-surface-v1.toml; this file intentionally never repeats method IDs.
 schema_version = 1
 contract_inventory = "docs/plans/4-testing/contract-surface-v1.toml"
-workflow_v2_cross_cutting_tests = [
-  "workflow_harness_uses_only_selected_scenario_runtime",
-  "workflow_effects_do_not_call_global_operations_context"
-]
+workflow_v2_cross_cutting_tests = ["update::production_handler_tests::reload::selected_runtimes_remain_isolated_through_real_handlers"]
 
 [[generated_contract_rows]]
 families = [
@@ -170,6 +167,11 @@ in_process_test = "scenario_reload_is_atomic_and_refreshes_once"
 e2e_case = "live_scenario_reload"
 runtime_field = "AppRuntime.scenario_control,AppRuntime.operations"
 application_workflow_tests = [
-  "scenario_reload_is_atomic_and_generation_checked_by_the_application",
-  "reload_stale_completion_cannot_move_virtual_time_backwards"
+  "update::production_handler_tests::reload::late_list_cannot_restart_or_replace_completed_refresh",
+  "update::production_handler_tests::reload::refresh_keeps_published_models_until_all_builds_succeed",
+  "update::production_handler_tests::reload::background_refresh_preserves_running_dialog",
+  "update::production_handler_tests::reload::scenario_reload_event_refreshes_actual_models_and_rejects_invalid_overlay",
+  "update::production_handler_tests::reload::duplicate_build_and_old_finish_cannot_publish_over_new_refresh",
+  "update::production_handler_tests::reload::duplicate_device_candidates_are_rejected_without_publishing",
+  "update::production_handler_tests::reload::refresh_preserves_valid_selection_and_drops_missing_identity"
 ]
