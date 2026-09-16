@@ -4,8 +4,7 @@ schema_version = 1
 contract_inventory = "docs/plans/4-testing/contract-surface-v1.toml"
 workflow_v2_cross_cutting_tests = [
   "workflow_harness_uses_only_selected_scenario_runtime",
-  "workflow_effects_do_not_call_global_operations_context",
-  "workflow_facade_covers_every_migrated_path"
+  "workflow_effects_do_not_call_global_operations_context"
 ]
 
 [[generated_contract_rows]]
@@ -85,8 +84,14 @@ in_process_test = "physical_scenario_drives_dialog_and_refresh"
 e2e_case = "logical_preflight_confirmation"
 runtime_field = "AppRuntime.operations"
 application_workflow_tests = [
-  "logical_open_preflight_confirm_executes_once_and_refreshes_once",
-  "logical_stale_preflight_completion_is_rejected"
+  "update::production_handler_tests::logical::confirmation_executes_once_and_schedules_both_real_refreshes",
+  "update::production_handler_tests::logical::cancelled_confirmation_and_changed_identity_cannot_execute",
+  "update::production_handler_tests::logical::cancelled_preflight_cannot_reopen_confirmation",
+  "update::production_handler_tests::logical::stale_candidate_capture_cannot_change_current_selection::case_1_replaced",
+  "update::production_handler_tests::logical::stale_candidate_capture_cannot_change_current_selection::case_2_left_view",
+  "update::production_handler_tests::logical::stale_topology_does_not_replace_current_candidate_resolution",
+  "update::production_handler_tests::logical::operation_failure_clears_pending_without_success_refresh",
+  "update::production_handler_tests::logical::action_form_validates_input_and_cancel_clears_actual_dialog"
 ]
 
 [[flow]]

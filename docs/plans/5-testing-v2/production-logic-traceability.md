@@ -111,3 +111,39 @@ create-clippy,no-scenario,python}.log`. Final workspace coverage/CI remain pendi
 Other families remain open.
 
 The frozen dependency pins are unchanged.
+
+### Logical slice — 2026-09-16
+
+Eight tests now drive the real logical message handlers, confirmation dialog,
+selected operation adapter and completion/refresh routes. They cover exact-once
+confirmation, changed identity, cancelled preflight/confirmation, stale candidate
+capture after navigation, stale topology resolution, failed execution without a
+success refresh, and actual form validation/cancellation.
+
+Fixed production gaps exposed by those tests:
+
+- Candidate capture now carries a navigation generation and cannot restore a
+  selection after the user left or selected a different candidate.
+- A stale topology completion previously overwrote candidate resolution before
+  checking its generation. The generation check now precedes all result mutation.
+- Post-success incremental drive discovery/build now receives the app runtime
+  explicitly, like the logical operation itself.
+
+The global-context detector is stricter for handler tests: it fails immediately
+even when a production handler would swallow the returned lookup error. That
+change exposed the incremental-refresh lookup (`/tmp/production-logical-strict-red.log`).
+Legacy harness self-tests still deliberately check the non-panicking rejection.
+The guard is thread-local and non-Send; tests use Tokio's current-thread executor.
+
+Removed `src/workflows/logical.rs`, its private harness dispatch/effects/state,
+the two parallel logical tests, and the hard-coded five-name facade verifier.
+These tracked files/history remain recoverable in Git. No production logical
+state was replaced by the test reducer. Exact required names/flow mappings now
+refer to the library-handler cases.
+
+A deliberate local fault disabling the real confirmation executor caused the
+new success test to fail on missing production pending state; it was restored
+before validation (`/tmp/production-logical-mutation.log`). The normal run passed
+82 library tests, 10 remaining integration workflows and 8 logical-state tests
+(`/tmp/production-logical-final.log`). Remaining families and full coverage/CI
+are still outstanding.

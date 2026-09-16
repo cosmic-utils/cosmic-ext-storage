@@ -8,6 +8,9 @@ use futures_util::StreamExt;
 use rstest::{fixture, rstest};
 use storage_types::CreatePartitionInfo;
 
+#[path = "production_logical_tests.rs"]
+mod logical;
+
 async fn outputs(task: Task<Message>) -> Vec<Message> {
     let Some(mut stream) = cosmic::iced::runtime::task::into_stream(task) else {
         return Vec::new();
@@ -104,7 +107,7 @@ fn partition_dialog(app: &mut AppModel) -> &mut CreatePartitionDialog {
 async fn create_routes_to_selected_runtime_and_refreshes_actual_models(
     #[future(awt)] mut physical_app: AppModel,
 ) {
-    let _guard = crate::operations::reject_global_operations_for_workflow_tests();
+    let _guard = crate::operations::forbid_global_operations_for_handler_tests();
     let app = &mut physical_app;
     let task = create(app, CreateMessage::Partition);
     assert!(partition_dialog(app).running);
@@ -144,7 +147,7 @@ async fn create_cancel_and_missing_dialog_have_no_effect(
     #[future(awt)] mut physical_app: AppModel,
     #[case] message: CreateMessage,
 ) {
-    let _guard = crate::operations::reject_global_operations_for_workflow_tests();
+    let _guard = crate::operations::forbid_global_operations_for_handler_tests();
     if matches!(message, CreateMessage::Partition) {
         physical_app.dialog = None;
     }
@@ -179,7 +182,7 @@ async fn create_submission_revalidates_form_without_side_effects(
     #[case] password: &str,
     #[case] confirmation: &str,
 ) {
-    let _guard = crate::operations::reject_global_operations_for_workflow_tests();
+    let _guard = crate::operations::forbid_global_operations_for_handler_tests();
     let state = partition_dialog(&mut physical_app);
     state.info.size = size;
     state.filesystem_tools[0].available = available;
@@ -210,7 +213,7 @@ async fn create_submission_revalidates_form_without_side_effects(
 async fn create_failure_surfaces_error_without_refreshing_navigation(
     #[future(awt)] mut physical_app: AppModel,
 ) {
-    let _guard = crate::operations::reject_global_operations_for_workflow_tests();
+    let _guard = crate::operations::forbid_global_operations_for_handler_tests();
     physical_app
         .nav
         .active_data_mut::<VolumesControl>()
@@ -253,7 +256,7 @@ async fn format_uses_selected_runtime_and_handles_invalid_targets(
     #[case] device_present: bool,
     #[case] tool_available: bool,
 ) {
-    let _guard = crate::operations::reject_global_operations_for_workflow_tests();
+    let _guard = crate::operations::forbid_global_operations_for_handler_tests();
     let app = &mut physical_app;
     let info = partition_dialog(app).info.clone();
     let task = create(app, CreateMessage::Partition);
@@ -337,7 +340,7 @@ async fn format_uses_selected_runtime_and_handles_invalid_targets(
 async fn create_completion_does_not_close_a_replacement_idle_dialog(
     #[future(awt)] mut physical_app: AppModel,
 ) {
-    let _guard = crate::operations::reject_global_operations_for_workflow_tests();
+    let _guard = crate::operations::forbid_global_operations_for_handler_tests();
     let app = &mut physical_app;
     let task = create(app, CreateMessage::Partition);
     let completions = outputs(task).await;
@@ -370,7 +373,7 @@ async fn old_partition_completion_cannot_replace_a_new_running_dialog(
     #[future(awt)] mut physical_app: AppModel,
     #[case] failing: bool,
 ) {
-    let _guard = crate::operations::reject_global_operations_for_workflow_tests();
+    let _guard = crate::operations::forbid_global_operations_for_handler_tests();
     let app = &mut physical_app;
     let replacement = partition_dialog(app).clone();
     if failing {

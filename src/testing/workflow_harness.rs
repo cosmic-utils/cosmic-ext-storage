@@ -12,8 +12,7 @@ use crate::{
     AppModel, AppRuntime,
     operations::GlobalOperationsGuard,
     workflows::{
-        EffectRecord, SecretInput, WorkflowCapabilities, image_usage, logical, network, physical,
-        reload,
+        EffectRecord, SecretInput, WorkflowCapabilities, image_usage, network, physical, reload,
     },
 };
 
@@ -88,7 +87,6 @@ pub struct TraceProjection {
 }
 
 enum ScheduledEffect {
-    Logical(logical::Effect),
     Physical(physical::Effect),
     Network(network::Effect),
     ImageUsage(image_usage::Effect),
@@ -98,7 +96,6 @@ enum ScheduledEffect {
 impl ScheduledEffect {
     fn workflow(&self) -> &'static str {
         match self {
-            Self::Logical(_) => "logical",
             Self::Physical(_) => "physical",
             Self::Network(_) => "network",
             Self::ImageUsage(_) => "image_usage",
@@ -108,7 +105,6 @@ impl ScheduledEffect {
 
     fn operation(&self) -> &'static str {
         match self {
-            Self::Logical(effect) => effect.operation(),
             Self::Physical(effect) => effect.operation(),
             Self::Network(effect) => effect.operation(),
             Self::ImageUsage(effect) => effect.operation(),
@@ -118,7 +114,6 @@ impl ScheduledEffect {
 
     fn generation(&self) -> u64 {
         match self {
-            Self::Logical(effect) => effect.generation(),
             Self::Physical(effect) => effect.generation(),
             Self::Network(effect) => effect.generation(),
             Self::ImageUsage(effect) => effect.generation(),
@@ -132,7 +127,6 @@ impl ScheduledEffect {
 }
 
 enum ScheduledCompletion {
-    Logical(logical::Completion),
     Physical(physical::Completion),
     Network(network::Completion),
     ImageUsage(image_usage::Completion),
@@ -142,9 +136,6 @@ enum ScheduledCompletion {
 impl ScheduledCompletion {
     fn status(&self) -> &'static str {
         match self {
-            Self::Logical(logical::Completion::Captured { result, .. }) => status(result),
-            Self::Logical(logical::Completion::Preflighted { result, .. }) => status(result),
-            Self::Logical(logical::Completion::Executed { result, .. }) => status(result),
             Self::Physical(physical::Completion::Finished { result, .. }) => status(result),
             Self::Network(network::Completion::Created { result, .. }) => status(result),
             Self::Network(network::Completion::Tested { result, .. }) => status(result),
@@ -242,16 +233,6 @@ impl WorkflowHarness {
         self.runtime.operations().registry.block.id().0
     }
 
-    pub fn dispatch_logical(
-        &mut self,
-        intent: logical::LogicalIntent,
-    ) -> Result<(), WorkflowHarnessError> {
-        self.next_generation();
-        let effects = self.model.reduce_logical_workflow(intent);
-        self.enqueue_logical(effects);
-        Ok(())
-    }
-
     pub fn dispatch_physical(
         &mut self,
         intent: physical::PhysicalIntent,
@@ -290,10 +271,6 @@ impl WorkflowHarness {
         let effects = self.model.reduce_reload_workflow(intent, generation);
         self.enqueue_reload(effects);
         Ok(())
-    }
-
-    pub fn logical_snapshot(&self) -> logical::LogicalSnapshot {
-        self.model.workflows.logical.snapshot()
     }
 
     pub fn physical_snapshot(&self) -> physical::PhysicalSnapshot {
@@ -336,9 +313,6 @@ impl WorkflowHarness {
             has_secret: effect.has_secret(),
         });
         let completion = match effect {
-            ScheduledEffect::Logical(effect) => {
-                ScheduledCompletion::Logical(logical::execute(&self.capabilities, effect).await)
-            }
             ScheduledEffect::Physical(effect) => {
                 ScheduledCompletion::Physical(physical::execute(&self.capabilities, effect).await)
             }
@@ -362,11 +336,6 @@ impl WorkflowHarness {
             return Ok(false);
         };
         match completion {
-            ScheduledCompletion::Logical(completion) => {
-                let effects =
-                    logical::reduce_completion(&mut self.model.workflows.logical, completion);
-                self.enqueue_logical(effects);
-            }
             ScheduledCompletion::Physical(completion) => {
                 physical::reduce_completion(&mut self.model.workflows.physical, completion);
             }
@@ -493,11 +462,6 @@ impl WorkflowHarness {
         fs::write(&self.trace, bytes).map_err(|_| WorkflowHarnessError::TemporaryRootUnavailable)
     }
 
-    fn enqueue_logical(&mut self, effects: Vec<logical::Effect>) {
-        self.queue
-            .extend(effects.into_iter().map(ScheduledEffect::Logical));
-    }
-
     fn enqueue_physical(&mut self, effects: Vec<physical::Effect>) {
         self.queue
             .extend(effects.into_iter().map(ScheduledEffect::Physical));
@@ -568,19 +532,4 @@ fn resolve_repository_file(
         return Err(WorkflowHarnessError::InvalidFixtureReference);
     }
     Ok(canonical)
-}
-
-/// The public test facade deliberately has no `Message` input. This verifier
-/// keeps the five typed workflow entry points closed and distinct.
-pub fn verify_workflow_facade_contract() -> Result<(), WorkflowHarnessError> {
-    let routes = ["logical", "physical", "network", "image_usage", "reload"];
-    if routes.len() != 5 || routes.iter().any(|route| route.is_empty()) {
-        return Err(WorkflowHarnessError::SchedulerProtocolViolation);
-    }
-    for (index, route) in routes.iter().enumerate() {
-        if routes[..index].contains(route) {
-            return Err(WorkflowHarnessError::SchedulerProtocolViolation);
-        }
-    }
-    Ok(())
 }

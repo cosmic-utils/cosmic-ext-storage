@@ -93,14 +93,6 @@ impl AppModel {
     }
 
     #[cfg(feature = "test-backend")]
-    pub(crate) fn reduce_logical_workflow(
-        &mut self,
-        intent: crate::workflows::logical::LogicalIntent,
-    ) -> Vec<crate::workflows::logical::Effect> {
-        crate::workflows::logical::reduce_intent(&mut self.workflows.logical, intent)
-    }
-
-    #[cfg(feature = "test-backend")]
     pub(crate) fn reduce_physical_workflow(
         &mut self,
         intent: crate::workflows::physical::PhysicalIntent,

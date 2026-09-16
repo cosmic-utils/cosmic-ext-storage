@@ -2,9 +2,8 @@ mod common;
 use std::collections::BTreeMap;
 
 use cosmic_ext_storage::testing::{
-    FixtureSecrets, ImageUsageIntent, ImageUsagePhase, LogicalIntent, LogicalPhase, NetworkIntent,
-    NetworkPhase, PhysicalIntent, PhysicalPhase, ReloadIntent, ReloadPhase, SecretInput,
-    WorkflowHarness, verify_workflow_facade_contract,
+    FixtureSecrets, ImageUsageIntent, ImageUsagePhase, NetworkIntent, NetworkPhase, PhysicalIntent,
+    PhysicalPhase, ReloadIntent, ReloadPhase, SecretInput, WorkflowHarness,
 };
 use storage_types::ImageAssetRef;
 
@@ -28,94 +27,6 @@ async fn workflow_harness_uses_only_selected_scenario_runtime() {
     assert_eq!(second.selected_block_backend_id(), "ui-scenario");
     assert!(first.global_operations_lookup_is_rejected().await);
     assert!(second.global_operations_lookup_is_rejected().await);
-}
-
-#[rstest::rstest]
-#[tokio::test(flavor = "current_thread")]
-async fn logical_open_preflight_confirm_executes_once_and_refreshes_once(
-    #[from(common::workflow)]
-    #[with("logical/preflight.toml")]
-    #[future(awt)]
-    harness: WorkflowHarness,
-) {
-    let mut harness = harness;
-    harness
-        .dispatch_logical(LogicalIntent::Open {
-            device_path: "/dev/ui-disk0p1".into(),
-        })
-        .expect("open intent");
-    harness.drive_until_idle().await.expect("preflight flow");
-    assert_eq!(
-        harness.logical_snapshot().phase,
-        LogicalPhase::AwaitingConfirmation
-    );
-
-    harness
-        .dispatch_logical(LogicalIntent::Confirm)
-        .expect("confirm intent");
-    harness.drive_until_idle().await.expect("execute flow");
-
-    let snapshot = harness.logical_snapshot();
-    assert_eq!(snapshot.phase, LogicalPhase::Completed);
-    assert_eq!(snapshot.refresh_generation, 1);
-    assert_eq!(
-        harness
-            .effect_records()
-            .iter()
-            .map(|record| record.operation)
-            .collect::<Vec<_>>(),
-        vec![
-            "logical.capture_candidate",
-            "logical.preflight",
-            "logical.execute",
-        ]
-    );
-}
-
-#[rstest::rstest]
-#[tokio::test(flavor = "current_thread")]
-async fn logical_stale_preflight_completion_is_rejected(
-    #[from(common::workflow)]
-    #[with("logical/preflight.toml")]
-    #[future(awt)]
-    harness: WorkflowHarness,
-) {
-    let mut harness = harness;
-    harness
-        .dispatch_logical(LogicalIntent::Open {
-            device_path: "/dev/ui-disk0p1".into(),
-        })
-        .expect("first open");
-    assert!(
-        harness
-            .execute_scheduled()
-            .await
-            .expect("execute first capture")
-    );
-
-    harness
-        .dispatch_logical(LogicalIntent::Open {
-            device_path: "/dev/ui-disk0p1".into(),
-        })
-        .expect("replacement open");
-    assert!(harness.deliver_completion().expect("deliver stale capture"));
-    harness
-        .drive_until_idle()
-        .await
-        .expect("replacement preflight");
-
-    assert_eq!(
-        harness.logical_snapshot().phase,
-        LogicalPhase::AwaitingConfirmation
-    );
-    assert_eq!(
-        harness
-            .effect_records()
-            .iter()
-            .filter(|record| record.operation == "logical.preflight")
-            .count(),
-        1
-    );
 }
 
 #[rstest::rstest]
@@ -458,9 +369,4 @@ async fn workflow_effects_do_not_call_global_operations_context(
     harness: WorkflowHarness,
 ) {
     assert!(harness.global_operations_lookup_is_rejected().await);
-}
-
-#[tokio::test(flavor = "current_thread")]
-async fn workflow_facade_covers_every_migrated_path() {
-    verify_workflow_facade_contract().expect("workflow facade contract");
 }

@@ -21,7 +21,10 @@ use crate::fl;
 use crate::logging;
 use crate::message::app::{ImagePathPickerKind, Message};
 use crate::message::network::NetworkMessage;
-use crate::models::{build_drive_timed, load_all_drives, load_drive_candidates};
+use crate::models::{
+    load::{build_drive_timed_with_operations, load_drive_candidates_with_operations},
+    load_all_drives,
+};
 use crate::operations::FilesystemsClient;
 use crate::state::app::AppModel;
 use crate::state::dialogs::ShowDialog;
@@ -140,9 +143,10 @@ pub(crate) fn update(app: &mut AppModel, message: Message) -> Task<Message> {
             app.filesystem_tools = tools;
         }
         Message::LoadDrivesIncremental => {
+            let operations = app.runtime.operations();
             return Task::perform(
-                async {
-                    load_drive_candidates()
+                async move {
+                    load_drive_candidates_with_operations(operations)
                         .await
                         .map_err(|error| error.to_string())
                 },
@@ -156,9 +160,10 @@ pub(crate) fn update(app: &mut AppModel, message: Message) -> Task<Message> {
                     return Task::done(cosmic::Action::App(Message::DriveLoadFinished));
                 }
                 return Task::batch(disks.into_iter().map(|disk| {
-                    Task::perform(build_drive_timed(disk), |(result, elapsed_ms)| {
-                        Message::DriveLoaded { result, elapsed_ms }.into()
-                    })
+                    Task::perform(
+                        build_drive_timed_with_operations(disk, app.runtime.operations()),
+                        |(result, elapsed_ms)| Message::DriveLoaded { result, elapsed_ms }.into(),
+                    )
                 }));
             }
             Err(error) => {
@@ -188,11 +193,12 @@ pub(crate) fn update(app: &mut AppModel, message: Message) -> Task<Message> {
             app.network.clear_editor();
             app.sidebar.selected_child = None;
             app.logical.request_view(device_path.clone());
-            if app.logical.loading {
+            if app.logical.loading && device_path.is_none() {
                 return Task::none();
             }
             if let Some(device_path) = device_path {
                 let operations = app.runtime.operations();
+                let generation = app.logical.candidate_generation;
                 return Task::perform(
                     async move {
                         let result = operations
@@ -200,6 +206,7 @@ pub(crate) fn update(app: &mut AppModel, message: Message) -> Task<Message> {
                             .await
                             .map_err(|error| error.to_string());
                         Message::LogicalCandidateCaptured {
+                            generation,
                             device_path,
                             result,
                         }
@@ -210,22 +217,28 @@ pub(crate) fn update(app: &mut AppModel, message: Message) -> Task<Message> {
             return Task::done(cosmic::Action::App(Message::LoadLogicalEntities));
         }
         Message::LogicalCandidateCaptured {
+            generation,
             device_path,
             result,
-        } => match result {
-            Ok(anchor) => {
-                app.logical.request_candidate(Some(anchor));
-                return Task::done(cosmic::Action::App(Message::LoadLogicalEntities));
+        } => {
+            if !app.logical.view_requested || generation != app.logical.candidate_generation {
+                return Task::none();
             }
-            Err(error) => {
-                app.logical.selected_device = Some(device_path);
-                app.logical.candidate_resolution =
-                    Some(storage_types::LogicalCandidateResolution::Unavailable {
-                        source: "UDisks".into(),
-                        reason: error,
-                    });
+            match result {
+                Ok(anchor) => {
+                    app.logical.request_candidate(Some(anchor));
+                    return Task::done(cosmic::Action::App(Message::LoadLogicalEntities));
+                }
+                Err(error) => {
+                    app.logical.selected_device = Some(device_path);
+                    app.logical.candidate_resolution =
+                        Some(storage_types::LogicalCandidateResolution::Unavailable {
+                            source: "UDisks".into(),
+                            reason: error,
+                        });
+                }
             }
-        },
+        }
         Message::LoadLogicalEntities => {
             let generation = app.logical.begin_load();
             let request = storage_types::LogicalLoadRequest {

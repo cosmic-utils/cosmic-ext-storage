@@ -166,6 +166,16 @@ Keyboard cases retain an owned virtual keyboard device for the case lifetime;
 its regression rejects early process exit and verifies child termination/reaping.
 # Non-rendered production-handler migration (2026-09-16)
 
+Required logical production-route cases (replace the parallel logical workflow):
+- `update::production_handler_tests::logical::confirmation_executes_once_and_schedules_both_real_refreshes`
+- `update::production_handler_tests::logical::cancelled_confirmation_and_changed_identity_cannot_execute`
+- `update::production_handler_tests::logical::cancelled_preflight_cannot_reopen_confirmation`
+- `update::production_handler_tests::logical::stale_candidate_capture_cannot_change_current_selection::case_1_replaced`
+- `update::production_handler_tests::logical::stale_candidate_capture_cannot_change_current_selection::case_2_left_view`
+- `update::production_handler_tests::logical::stale_topology_does_not_replace_current_candidate_resolution`
+- `update::production_handler_tests::logical::operation_failure_clears_pending_without_success_refresh`
+- `update::production_handler_tests::logical::action_form_validates_input_and_cancel_clears_actual_dialog`
+
 Required stale/duplicate completion cases:
 - `update::production_handler_tests::old_partition_completion_cannot_replace_a_new_running_dialog::case_1_success`
 - `update::production_handler_tests::old_partition_completion_cannot_replace_a_new_running_dialog::case_2_failure`

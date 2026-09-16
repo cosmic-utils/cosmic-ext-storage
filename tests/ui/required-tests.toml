@@ -23,7 +23,15 @@ tests = [
   "update::production_handler_tests::format_uses_selected_runtime_and_handles_invalid_targets::case_3_missing_tool",
   "update::production_handler_tests::create_completion_does_not_close_a_replacement_idle_dialog",
   "update::production_handler_tests::old_partition_completion_cannot_replace_a_new_running_dialog::case_1_success",
-  "update::production_handler_tests::old_partition_completion_cannot_replace_a_new_running_dialog::case_2_failure"
+  "update::production_handler_tests::old_partition_completion_cannot_replace_a_new_running_dialog::case_2_failure",
+  "update::production_handler_tests::logical::confirmation_executes_once_and_schedules_both_real_refreshes",
+  "update::production_handler_tests::logical::cancelled_confirmation_and_changed_identity_cannot_execute",
+  "update::production_handler_tests::logical::cancelled_preflight_cannot_reopen_confirmation",
+  "update::production_handler_tests::logical::stale_candidate_capture_cannot_change_current_selection::case_1_replaced",
+  "update::production_handler_tests::logical::stale_candidate_capture_cannot_change_current_selection::case_2_left_view",
+  "update::production_handler_tests::logical::stale_topology_does_not_replace_current_candidate_resolution",
+  "update::production_handler_tests::logical::operation_failure_clears_pending_without_success_refresh",
+  "update::production_handler_tests::logical::action_form_validates_input_and_cancel_clears_actual_dialog"
 ]
 
 [[target]]
@@ -209,8 +217,6 @@ name = "application_workflows"
 features = ["test-backend"]
 tests = [
   "workflow_harness_uses_only_selected_scenario_runtime",
-  "logical_open_preflight_confirm_executes_once_and_refreshes_once",
-  "logical_stale_preflight_completion_is_rejected",
   "busy_unmount_keeps_actionable_error_and_does_not_refresh",
   "luks_unlock_uses_secret_input_and_redacts_every_projection",
   "network_create_mount_and_status_are_reduced_from_one_flow",
@@ -219,8 +225,7 @@ tests = [
   "usage_scan_and_delete_map_results_without_host_file_access",
   "scenario_reload_is_atomic_and_generation_checked_by_the_application",
   "reload_stale_completion_cannot_move_virtual_time_backwards",
-  "workflow_effects_do_not_call_global_operations_context",
-  "workflow_facade_covers_every_migrated_path"
+  "workflow_effects_do_not_call_global_operations_context"
 ]
 
 [[target]]

@@ -11,10 +11,29 @@ pub async fn load_drive_candidates() -> Result<Vec<DiskInfo>, OperationError> {
     DisksClient::new().await?.list_disks().await
 }
 
+pub async fn load_drive_candidates_with_operations(
+    operations: std::sync::Arc<crate::operations::StorageOperations>,
+) -> Result<Vec<DiskInfo>, OperationError> {
+    DisksClient::with_operations(operations).list_disks().await
+}
+
 pub async fn build_drive_timed(disk: DiskInfo) -> (Result<UiDrive, String>, u128) {
+    let operations = match crate::operations::shared().await {
+        Ok(operations) => operations,
+        Err(error) => return (Err(error.to_string()), 0),
+    };
+    build_drive_timed_with_operations(disk, operations).await
+}
+
+pub async fn build_drive_timed_with_operations(
+    disk: DiskInfo,
+    operations: std::sync::Arc<crate::operations::StorageOperations>,
+) -> (Result<UiDrive, String>, u128) {
     let started = Instant::now();
     let device = disk.device.clone();
-    let result = UiDrive::new(disk).await.map_err(|error| error.to_string());
+    let result = UiDrive::with_operations(disk, operations)
+        .await
+        .map_err(|error| error.to_string());
     let elapsed_ms = started.elapsed().as_millis();
     match &result {
         Ok(_) => tracing::info!(%device, elapsed_ms, "drive build complete"),

@@ -186,6 +186,7 @@ static SHARED_OPERATIONS: OnceCell<Arc<StorageOperations>> = OnceCell::const_new
 #[cfg(feature = "test-backend")]
 thread_local! {
     static REJECT_SHARED_OPERATIONS: Cell<u32> = const { Cell::new(0) };
+    static FAIL_SHARED_OPERATIONS: Cell<u32> = const { Cell::new(0) };
 }
 
 /// Test-only migration detector for application-workflow tests.
@@ -195,15 +196,33 @@ thread_local! {
 #[cfg(feature = "test-backend")]
 pub(crate) fn reject_global_operations_for_workflow_tests() -> GlobalOperationsGuard {
     REJECT_SHARED_OPERATIONS.with(|depth| depth.set(depth.get().saturating_add(1)));
-    GlobalOperationsGuard(PhantomData)
+    GlobalOperationsGuard {
+        strict: false,
+        marker: PhantomData,
+    }
+}
+
+/// Fail the test even if production would catch and discard the lookup error.
+#[cfg(all(test, feature = "test-backend"))]
+pub(crate) fn forbid_global_operations_for_handler_tests() -> GlobalOperationsGuard {
+    let mut guard = reject_global_operations_for_workflow_tests();
+    guard.strict = true;
+    FAIL_SHARED_OPERATIONS.with(|depth| depth.set(depth.get() + 1));
+    guard
 }
 
 #[cfg(feature = "test-backend")]
-pub(crate) struct GlobalOperationsGuard(PhantomData<Rc<()>>);
+pub(crate) struct GlobalOperationsGuard {
+    strict: bool,
+    marker: PhantomData<Rc<()>>,
+}
 
 #[cfg(feature = "test-backend")]
 impl Drop for GlobalOperationsGuard {
     fn drop(&mut self) {
+        if self.strict {
+            FAIL_SHARED_OPERATIONS.with(|depth| depth.set(depth.get() - 1));
+        }
         REJECT_SHARED_OPERATIONS.with(|depth| {
             let current = depth.get();
             assert!(current > 0, "workflow global-operations guard underflow");
@@ -224,6 +243,11 @@ pub fn install_selected(operations: Arc<StorageOperations>) -> Result<(), Operat
 /// before any task runs. This prevents a scenario task from falling back to
 /// host-backed operations.
 pub async fn shared() -> Result<Arc<StorageOperations>, OperationError> {
+    #[cfg(feature = "test-backend")]
+    assert!(
+        !FAIL_SHARED_OPERATIONS.with(|depth| depth.get() > 0),
+        "production handler attempted global operations context"
+    );
     #[cfg(feature = "test-backend")]
     if REJECT_SHARED_OPERATIONS.with(|depth| depth.get() > 0) {
         return Err(OperationError::Failed(

@@ -66,6 +66,7 @@ pub enum Message {
         device_path: Option<String>,
     },
     LogicalCandidateCaptured {
+        generation: u64,
         device_path: String,
         result: Result<LogicalCandidateAnchor, String>,
     },

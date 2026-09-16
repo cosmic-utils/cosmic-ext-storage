@@ -13,7 +13,6 @@ use storage_contracts::{DesktopServices, ScenarioControl};
 use crate::{operations::StorageOperations, runtime::AppRuntime};
 
 pub(crate) mod image_usage;
-pub(crate) mod logical;
 pub(crate) mod network;
 pub(crate) mod physical;
 pub(crate) mod reload;
@@ -119,7 +118,6 @@ impl Drop for SecretInput {
 /// harness. It contains no mock backend or parallel application model.
 #[derive(Default)]
 pub(crate) struct ApplicationWorkflowState {
-    pub(crate) logical: logical::State,
     pub(crate) physical: physical::State,
     pub(crate) network: network::State,
     pub(crate) image_usage: image_usage::State,

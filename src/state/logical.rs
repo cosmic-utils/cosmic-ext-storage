@@ -245,6 +245,8 @@ pub struct LogicalState {
     /// Typed navigation identity.  The display path above remains only while
     /// old sidebar routing is migrated; it is never used to form an action.
     pub selected_candidate: Option<LogicalCandidateAnchor>,
+    /// Invalidates asynchronous candidate captures across navigation/reopens.
+    pub candidate_generation: u64,
     pub candidate_resolution: Option<LogicalCandidateResolution>,
     pub entities: Vec<LogicalEntity>,
     pub selected: Option<LogicalEntityId>,
@@ -266,6 +268,7 @@ pub struct LogicalState {
 
 impl LogicalState {
     pub fn request_view(&mut self, device_path: Option<String>) {
+        self.candidate_generation = self.candidate_generation.saturating_add(1);
         self.view_requested = true;
         if let Some(device_path) = device_path {
             if self.selected_device.as_deref() != Some(&device_path) {
@@ -287,6 +290,7 @@ impl LogicalState {
     }
 
     pub fn leave_view(&mut self) {
+        self.candidate_generation = self.candidate_generation.saturating_add(1);
         self.view_requested = false;
         self.selected_device = None;
         self.selected_candidate = None;
@@ -311,6 +315,9 @@ impl LogicalState {
         generation: u64,
         result: Result<LogicalLoadResult, String>,
     ) -> bool {
+        if generation != self.logical_load_generation {
+            return false;
+        }
         match result {
             Ok(result) => {
                 self.candidate_resolution = Some(result.candidate_resolution.clone());
