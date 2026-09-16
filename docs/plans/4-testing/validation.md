@@ -1,5 +1,17 @@
 # Validation
 
+### Non-rendered audit correction (2026-09-16)
+
+The current adapter/presence checks are named accurately:
+`scenario_partition_adapter_creates_owned_device`,
+`scenario_image_and_usage_adapters_issue_operation_ids`, and
+`keyboard_case_manifest_is_present`. They do not prove dialog updates,
+rendered progress or keyboard accessibility. Production-handler requirements
+are listed separately in the current workflow-v2 manifest; keyboard execution
+remains deferred. The old `operation_workflow_contract` target was removed:
+its parser/type-name/function-pointer assertions did not exercise routing or
+establish removal of the retained native image bridge.
+
 ## Required automated coverage
 
 The names below are required, not examples. They are stored once in

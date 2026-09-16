@@ -10,7 +10,7 @@ use storage_types::{
 
 #[rstest::rstest]
 #[tokio::test]
-async fn physical_scenario_drives_dialog_and_refresh(
+async fn scenario_partition_adapter_creates_owned_device(
     #[from(common::scenario)]
     #[with("physical/partition-format.toml")]
     runtime: AppRuntime,
@@ -44,7 +44,7 @@ async fn configured_backend_error_remains_actionable(
 
 #[rstest::rstest]
 #[tokio::test]
-async fn usage_and_image_progress_render_from_contract_events(
+async fn scenario_image_and_usage_adapters_issue_operation_ids(
     #[from(common::scenario)]
     #[with("workflows/image-usage.toml")]
     runtime: AppRuntime,
@@ -134,8 +134,8 @@ async fn network_scenario_exercises_crud_and_mount_state() {
 }
 
 #[test]
-fn keyboard_dialog_flow_has_named_controls() {
-    // The runner requires semantic control names; cases declare them in TOML.
+fn keyboard_case_manifest_is_present() {
+    // Presence is not evidence of focus routing or executed keyboard controls.
     assert!(std::path::Path::new("tests/ui/cases/keyboard_accessibility.toml").exists());
 }
 

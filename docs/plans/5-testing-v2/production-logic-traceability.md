@@ -303,3 +303,28 @@ with a real action/form round trip. Historical specs are not used as evidence of
 these new tests. Eight reload tests and all 120 library tests passed; disabling
 the actual LoadDrivesIncremental dispatch failed four cases
 (`/tmp/production-reload-{final,suite,mutation}.log`), then the fault was restored.
+
+### Final audit corrections — 2026-09-16
+
+The later Btrfs action/form round-trip addition used the invalid domain prefix
+`btrfs-fs:`. CI and the first final coverage run caught it; the fixture now uses
+the contract's `btrfs:` prefix. The earlier 120-test result preceded this added
+assertion and did not validate it. The failed host run (`run-zusipsok`, exit 101)
+is not final coverage evidence, although all 17 native outer cases passed.
+
+The image-start test now delivers the actual startup completion twice, not just
+two Start requests. It reproduced an unconsumed startup identity
+(`/tmp/non-rendered-image-duplicate-red.log`). Successful startup now consumes
+that identity; duplicate completion for the current operation is ignored without
+cancelling or forgetting it. The test verifies the selected adapter still reports
+Running. Orphaned starts retain their owned-operation cleanup path. Scope: app
+image orchestration only, no dependency or native-copy-engine changes.
+
+All 120 library tests pass after both corrections
+(`/tmp/non-rendered-final-lib.log`). Removed the five misleading
+`operation_workflow_contract` checks (parser/type-name/function-pointer tests),
+whose names claimed production routing and bridge removal. Existing real-handler
+and backend contract tests remain; desktop-service routing is not established by
+a Rust type name. Scenario partition/image/usage checks and keyboard manifest
+presence are renamed to state exactly what they assert. The keyboard presence
+check does not prove accessibility. Deleted tests remain recoverable in Git.

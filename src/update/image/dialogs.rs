@@ -206,6 +206,10 @@ pub(super) fn image_operation_dialog(
         && !matches!(&app.dialog, Some(ShowDialog::ImageOperation(state)) if state.running && state.request_id == Some(*request_id))
     {
         if let Ok(operation_id) = result {
+            // A duplicate completion for our active operation is not orphaned.
+            if app.image_op_operation_id.as_ref() == Some(operation_id) {
+                return Task::none();
+            }
             let operation_id = operation_id.clone();
             return Task::perform(
                 async move {
@@ -270,6 +274,7 @@ pub(super) fn image_operation_dialog(
         }
         ImageOperationDialogMessage::Started { result, .. } => match result {
             Ok(operation_id) => {
+                state.request_id = None;
                 app.image_op_operation_id = Some(operation_id.clone());
                 state.operation_id = Some(operation_id.clone());
                 if state.cancel_requested {

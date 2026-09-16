@@ -162,19 +162,6 @@ tests = [
 ]
 
 [[target]]
-phase = "4"
-package = "cosmic-ext-storage"
-kind = "rust-integration"
-name = "operation_workflow_contract"
-tests = [
-  "usage_workflow_is_routed_through_contract",
-  "image_workflow_is_routed_through_contract",
-  "desktop_actions_are_routed_through_services",
-  "production_workflow_semantics_are_preserved",
-  "legacy_image_device_contract_is_removed_atomically"
-]
-
-[[target]]
 phase = "5"
 package = "test-backend"
 kind = "rust-integration"
@@ -229,11 +216,11 @@ kind = "rust-integration"
 name = "ui_scenario_contract"
 features = ["test-backend"]
 tests = [
-  "physical_scenario_drives_dialog_and_refresh",
+  "scenario_partition_adapter_creates_owned_device",
   "configured_backend_error_remains_actionable",
-  "usage_and_image_progress_render_from_contract_events",
+  "scenario_image_and_usage_adapters_issue_operation_ids",
   "network_scenario_exercises_crud_and_mount_state",
-  "keyboard_dialog_flow_has_named_controls",
+  "keyboard_case_manifest_is_present",
   "scenario_factory_never_constructs_production_adapters",
   "scenario_mode_has_no_real_backend_fallback"
 ]

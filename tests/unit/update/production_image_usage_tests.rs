@@ -382,6 +382,10 @@ async fn image_start_uses_selected_adapter_and_rejects_duplicate(
     let task = image(app, I::Start);
     assert!(image_state(app).running);
     assert!(outputs(image(app, I::Start)).await.is_empty());
+    let mut completions = outputs(task).await;
+    assert_eq!(completions.len(), 1);
+    let completion = completions.remove(0);
+    let task = update(app, completion.clone());
     settle(app, task).await;
     assert!(
         image_state(app).error.is_none(),
@@ -391,6 +395,17 @@ async fn image_start_uses_selected_adapter_and_rejects_duplicate(
     assert!(image_state(app).operation_id.is_some());
     let operation_id = image_state(app).operation_id.clone();
     assert_eq!(app.image_op_operation_id, operation_id);
+    assert!(
+        image_state(app).request_id.is_none(),
+        "startup consumed once"
+    );
+    assert!(outputs(update(app, completion)).await.is_empty());
+    assert_eq!(app.image_op_operation_id, operation_id);
+    let status = crate::operations::ImageClient::with_operations(app.runtime.operations())
+        .workflow_status(operation_id.as_deref().unwrap())
+        .await
+        .unwrap();
+    assert_eq!(status.state, storage_types::WorkflowState::Running);
 }
 
 #[rstest]

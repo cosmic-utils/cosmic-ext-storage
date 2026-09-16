@@ -101,7 +101,7 @@ async fn action_form_validates_input_and_cancel_clears_actual_dialog(mut logical
     use crate::message::dialogs::LogicalActionFormMessage;
     use crate::state::dialogs::LogicalActionForm;
     let action = storage_contracts::LogicalAction::ResizeBtrfsFilesystem {
-        filesystem: storage_types::LogicalEntityId::new("btrfs-fs:fixture").unwrap(),
+        filesystem: storage_types::LogicalEntityId::new("btrfs:fixture").unwrap(),
         request: storage_contracts::BtrfsResizeRequest::AbsoluteBytes(4096),
     };
     let reopened = LogicalActionForm::from_action(&action).unwrap();
