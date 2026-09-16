@@ -1,5 +1,10 @@
 # Testing V2 remaining gap ledger
 
+Current direction (2026-09-15): [non-rendered testing regrouping](non-rendered-testing-plan.md).
+Rendered-UI and further dependency work are paused. Audit production/test
+workflow sharing before interpreting existing workflow tests as UI business-logic
+coverage. The measurements below remain historical gaps, not a fresh baseline.
+
 Baseline: `5ff5e049756c5389f74a2bb0622b9612c219730f`, fresh run
 `run-eu4hrjun`, 2026-09-14. This ledger directs implementation; it is not
 acceptance evidence for later source changes. Detailed missing line/function
@@ -55,8 +60,10 @@ exercises the actual create-wizard navigation validator: available/missing or
 unrelated tools, unknown tables/stale indexes and zero/minimum/maximum/oversized
 sizes. The final step's navigation behavior is tested separately from submission
 validation. No new percentage or full operation-outcome coverage is claimed.
-Other gap rows remain open. Full UI form execution currently requires the
-[missing custom-widget accessibility scope decision](form-accessibility-blocker.md).
+Other gap rows remain open. Custom-widget accessibility, overlay publication
+and exclusive focus routing were approved on 2026-09-15. Fork fixes 9–13 are
+committed and integrated in the working app pin; [real widget validation](form-accessibility-blocker.md)
+is in progress. Passing host regressions do not complete the required UI flows.
 
 Non-Rust inventory currently comprises `tools/testing/{coverage,run_coverage}.py`,
 `tools/ui-testing/{assert_tests,debug-app}.py`,

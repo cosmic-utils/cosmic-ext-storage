@@ -2,6 +2,15 @@
 
 **Status:** proposed design; no implementation in this document.
 
+**Current scope amendment (2026-09-15):** the user has agreed to pause rendered
+UI testing and additional dependency patches, while retaining native backend
+tests and strengthening tests of the application's actual production logic.
+The [non-rendered testing plan](non-rendered-testing-plan.md) governs this
+outstanding work, including explicit opt-in UI execution and separate coverage
+evidence modes. No coverage percentage is waived and no deferred UI acceptance
+is claimed by this amendment; earlier requirements below are retained as history
+and as the full-UI re-enablement contract where not superseded.
+
 ## 1. Purpose
 
 Testing V2 replaces the current non-executing real-storage harness with a

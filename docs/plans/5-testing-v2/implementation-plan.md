@@ -1,5 +1,14 @@
 # Testing V2 implementation plan
 
+## Current execution direction — 2026-09-15
+
+Follow [the non-rendered testing regrouping plan](non-rendered-testing-plan.md)
+for outstanding work. The user has paused rendered-UI acceptance and further
+dependency patching. Its default-off execution policy, honest host+lab coverage
+mode and production-logic testing migrations supersede conflicting remaining
+steps below. Historical results remain evidence of their recorded revisions,
+not completion of the new plan or the deferred full UI gate.
+
 This plan implements [the Testing V2 specification](spec.md) in dependency
 order. Phases 0–4 retain their ordered safety and migration gates. Phase 5's
 coverage collection/checker tooling precedes Phase 6's executed UI cases;
@@ -596,10 +605,20 @@ with the full dialog navigation/activation/cancellation/disabled-reason flow;
 that mandatory case and the other remaining UI programs are not yet complete.
 The subsequent tooltip-forwarding repair exposes Create Partition; an extended
 keyboard opening/cancellation probe passes without mutating the scenario.
-Full form execution is now blocked by missing COSMIC text-input and dropdown
-accessibility implementations. See [the evidence and scope decision](form-accessibility-blocker.md).
-Implementing those widget protocols (including secure-input protection) goes
-beyond a small forwarding backport; obtain explicit scope approval. Do not
+Full form execution exposed missing COSMIC text-input and dropdown
+accessibility implementations. See [the evidence and approved scope](form-accessibility-blocker.md).
+The user approved those widget protocols (including secure-input protection),
+iced inline-overlay publication and exclusive accessibility focus routing on
+2026-09-15. Fixes 9–13 are committed on the pinned forks and integrated in the
+working app pin. Host widget/runtime regressions pass; normal/instrumented
+real form validation is in progress. Do not treat overlay plumbing or host
+widget tests as completed UI acceptance.
+Live text editing and dropdown selection now pass the diagnostic's first 15
+steps; disabled-state validation is blocked by [a separately scoped AccessKit
+translation defect](accesskit-disabled-state-blocker.md). Its existing upstream
+repair has been identified; obtain approval before changing that dependency.
+The pinned Unix adapter lacks EditableText: validate a focus-checked keyboard
+input path in the runner without introducing another dependency fork. Do not
 replace the full keyboard flow with the passing diagnostic or bypass the UI.
 Keep later dependency fixes separately scoped and documented for upstreaming;
 do not upgrade to master, change Wayland lifetime, or open an upstream PR.

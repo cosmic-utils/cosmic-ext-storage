@@ -38,3 +38,25 @@ fn production_runtime_constructs_real_registry_once() {
 fn runtime_test_facade_dispatches_without_desktop_server() {
     assert!(RuntimeRequest::parse(["--backend".into(), "real".into()]).is_ok());
 }
+
+#[test]
+fn scenario_secret_stdin_requires_explicit_scenario_mode() {
+    assert!(RuntimeRequest::parse(["--scenario-secrets-stdin".into()]).is_err());
+    let request = RuntimeRequest::parse([
+        "--backend".into(),
+        "scenario".into(),
+        "--scenario".into(),
+        "fixture.toml".into(),
+        "--scenario-secrets-stdin".into(),
+    ])
+    .unwrap();
+    assert!(matches!(
+        request,
+        RuntimeRequest::Scenario {
+            secrets_stdin: true,
+            ..
+        }
+    ));
+    #[cfg(not(feature = "test-backend"))]
+    assert!(AppRuntime::from_request(request).is_err());
+}

@@ -1,8 +1,14 @@
 # Form accessibility: missing widget support
 
 2026-09-14, continued from `4-ui-testing` commit `0a52ec5`.
-Status: tooltip forwarding repaired; full form accessibility requires a scope
-decision. Testing V2 is not complete. No coverage threshold, required UI flow,
+Status (2026-09-15): the user approved the custom text-input/dropdown work.
+The text-input, dropdown, iced overlay publication and exclusive accessibility
+focus repairs are approved, committed and pushed to the pinned forks. The app
+working tree integrates them; real normal/instrumented validation is in progress.
+Testing V2 is not complete.
+The live form now reaches editing and option selection, but disabled-state
+validation is blocked by [AccessKit's Linux state translation](accesskit-disabled-state-blocker.md).
+No coverage threshold, required UI flow,
 secret-handling requirement or visual-approval obligation is waived.
 
 ## What now works
@@ -60,7 +66,7 @@ or reporting focus from highlights would not meet the existing acceptance
 contract. Replacing production COSMIC widgets solely for tests would create
 a different tested UI and is not an acceptable shortcut.
 
-Recommended separate, explicitly approved scope before resuming full UI flows:
+Widget scope approved by the user on 2026-09-15:
 
 1. Implement text-input nodes, stable identity/label, focus and editable-text
    actions against the existing pinned custom widget. Verify Unicode editing,
@@ -77,6 +83,55 @@ Recommended separate, explicitly approved scope before resuming full UI flows:
 
 Retain the same exact-pinned-fork approach, no upstream PR, no master upgrade,
 no expanded shutdown quarantine and no coverage waiver. Approval for this
-widget-support scope would not authorize those other changes. Until then,
-preserve the successful diagnostic separately and keep the required full
-`keyboard_accessibility` case planned.
+widget-support scope does not authorize those other changes. Preserve the
+successful diagnostic separately and keep the required full
+`keyboard_accessibility` case planned until actual acceptance passes.
+
+## Implementation findings, 2026-09-15
+
+The first text-input patch, now committed as `5a1938b3` in the pinned libcosmic
+checkout, is based on `7a4912de43b6720a86f9c2e663758f8870261472`. It adds a named
+TextInput/PasswordInput node, author identity, a stable text-run child, masked
+protected content, disabled/read-only semantics and targeted value replacement.
+Secure-input semantics remain protected when the visual reveal toggle is used.
+It is integrated in the working app pin, not an end-to-end completion claim.
+
+Three lower-layer constraints must be handled explicitly:
+
+1. **Inline overlays have no accessibility publication path in pinned iced.**
+   `iced/core/src/overlay.rs` exposes no accessibility-node method, and
+   `iced/runtime/src/user_interface.rs::a11y_nodes` collects only the root widget
+   tree. COSMIC dropdown options live in such an overlay (or a separate popup
+   when explicitly configured). Adding nodes solely to the option widget will
+   not publish an inline menu. Do not duplicate invisible options on the closed
+   control or change popup ownership simply to make tests pass. A separately
+   scoped iced overlay-forwarding repair was approved in the follow-up and is
+   implemented locally as iced `7192a2dca` with six passing runtime regressions.
+   See [fix 10](dependency-fix-ledger.md#10-publish-open-iced-overlay-trees-local-not-promoted).
+   It is now integrated with libcosmic menu option nodes (fix 12). Exclusive
+   accessibility-focus routing was subsequently approved separately (fix 11).
+2. **Accessibility focus is not routed through iced's exclusive focus operation.**
+   `iced/winit/src/lib.rs`, `Event::Accessibility`, still has a TODO for
+   `Action::Focus` before forwarding the event. Local widget focus alone cannot
+   guarantee that a previously focused button is unfocused. Before promoting
+   the text-input focus action, route valid, enabled focus targets through the
+   existing widget focus operation and test cross-widget focus exclusivity,
+   stale/unknown targets and preservation of read-only state. This is another
+   small iced integration requirement, not Wayland lifetime work.
+3. **The pinned AccessKit Unix adapter does not implement EditableText.**
+   In AccessKit `f0599ee`, `platforms/atspi-common/src/node.rs::interfaces`
+   advertises Accessible, Action, Component, Selection, Text and numeric Value;
+   there is no EditableText implementation. The runner's existing
+   `EditableTextProxy::set_text_contents` therefore cannot edit these fields,
+   even after libcosmic supports AccessKit `SetValue`. Prefer verified target
+   focus plus normal keyboard replacement in the existing private compositor,
+   with secret-free command arguments/logs and actual application assertions.
+   This runner refinement is implemented with 82 passing runner tests; live
+   verification is in progress. Do not claim a libcosmic
+   value-action unit test proves Linux AT-SPI text editing, and do not upgrade
+   or fork AccessKit without a separate decision.
+
+Remaining validation includes full widget-tree/child-button traversal, exclusive
+focus, dropdown options and selection, normal/instrumented real form runs,
+AT-SPI and screenshot secret-artifact checks, and the exact-pin/quarantine
+evidence review. Existing passing diagnostic artifacts remain on the old pin.

@@ -320,3 +320,83 @@ The exact partial [dialog probe](keyboard-dialog-probe.toml) is archived outside
 the required-case directory; do not count it as completed keyboard acceptance.
 No broader widget protocol implementation, alternate input test mechanism,
 threshold waiver, quarantine expansion or Wayland-lifetime repair was made.
+
+### Approved widget work started, 2026-09-15
+
+The user approved custom text-input/dropdown accessibility. A local text-input
+patch now exists in the pinned libcosmic checkout; no dependency revision was
+promoted into the app. Its scope and newly discovered integration requirements
+are recorded in [the form findings](form-accessibility-blocker.md).
+Inline dropdown menus require an iced overlay accessibility publication path;
+exclusive accessibility focus also remains a runtime TODO. Additional iced
+scope was raised with the user before changing iced. The Linux adapter lacks
+EditableText, so the runner's existing text-edit operation also needs a verified
+keyboard-input refinement. No AccessKit upgrade, app pin change, quarantine
+change, upstream PR or fresh coverage percentage is implied by this local work.
+
+### Approved iced overlay publication, 2026-09-15
+
+The user approved only the additional overlay publication scope in the
+follow-up. Iced commit `7192a2dca` implements that path through Overlay, Group,
+message Map, Nested, UserInterface and the existing window adapter caller.
+Four initial runtime regressions failed against the old publication path:
+only the base node was returned. All six final overlay regressions now pass;
+the two iced-widget, six iced-winit and 29 libcosmic library tests also pass.
+The libcosmic build without accessibility passes, with upstream warnings.
+
+This is a local, independently committed iced change; it has not been pushed
+or promoted into the app. The libcosmic checkout points its working submodule
+at the commit while preserving the uncommitted text-input draft. App branch
+`4-ui-testing`, Cargo.lock, dependency revision and quarantine remain unchanged.
+The dropdown must still provide accessible options through this new path;
+exclusive focus routing remains unapproved and untouched. See
+[fix 10 and its verification details](dependency-fix-ledger.md#10-publish-open-iced-overlay-trees-local-not-promoted).
+
+### Resumed integration and real form validation, 2026-09-15
+
+The later exclusive-focus scope was explicitly approved. The preceding
+local-only entries are historical, not the current integration status.
+Fork fixes 9–13 are committed and pushed: iced `d38647d7a`, libcosmic
+`2ca5a4174bb76a742ef5d6d09d056bd9cc9b25c6`. The working app pin changes only
+eighteen Cargo.lock git source URLs, without package/version changes. Lock
+SHA-256: `280c127111a6b97f060f1a5fc052861020cc1fea01177552e356bcc5c3bcc14b`.
+
+The runner uses exclusively verified field focus and stdin-fed keyboard input,
+with 86 passing tests including new text-target and typed stale-node error
+regressions. Read observations may restart within the existing signal-driven
+deadline; input actions do not repeat. Unicode entry and actual AT-SPI Text
+readback now pass in the real app. Named-button numeric identity is independently
+documented as fix 13. See the ledger for all fork scopes and red/green evidence.
+
+Normal reload `live_scenario_reload-13-1789496995745363928` passes all nine
+functional steps and shuts down cleanly. Normal form diagnostic
+`form_accessibility_probe-12-1789497112055077790` completes 15 steps through
+text editing, dropdown selection and zero-size entry, then fails because
+AccessKit reports disabled Next as enabled. The exact diagnostic is archived
+outside required-case discovery. [Upstream already fixed this separate
+AccessKit defect](accesskit-disabled-state-blocker.md); permission to backport
+that fix was requested. AccessKit has not been changed.
+
+Additional app-only work preserves protected accessibility semantics when
+encryption-options visually reveals a passphrase (two widget-tree regressions,
+one red before/both green after). Bounded, generic-error startup secret input
+now shares scenario composition; eight parser tests pass, but anonymous-pipe
+runner transport and the actual LUKS flow are not implemented yet.
+
+Current host checks: all 59 application library tests, all 86 runner tests,
+six runtime-contract tests, strict workspace/all-feature/all-target Clippy,
+formatting and diff checks pass. These are not fresh combined coverage or
+instrumented UI acceptance. New-pin instrumented form/reload validation is
+outstanding; the quarantine's hash, case, matcher, owner and expiry are
+unchanged. No required UI case was promoted and no upstream PR was opened.
+
+### Regrouping decision, 2026-09-15
+
+The user subsequently paused further dependency fixes and agreed to default-off
+rendered UI execution, while retaining backend testing and prioritising the
+actual application's non-rendered business logic. The audit found that the
+current workflow reducer entry points are test-feature-only and are not called
+by normal UI handlers. The [new execution plan](non-rendered-testing-plan.md)
+addresses that production/test divergence and scopes coverage honestly. This
+entry records the decision and plan only; execution switches are not implemented
+yet. The AccessKit backport proposal is paused.

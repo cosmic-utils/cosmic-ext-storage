@@ -17,6 +17,9 @@ use storage_types::{
 
 use crate::operations::{OperationError, StorageOperations};
 
+#[cfg(feature = "test-backend")]
+mod scenario_secrets;
+
 #[derive(Clone)]
 pub struct AppRuntime {
     operations: Arc<StorageOperations>,
@@ -119,7 +122,7 @@ impl AppRuntime {
         overlay: Option<PathBuf>,
         trace: Option<PathBuf>,
     ) -> Result<Self, OperationError> {
-        Self::scenario_with_control(fixture, overlay, trace, None)
+        Self::scenario_with_control(fixture, overlay, trace, None, Default::default())
     }
 
     /// Test-only variant of scenario composition that receives fixture secret
@@ -132,13 +135,7 @@ impl AppRuntime {
         trace: Option<PathBuf>,
         secrets: std::collections::BTreeMap<String, String>,
     ) -> Result<Self, OperationError> {
-        let scenario =
-            test_backend::ScenarioRuntime::load_with_secrets(fixture, overlay, trace, secrets)
-                .map_err(OperationError::from)?;
-        let marker = scenario.marker();
-        let mut runtime = Self::from_adapters(scenario.adapters())?;
-        runtime.scenario_marker = Some(marker);
-        Ok(runtime)
+        Self::scenario_with_control(fixture, overlay, trace, None, secrets)
     }
 
     #[cfg(feature = "test-backend")]
@@ -147,9 +144,11 @@ impl AppRuntime {
         overlay: Option<PathBuf>,
         trace: Option<PathBuf>,
         control: Option<ScenarioControlEndpoint>,
+        secrets: std::collections::BTreeMap<String, String>,
     ) -> Result<Self, OperationError> {
-        let scenario = test_backend::ScenarioRuntime::load(fixture, overlay, trace)
-            .map_err(OperationError::from)?;
+        let scenario =
+            test_backend::ScenarioRuntime::load_with_secrets(fixture, overlay, trace, secrets)
+                .map_err(OperationError::from)?;
         let marker = scenario.marker();
         let server = match control {
             Some(control) => {
@@ -188,6 +187,7 @@ pub enum RuntimeRequest {
         watch: bool,
         control_socket: Option<PathBuf>,
         control_token_file: Option<PathBuf>,
+        secrets_stdin: bool,
     },
 }
 
@@ -195,7 +195,7 @@ impl RuntimeRequest {
     fn usage() -> &'static str {
         #[cfg(feature = "test-backend")]
         {
-            "usage: cosmic-ext-storage [--backend real|scenario --scenario <fixture> --scenario-state <overlay> --scenario-trace <trace> --watch-scenario --scenario-control-socket <socket> --scenario-control-token-file <token>]"
+            "usage: cosmic-ext-storage [--backend real|scenario --scenario <fixture> --scenario-state <overlay> --scenario-trace <trace> --watch-scenario --scenario-control-socket <socket> --scenario-control-token-file <token> --scenario-secrets-stdin]"
         }
         #[cfg(not(feature = "test-backend"))]
         {
@@ -211,6 +211,7 @@ impl RuntimeRequest {
         let mut watch = false;
         let mut control_socket = None;
         let mut control_token_file = None;
+        let mut secrets_stdin = false;
         let mut arguments = arguments.into_iter();
         while let Some(argument) = arguments.next() {
             match argument.as_str() {
@@ -235,6 +236,7 @@ impl RuntimeRequest {
                     ))
                 }
                 "--watch-scenario" => watch = true,
+                "--scenario-secrets-stdin" => secrets_stdin = true,
                 "--scenario-control-socket" => {
                     control_socket = Some(PathBuf::from(
                         arguments
@@ -261,6 +263,7 @@ impl RuntimeRequest {
                     || watch
                     || control_socket.is_some()
                     || control_token_file.is_some()
+                    || secrets_stdin
                 {
                     return Err("scenario arguments require --backend scenario".into());
                 }
@@ -280,6 +283,7 @@ impl RuntimeRequest {
                     watch,
                     control_socket,
                     control_token_file,
+                    secrets_stdin,
                 })
             }
             _ => Err("--backend must be real or scenario".into()),
@@ -300,6 +304,7 @@ impl AppRuntime {
                         trace,
                         control_socket,
                         control_token_file,
+                        secrets_stdin,
                         ..
                     } = request
                     else {
@@ -315,6 +320,11 @@ impl AppRuntime {
                                 socket,
                                 token_file,
                             }),
+                        if secrets_stdin {
+                            scenario_secrets::read(std::io::stdin().lock())?
+                        } else {
+                            Default::default()
+                        },
                     )
                 }
                 #[cfg(not(feature = "test-backend"))]

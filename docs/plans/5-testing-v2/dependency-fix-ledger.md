@@ -192,6 +192,170 @@ must be recorded separately from these dependency unit-test results.
   is not changed. This patch does not implement accessible tooltip-overlay
   descriptions or promise that every wrapper/widget has complete accessibility.
 
+## 9. COSMIC custom text-input accessibility
+
+2026-09-15: user-approved work is committed as libcosmic `5a1938b3` in
+`src/widget/text_input/input.rs`, on the existing pinned fork branch.
+The app's working pin includes it via `0708e2cdc64a1395effa6cf896ca3da51ba5be4b`;
+normal/instrumented UI validation is in progress. Scope: named field nodes,
+stable text-run identity, plain/Unicode values, always-protected password tree
+content (including visual reveal), disabled/read-only semantics and targeted
+value updates through the application's existing callback. The patch does not
+modify validation rules or storage behavior.
+
+Local validation: `cargo +1.95.0 test --locked -p libcosmic --lib --features
+a11y,tokio,winit,wayland,wgpu` passes all 29 tests (nine new text-input
+regressions). `cargo +1.95.0 check --locked -p libcosmic --no-default-features
+--features tokio,winit,wayland,wgpu` also passes. Both run from the libcosmic
+checkout and emit existing upstream warnings; this is not a warning-free
+Clippy claim. Logs are retained in the app's ignored
+`target/testing-v2-completion/form-a11y/` directory. Regressions cover real
+Widget-trait node publication, stable text-run identity, Unicode/control-char
+handling, secure and revealed-password masking, malformed/unsupported/wrong
+targets, disabled/read-only fields, managed values, repeated focus callbacks
+and empty password replacement. No real compositor run has used this draft.
+
+The final patch also forwards input child-button nodes and operations, outside
+the protected text subtree, and offers `accessible_name` without adding another
+visible label. Two additional regressions verify child-button exposure and the
+real focus operation's read-only preservation/exactly-once focus callback.
+Focus support depends on the separately approved iced fix 11 below; do not
+extract just the widget-local Focus handler when upstreaming.
+Dropdown options additionally need the overlay path in fix 10. The pinned AccessKit adapter has no EditableText
+interface; direct AccessKit value-action unit tests are not evidence that the
+Linux runner can edit a field. See [the implementation findings and remaining
+verification](form-accessibility-blocker.md#implementation-findings-2026-09-15).
+These are separately scoped integration requirements, not Wayland destruction
+repairs. No upstream PR or dependency upgrade is authorized by this entry.
+
+## 10. Publish open iced overlay trees (local, not promoted)
+
+- **Approval:** the user explicitly approved this additional overlay fix on
+  2026-09-15. Accessibility-focus routing was subsequently approved separately
+  and is documented as fix 11.
+- **Commit:** local iced `7192a2dca5e4e41194b36ef4daf7fa734774ae53`, based on the
+  existing pinned-fork `b852a3354aca786ca0e6d899fb36dc2d4fa62aaf`. Not pushed;
+  initially no new libcosmic or app pin was committed for this repair.
+  Follow-up: pushed with fix 11 on the existing fork branch, included by
+  libcosmic `12bd0e28` and the app's working `0708e2cd` pin. The heading records
+  its original local-only validation stage; real UI promotion is still pending.
+- **Cause:** Overlay had no node-publication API, and UserInterface collected
+  only the base widget tree. A menu's option nodes could not reach AccessKit
+  through an inline overlay even if the widget implemented them correctly.
+- **Scope:** add a feature-gated, empty-by-default `Overlay::a11y_nodes` hook;
+  forward it through message Map and Group; collect open descendants in
+  Nested; join base and current overlay trees in UserInterface. Preserve node
+  IDs, descendant relationships, layout/virtual offsets and cursor input.
+  Read current overlay state and calculate current layout instead of relying
+  on a stale open/close/render cache. The existing event-routing machinery,
+  message mapping and popup ownership are unchanged.
+- **API integration:** `UserInterface::a11y_nodes` now takes `&mut self` and a
+  renderer reference so it can construct current overlays/layouts. The sole
+  runtime caller in iced/winit passes the window's existing renderer. This is
+  an API consideration for other custom iced integrations when upstreaming;
+  it is not a dependency version upgrade.
+- **Red/green verification:** four initial runtime regressions failed on the
+  old publication path (one base node instead of five, missing option/bounds).
+  All six final regressions pass: grouped/mapped/nested publication without
+  duplicate IDs; close/reopen identity; fresh bounds after layout changes;
+  delivery to a published nested target with one mapped message and rejection
+  of an unknown target; cursor/physical/virtual offset forwarding; and removal
+  despite a stale render cache, including relayout. These use the real
+  UserInterface, overlay wrappers and event loop update path with a null
+  renderer and test widgets, not a live compositor or COSMIC Dropdown.
+- **Broader local checks:** six iced-runtime, two iced-widget, six iced-winit
+  and 29 libcosmic library tests pass (43 total). The no-a11y libcosmic build
+  also passes. Existing dependency warnings remain; no clean-Clippy claim.
+  Evidence is under ignored `target/testing-v2-completion/overlay-a11y/`
+  (`red.log`, `green.log`, `without-a11y.log`).
+- **Reproduction:** from the libcosmic checkout, run `cargo +1.95.0 test
+  --locked -p libcosmic -p iced_runtime -p iced_widget -p iced_winit --lib
+  --features libcosmic/a11y,libcosmic/tokio,libcosmic/winit,libcosmic/wayland,libcosmic/wgpu`.
+  Select features on the workspace's libcosmic package; Cargo rejects explicit
+  iced-runtime feature selection from this parent workspace. Adding iced-core
+  to this test command also fails because its dev-dependencies belong to the
+  nested workspace; runtime regressions exercise the changed core wrappers.
+- **Not included:** libcosmic dropdown option/control semantics, text-input
+  child-button forwarding, exclusive accessibility focus, AccessKit
+  EditableText, tooltip-overlay descriptions, Wayland teardown, app pin or
+  quarantine changes. No upstream PR. Keep these obligations explicit before
+  promoting the fork or claiming full form/keyboard coverage.
+
+## 11. Route accessibility focus exclusively
+
+- **Approval and commits:** explicitly approved after fix 10; iced `d38647d7a`
+  and libcosmic submodule integration `12bd0e28`, pushed only to the existing
+  stoorps fork branches. No upstream PR or dependency upgrade.
+- **Cause:** the runtime forwarded Focus to a widget without first applying
+  exclusive focus. A text field could focus itself while a button stayed focused.
+- **Scope:** validate a data-free Focus request on the root accessibility tree,
+  require one present, enabled, visible node advertising Focus, and preflight
+  exactly one real focusable widget with that numeric ID. Only then apply the
+  existing exclusive focus operation in that window, request redraw and forward
+  the event for widget callbacks. Invalid requests are not forwarded. Other
+  action types, windows, popup ownership and Wayland lifetime are unchanged.
+- **Tests:** three runtime regressions cover moving focus both directions,
+  repeated focus, disabled/unadvertised/non-operable nodes and malformed,
+  stale or non-Focus requests without clearing the previous focus. Actual
+  COSMIC text-input operation tests separately verify read-only preservation
+  and one application callback after runtime focus. Nine runtime tests total
+  pass (six overlay plus three focus), alongside six iced-winit tests.
+
+## 12. COSMIC dropdown controls and option selection
+
+- **Commit:** libcosmic `0708e2cdc64a1395effa6cf896ca3da51ba5be4b`, on the pinned
+  fork branch. App working pin updated; end-to-end validation in progress.
+- **Scope:** publish a named ComboBox with author identity, value, expanded
+  state and disabled semantics for an empty list; include it in real focus
+  operations. Keyboard activation/selection uses the existing open/close flags
+  and callbacks. Publish ListBox/options through both inline-overlay and popup
+  wrappers, with selected state and layout bounds. Targeted accessible clicks
+  select through the existing application callback and close path.
+- **Identity/lifecycle:** per-menu IDs survive unchanged option lists; replacing
+  or reordering the labels replaces option IDs. Requests to unknown, replaced
+  or already-closed options do not select. The code does not replace popup
+  creation/destruction or repair Wayland lifetime. The existing string-list API
+  has no per-item-disabled configuration; all its nonempty entries are selectable.
+  Empty-control disabled behavior is tested, not an invented disabled-item API.
+- **Tests:** seven new libcosmic regressions cover actual control/option nodes,
+  names/IDs/value/bounds/selection, empty controls, duplicate labels with distinct
+  IDs, changed-list invalidation, targeted selection and popup-close callbacks,
+  stale/unsupported requests, and focused keyboard boundaries/open/close/Tab.
+  All 38 libcosmic library tests pass, plus nine runtime, two iced-widget and six
+  iced-winit tests (55 total). The no-a11y build also passes, with upstream warnings.
+- **App-only integration:** create-wizard fields receive stable IDs, numeric
+  fields receive accessible names without duplicated visible labels, and the
+  filesystem dropdown receives a stable name/ID. The runner replaces the absent
+  Unix EditableText path with Component focus, exclusive-focus observation,
+  normal keyboard input over stdin and another focus check. It rejects disabled,
+  non-editable or mismatched secret/ordinary targets and control characters.
+  Protected contents never enter argv/helper logs. Plain-text assertions use
+  the real AT-SPI Text interface; such assertions on password fields are rejected.
+  Eleven new rstest runner cases cover the input checks/redacted diagnostics;
+  all 82 runner tests and strict runner Clippy pass. Live form evidence is still
+  required; these host results are not a completed UI-case or coverage claim.
+
+## 13. Match named COSMIC buttons by numeric accessibility identity
+
+- **Commit:** libcosmic `2ca5a4174bb76a742ef5d6d09d056bd9cc9b25c6` on the
+  existing pinned fork branch. No iced or Wayland lifetime change.
+- **Live cause:** form probe `form_accessibility_probe-12-1789496246689414972`
+  could select the disk, but accessible activation of Create Partition did
+  nothing. The button had a custom author ID; AccessKit reconstructs a numeric
+  widget ID. Comparing the two enum representations directly rejects the same
+  underlying node. Earlier button regressions covered only generated IDs.
+- **Scope:** publish the custom author ID and compare numeric identities of the
+  button, event target and request target. Reject requests carrying unexpected
+  data; keep the existing callback and disabled-button checks.
+- **Red/green evidence:** the regression now uses a named button and the real
+  adapter's numeric reconstruction. It fails before the repair (one failure,
+  two passes) and all 38 libcosmic library tests pass afterward. Logs:
+  `/tmp/cosmic-named-button-red.log` and `/tmp/cosmic-named-button-green.log`.
+  The app pin is updated. Live rerun
+  `form_accessibility_probe-12-1789496758145541032` now activates Create
+  Partition and exposes `create.name`; its next focus observation failed on
+  a retired AT-SPI object. This proves button delivery, not the complete form.
+
 ## Focus integration evidence and exact quarantine rebind
 
 Evidence root: ignored `target/testing-v2-completion/focus/`. These are local
@@ -317,6 +481,29 @@ coverage percentage, final CI, mandatory keyboard-case success or visual
 approval is claimed by this diagnostic batch.
 
 ## App-only fixes and exclusions
+
+- Encryption-options visual reveal previously replaced `secure_input` with
+  an ordinary text input. Keep `secure_input` and vary its existing `hidden`
+  parameter instead, so the accessibility role and masked content remain
+  protected. Two rstest cases exercise the actual production field builder
+  and published widget tree for hidden/revealed states: revealed fails before
+  the fix; both pass after (`/tmp/cosmic-secret-reveal-{red,green}.log`). This
+  app-only fix does not claim live secret-artifact or complete LUKS coverage.
+- Test-only scenario composition now accepts bounded secret pairs on explicit
+  `--scenario-secrets-stdin`, through the same runtime constructor with or
+  without control-server support. Values are not arguments, environment,
+  fixture data or control commands. Duplicate/unsafe IDs, malformed/control/
+  oversized values fail with a generic message. Eight parser regressions pass;
+  the runner's ephemeral-value transport and live LUKS case are still pending.
+
+- Continued form/reload validation exposed an observation race in the runner:
+  accessible properties wrap `UnknownObject` as `zbus::Error::FDO`, while
+  the existing retired-node handler recognized only raw method errors. Four
+  rstest cases cover direct/wrapped errors and unrelated failures (two red
+  before, all green after; 86 runner tests total). Match typed errors, never
+  error text. Only tree observations restart after an accessibility signal
+  within the original deadline; actions are not retried. Evidence:
+  `/tmp/cosmic-retired-node-{red,green}.log`. This is not a dependency fix.
 
 - App commit `9924e1b`: short owned `/tmp/cs-ui-*` runtime directories fix Sway
   IPC path overflow for long case/artifact names. This belongs to our harness,

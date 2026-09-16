@@ -1,0 +1,123 @@
+schema_version = 2
+id = "form_accessibility_probe"
+scenario = "tests/ui/scenarios/accessibility/keyboard.toml"
+scenario_sha256 = "57a35cf7ec2a59d366993cb9c9c5b10e0e7c96426b9dca6ea8b4dfa19a3cac35"
+
+[ready]
+timeout_ms = 15000
+[[ready.assert]]
+kind = "unique"
+selector = { role = "button", name = "Keyboard Scenario Disk" }
+
+[[step]]
+id = "select_disk"
+kind = "invoke"
+target = { role = "button", name = "Keyboard Scenario Disk" }
+
+[[step]]
+id = "open_create"
+kind = "invoke"
+target = { role = "button", name = "Create Partition" }
+
+[[step]]
+id = "field_exposed"
+kind = "assert"
+assert = { kind = "unique", selector = { role = "entry", automation_id = "create.name" } }
+
+[[step]]
+id = "edit_unicode_name"
+kind = "set_text"
+target = { role = "entry", automation_id = "create.name" }
+value = "Data é🦀"
+
+[[step]]
+id = "name_updated"
+kind = "assert"
+assert = { kind = "property_equals", selector = { role = "entry", automation_id = "create.name" }, property = "text", value = "Data é🦀" }
+
+[[step]]
+id = "open_filesystems"
+kind = "invoke"
+target = { role = "combo box", automation_id = "create.filesystem" }
+
+[[step]]
+id = "ext4_option_exposed"
+kind = "assert"
+assert = { kind = "unique", selector = { role = "list item", name = "ext4 — Modern Linux filesystem (default)" } }
+
+[[step]]
+id = "choose_ext4"
+kind = "invoke"
+target = { role = "list item", name = "ext4 — Modern Linux filesystem (default)" }
+
+[[step]]
+id = "options_closed"
+kind = "assert"
+assert = { kind = "absent", selector = { role = "list item", name = "ext4 — Modern Linux filesystem (default)" } }
+
+[[step]]
+id = "reopen_filesystems"
+kind = "invoke"
+target = { role = "combo box", automation_id = "create.filesystem" }
+
+[[step]]
+id = "selection_retained"
+kind = "assert"
+assert = { kind = "unique", selector = { role = "list item", name = "ext4 — Modern Linux filesystem (default)", states = ["selected"] } }
+
+[[step]]
+id = "dismiss_options"
+kind = "key"
+key = "Escape"
+
+[[step]]
+id = "sizing"
+kind = "invoke"
+target = { role = "button", name = "Next" }
+
+[[step]]
+id = "zero_size"
+kind = "set_text"
+target = { role = "entry", automation_id = "create.size" }
+value = "0"
+
+[[step]]
+id = "next_still_exposed"
+kind = "assert"
+assert = { kind = "unique", selector = { role = "button", name = "Next" } }
+
+[[step]]
+id = "zero_size_cannot_advance"
+kind = "assert"
+assert = { kind = "absent", selector = { role = "button", name = "Next", states = ["enabled"] } }
+
+[[step]]
+id = "restore_valid_size"
+kind = "set_text"
+target = { role = "entry", automation_id = "create.size" }
+value = "1"
+
+[[step]]
+id = "valid_size_can_advance"
+kind = "assert"
+assert = { kind = "unique", selector = { role = "button", name = "Next", states = ["enabled"] } }
+
+[[step]]
+id = "cancel"
+kind = "invoke"
+target = { role = "button", name = "Cancel" }
+
+[[step]]
+id = "dialog_closed"
+kind = "assert"
+assert = { kind = "absent", selector = { role = "entry", automation_id = "create.name" } }
+
+[[step]]
+id = "no_mutation"
+kind = "assert"
+assert = { kind = "state_equals", pointer = "/ok/generation", value = 0 }
+
+[[step]]
+id = "no_operation"
+kind = "assert"
+assert = { kind = "state_equals", pointer = "/ok/last_sequence", value = 0 }

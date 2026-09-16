@@ -2,7 +2,7 @@
 //! for semantic assertions; incomplete programs cannot produce passing evidence.
 
 use super::*;
-use atspi::proxy::{action::ActionProxy, editable_text::EditableTextProxy};
+use atspi::proxy::{action::ActionProxy, component::ComponentProxy, text::TextProxy};
 use atspi::{AccessibilityConnection, ObjectRefOwned, events::ObjectEvents};
 use base64::{Engine, engine::general_purpose::STANDARD};
 use futures_util::StreamExt;
@@ -672,10 +672,12 @@ async fn run_case(
         .environment
         .insert("WAYLAND_DISPLAY".into(), display.into());
     let viewport = session.assert_viewport(&sway_socket)?;
-    let uses_keyboard = case
-        .step
-        .iter()
-        .any(|step| matches!(step.operation, Operation::Key { .. }));
+    let uses_keyboard = case.step.iter().any(|step| {
+        matches!(
+            step.operation,
+            Operation::Key { .. } | Operation::SetText { .. }
+        )
+    });
     if uses_keyboard {
         session.start_keyboard(&sway_socket)?;
     }
@@ -797,7 +799,8 @@ async fn run_case(
                 secret,
             } => {
                 let node = unique(&nodes, target)?;
-                let proxy = EditableTextProxy::builder(connection.connection())
+                validate_text_target(node, value, *secret)?;
+                let proxy = ComponentProxy::builder(connection.connection())
                     .destination(
                         node.reference
                             .name_as_str()
@@ -806,11 +809,33 @@ async fn run_case(
                     .path(node.reference.path_as_str())?
                     .build()
                     .await?;
-                // Never serialize text contents or the manifest in evidence.
-                let _redact = secret;
-                if !proxy.set_text_contents(value).await? {
-                    bail!("AT-SPI text update was rejected");
+                if !proxy.grab_focus().await? {
+                    bail!("AT-SPI field focus was rejected");
                 }
+                wait_assert(
+                    &connection,
+                    &mut events,
+                    control,
+                    &Assertion::Focused {
+                        selector: target.clone(),
+                    },
+                    READY_TIMEOUT,
+                )
+                .await?;
+                // The pinned AccessKit Unix adapter has no EditableText interface.
+                // Use normal keys only after observing exclusive target focus.
+                // Text is sent on stdin, never in argv, stderr, or evidence.
+                type_field_text(session, value).await?;
+                wait_assert(
+                    &connection,
+                    &mut events,
+                    control,
+                    &Assertion::Focused {
+                        selector: target.clone(),
+                    },
+                    READY_TIMEOUT,
+                )
+                .await?;
             }
             Operation::Key { key } => {
                 session.run_checked("wtype", keyboard_arguments(key)?)?;
@@ -865,7 +890,35 @@ async fn wait_assert(
             .clone()
             .map_err(|error| anyhow!(error))?;
         let nodes = observed_tree(connection, events, deadline).await?;
-        match assert_tree(&nodes, assertion) {
+        let result = if let Assertion::PropertyEquals {
+            selector,
+            property,
+            value,
+        } = assertion
+            && property == "text"
+        {
+            let node = unique(&nodes, selector)?;
+            if node.role == "password text" {
+                bail!("plaintext assertions on protected fields are forbidden");
+            }
+            let proxy = TextProxy::builder(connection.connection())
+                .destination(
+                    node.reference
+                        .name_as_str()
+                        .context("AT-SPI node has no bus owner")?,
+                )?
+                .path(node.reference.path_as_str())?
+                .build()
+                .await?;
+            if proxy.get_text(0, -1).await? == *value {
+                Ok(())
+            } else {
+                Err(anyhow!("accessible text differs"))
+            }
+        } else {
+            assert_tree(&nodes, assertion)
+        };
+        match result {
             Ok(()) => return Ok(()),
             Err(error) => {
                 match tokio::time::timeout_at(deadline, events.receiver.changed()).await {
@@ -875,6 +928,51 @@ async fn wait_assert(
             }
         }
     }
+}
+
+fn validate_text_target(node: &Node, value: &str, secret: bool) -> Result<()> {
+    if !matches!(node.role.as_str(), "text" | "entry" | "password text")
+        || !node.states.iter().any(|state| state == "enabled")
+        || !node.states.iter().any(|state| state == "editable")
+    {
+        bail!("text target must be an enabled editable field");
+    }
+    if secret != (node.role == "password text") {
+        bail!("secret flag must match protected-field semantics");
+    }
+    if value.len() > 4096 || value.chars().any(char::is_control) {
+        bail!("text input exceeds the bound or contains control characters");
+    }
+    Ok(())
+}
+
+async fn type_field_text(session: &CapabilitySession, value: &str) -> Result<()> {
+    let mut command = tokio::process::Command::from(session.command("wtype"));
+    // Replace the selection with the first character. Clearing first can make
+    // controlled numeric fields restore their old value before typing begins.
+    command.args(["-M", "ctrl", "-k", "a", "-m", "ctrl"]);
+    if value.is_empty() {
+        command.args(["-k", "BackSpace"]);
+    }
+    command
+        .arg("-")
+        .stdin(Stdio::piped())
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .kill_on_drop(true);
+    let mut child = command.spawn().context("start field keyboard input")?;
+    tokio::time::timeout(READY_TIMEOUT, async {
+        let mut stdin = child.stdin.take().context("field input pipe missing")?;
+        stdin.write_all(value.as_bytes()).await?;
+        stdin.shutdown().await?;
+        drop(stdin);
+        if !child.wait().await?.success() {
+            bail!("field keyboard input failed");
+        }
+        Ok(())
+    })
+    .await
+    .context("field keyboard input deadline")?
 }
 
 async fn observed_tree(
@@ -896,8 +994,7 @@ async fn observed_tree(
             Err(error) => {
                 // Re-rendering can retire a node between GetChildren and its
                 // properties. Re-query observations, never repeat UI actions.
-                let retired = matches!(error.downcast_ref::<zbus::Error>(), Some(zbus::Error::MethodError(name, _, _)) if name.as_str() == "org.freedesktop.DBus.Error.UnknownObject");
-                if !retired {
+                if !is_retired_node(&error) {
                     return Err(error);
                 }
                 tokio::time::timeout_at(deadline, events.receiver.changed())
@@ -906,6 +1003,14 @@ async fn observed_tree(
             }
         }
     }
+}
+
+fn is_retired_node(error: &anyhow::Error) -> bool {
+    error.chain().any(|cause| {
+        matches!(cause.downcast_ref::<zbus::Error>(), Some(zbus::Error::MethodError(name, _, _)) if name.as_str() == "org.freedesktop.DBus.Error.UnknownObject")
+            || matches!(cause.downcast_ref::<zbus::Error>(), Some(zbus::Error::FDO(inner)) if matches!(inner.as_ref(), zbus::fdo::Error::UnknownObject(_)))
+            || matches!(cause.downcast_ref::<zbus::fdo::Error>(), Some(zbus::fdo::Error::UnknownObject(_)))
+    })
 }
 
 struct EventWatch {

@@ -1,6 +1,30 @@
 use super::*;
 use rstest::{fixture, rstest};
 
+#[rstest]
+#[case::direct_fdo(true, false, true)]
+#[case::wrapped_fdo(true, true, true)]
+#[case::unrelated_fdo(false, false, false)]
+#[case::wrapped_unrelated(false, true, false)]
+fn retired_node_recognizes_typed_property_errors(
+    #[case] retired: bool,
+    #[case] wrapped: bool,
+    #[case] expected: bool,
+) {
+    let error = if retired {
+        zbus::fdo::Error::UnknownObject("retired node".into())
+    } else {
+        zbus::fdo::Error::AccessDenied("UnknownObject in text is not its type".into())
+    };
+    let error = if wrapped {
+        anyhow::Error::new(zbus::Error::from(error))
+    } else {
+        anyhow::Error::new(error)
+    }
+    .context("property query");
+    assert_eq!(is_retired_node(&error), expected);
+}
+
 #[tokio::test]
 async fn shutdown_wait_preserves_nonzero_exit_and_times_out() {
     let mut exited = Command::new("/bin/sh")
@@ -41,6 +65,51 @@ fn node(name: &str, depth: usize) -> Node {
         description: "description".into(),
         states: vec!["enabled".into()],
     }
+}
+
+#[rstest]
+#[case("entry", true, false, false, true)]
+#[case("text", true, false, false, true)]
+#[case("password text", true, true, false, true)]
+#[case("entry", true, true, false, false)]
+#[case("password text", true, false, false, false)]
+#[case("entry", false, false, false, false)]
+#[case("entry", true, false, true, false)]
+#[case("button", true, false, false, false)]
+fn text_entry_requires_editable_enabled_and_matching_secret_semantics(
+    #[case] role: &str,
+    #[case] enabled: bool,
+    #[case] secret: bool,
+    #[case] read_only: bool,
+    #[case] valid: bool,
+) {
+    let mut field = node("field", 0);
+    field.role = role.into();
+    field.states.clear();
+    if enabled {
+        field.states.push("enabled".into());
+    }
+    if !read_only {
+        field.states.push("editable".into());
+    }
+    assert_eq!(
+        validate_text_target(&field, "Unicode e\u{301}🦀", secret).is_ok(),
+        valid
+    );
+}
+
+#[rstest]
+#[case("SECRET\n")]
+#[case("SECRET\t")]
+#[case("SECRET\0")]
+fn rejected_text_diagnostics_do_not_echo_contents(#[case] value: &str) {
+    let mut field = node("field", 0);
+    field.role = "password text".into();
+    field.states.push("editable".into());
+    let error = validate_text_target(&field, value, true).unwrap_err();
+    assert!(!format!("{error:?}").contains("SECRET"));
+    assert!(validate_text_target(&field, &"x".repeat(4097), true).is_err());
+    assert!(validate_text_target(&field, "", true).is_ok());
 }
 
 #[rstest]
