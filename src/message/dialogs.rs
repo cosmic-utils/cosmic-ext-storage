@@ -56,13 +56,25 @@ pub enum TakeOwnershipMessage {
     Cancel,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Clone, PartialEq, Eq)]
 pub enum ChangePassphraseMessage {
     CurrentUpdate(String),
     NewUpdate(String),
     ConfirmUpdate(String),
     Confirm,
     Cancel,
+}
+
+impl std::fmt::Debug for ChangePassphraseMessage {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(match self {
+            Self::CurrentUpdate(_) => "CurrentUpdate(<redacted>)",
+            Self::NewUpdate(_) => "NewUpdate(<redacted>)",
+            Self::ConfirmUpdate(_) => "ConfirmUpdate(<redacted>)",
+            Self::Confirm => "Confirm",
+            Self::Cancel => "Cancel",
+        })
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -99,11 +111,21 @@ pub enum CreateMessage {
     Partition,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Clone, PartialEq, Eq)]
 pub enum UnlockMessage {
     PassphraseUpdate(String),
     Confirm,
     Cancel,
+}
+
+impl std::fmt::Debug for UnlockMessage {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter.write_str(match self {
+            Self::PassphraseUpdate(_) => "PassphraseUpdate(<redacted>)",
+            Self::Confirm => "Confirm",
+            Self::Cancel => "Cancel",
+        })
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -158,9 +180,20 @@ pub struct AttachDiskResult {
 pub enum ImageOperationDialogMessage {
     Start,
     CancelOperation,
+    Started {
+        request_id: uuid::Uuid,
+        result: Result<String, String>,
+    },
+    CancelCompleted {
+        operation_id: String,
+        result: Result<(), String>,
+    },
     /// Progress update from subscription (operation_id, bytes_completed, total_bytes, speed_bytes_per_sec).
     Progress(String, u64, u64, u64),
-    Complete(Result<(), String>),
+    Complete {
+        operation_id: String,
+        result: Result<(), String>,
+    },
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -171,17 +204,10 @@ pub enum UnmountBusyMessage {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub enum BtrfsCreateSubvolumeMessage {
-    NameUpdate(String),
-    Create,
-    Cancel,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum BtrfsCreateSnapshotMessage {
-    SourceIndexUpdate(usize),
-    NameUpdate(String),
+pub enum LogicalActionFormMessage {
+    PrimaryTextUpdate(String),
+    SizeUpdate(String),
     ReadOnlyUpdate(bool),
-    Create,
+    Submit,
     Cancel,
 }

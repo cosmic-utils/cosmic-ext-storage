@@ -1,0 +1,14 @@
+schema_version = 2
+id = "logical-preflight"
+description = "A declared logical candidate and confirmation explanation for stale-preflight coverage."
+
+[backend]
+id = "ui-scenario"
+capabilities = ["logical"]
+
+[world]
+revision = 0
+
+[world.logical]
+candidate_path = "/dev/ui-disk0p1"
+confirmation_message = "This fixture creates the declared logical entity."

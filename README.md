@@ -7,7 +7,8 @@ COSMIC Storage is a desktop storage utility for the COSMIC desktop. It runs as t
 
 ### Prerequisites
 You will need the following packages/services:
- - `udisks2` (system service) - required for device enumeration, events, and native Polkit-authorized operations
+- `udisks2` (system service) - required for device enumeration, events, and native Polkit-authorized operations
+- UDisks2's LVM2, MD RAID, and Btrfs plugins for logical-storage discovery and actions
  - `just` (task runner) - install via `cargo install just` or your package manager
  
 For partition type support:
@@ -22,6 +23,14 @@ Recommended:
 - Optional: `rclone` for per-user network-drive configurations. Configurations live under the desktop user’s `~/.config/rclone/`; mounts and mount-on-login units are also user-scoped.
 
 The application uses the backend-neutral `storage-contracts` API. The currently shipped block-storage adapter is `UdisksBackend`; additional local or network adapters can be registered at the application composition root without making UI code depend on their implementation.
+
+## Logical storage
+
+Logical storage discovery covers LVM volume groups and logical volumes, MD RAID
+arrays, and Btrfs filesystems/subvolumes. Actions are sent directly to UDisks2
+through typed requests and use its native Polkit prompts. There is no
+project-owned privileged service or fallback command path. Destructive actions
+show their typed confirmation before they are submitted.
 
 ## Development
 
@@ -39,9 +48,27 @@ just check              # Run fmt, clippy, and tests
 just run                # Build and run the app
 just install            # Install the app binary and desktop assets
 just uninstall          # Remove installed app files
+STORAGE_LAB=1 just test-lab # Run real storage tests in private Testcontainers
+just app-workflow-check    # Run deterministic application workflow tests
+UI_E2E_ENABLED=1 just ui-e2e # Opt-in rendered diagnostics; paused by default
+just coverage              # Host+native coverage; reviewed no-regression baseline
 ```
 
 `just install` installs the application binary, desktop entry, metainfo, and icon. It does not install service, policy, or socket files.
+
+The storage suite uses the same Testcontainers lifecycle locally and in CI.
+Its pinned private image provides UDisks, D-Bus, Polkit, filesystem/LVM/MD/Btrfs
+tools, and local SFTP; mutations are restricted to ledger-owned file-backed
+loops. No host storage or D-Bus mounts and no VM are required. See the
+[lab contract](tools/storage-lab/README.md) for prerequisites and artifacts.
+
+`just app-workflow-check` drives the real application message handlers against
+owned scenario adapters, without a window, compositor or desktop bus. It uses
+rstest fixtures and the app's actual tasks/state; the separate test-only workflow
+reducers have been removed. Rendered UI execution is paused and default-off;
+it remains an explicit diagnostic opt-in, not current acceptance evidence.
+[Coverage tooling](tools/testing/README.md) collects real host/container profiles
+and keeps unmet thresholds and unmeasured sources visible.
 
 ## Logging
 

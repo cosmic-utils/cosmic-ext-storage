@@ -28,6 +28,7 @@ pub mod common;
 pub mod disk;
 pub mod encryption;
 pub mod filesystem;
+pub mod logical;
 pub mod lvm;
 pub mod network;
 pub mod partition;
@@ -36,6 +37,7 @@ pub mod rclone;
 pub mod smart;
 pub mod usage_scan;
 pub mod volume;
+pub mod workflow;
 
 pub use btrfs::{BtrfsSubvolume, DeletedSubvolume, FilesystemUsage, SubvolumeList};
 pub use common::{
@@ -49,6 +51,22 @@ pub use encryption::{EncryptionOptionsSettings, LuksInfo, LuksVersion};
 pub use filesystem::{
     CheckResult, FilesystemInfo, FilesystemToolInfo, FilesystemType, FormatOptions, KillResult,
     MountOptions, MountOptionsSettings, ProcessInfo, UnmountResult,
+};
+pub use logical::{
+    BlockDeviceFingerprint, BlockDeviceId, BlockDeviceRef, BtrfsAllocation, BtrfsDeviceDetails,
+    BtrfsFilesystemDetails, BtrfsFilesystemValue, BtrfsMember, BtrfsMemberState,
+    BtrfsPrimaryMember, BtrfsRelativePath, BtrfsSubvolumeDetails, BtrfsSubvolumeEntityDetails,
+    BtrfsSubvolumeHierarchy, BtrfsSubvolumeRef, BtrfsSubvolumeRowKey, BtrfsTopologyDiagnostic,
+    ConfirmedDestructiveScope, LogicalAggregateSummary, LogicalBlockedReason,
+    LogicalCandidateAnchor, LogicalCandidateKind, LogicalCandidateResolution, LogicalCapabilities,
+    LogicalDisplay, LogicalEntity, LogicalEntityDetails, LogicalEntityId, LogicalEntityKind,
+    LogicalIdentityError, LogicalLoadRequest, LogicalLoadResult, LogicalMember, LogicalMemberId,
+    LogicalOperation, LogicalSource, LogicalSourceAvailability, LogicalSourceStatus,
+    LogicalTopology, LogicalTopologyError, LvmActivationState, LvmLogicalVolumeDetails,
+    LvmLogicalVolumeSummary, LvmPhysicalVolumeDetails, LvmPhysicalVolumeState,
+    LvmPhysicalVolumeSummary, LvmVolumeGroupDetails, MdRaidArrayDetails, MdRaidHealth,
+    MdRaidLevelName, MdRaidMemberDetails, MdRaidMemberRole, MdRaidMemberState, MountPointUsage,
+    ProgressRatio, all_logical_operations, btrfs_default_subvolume_id, summarize_entities,
 };
 pub use lvm::{LogicalVolumeInfo, PhysicalVolumeInfo, VolumeGroupInfo};
 pub use network::{
@@ -77,3 +95,8 @@ pub use usage_scan::{
     UsageTopFileEntry,
 };
 pub use volume::{VolumeInfo, VolumeKind, VolumeType};
+pub use workflow::{
+    DesktopImageSelection, ImageAssetRef, ImageAttachment, ImageAttachmentRequest, ImageCopyKind,
+    ImageCopyRequest, ImageWorkflowStatus, UsageDeleteRequest, UsageDeleteResponse,
+    UsageWorkflowRequest, UsageWorkflowStatus, WorkflowState,
+};

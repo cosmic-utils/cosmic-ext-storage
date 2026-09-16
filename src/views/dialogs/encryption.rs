@@ -54,6 +54,7 @@ pub fn take_ownership<'a>(state: TakeOwnershipDialog) -> Element<'a, Message> {
 
 pub fn change_passphrase<'a>(state: ChangePassphraseDialog) -> Element<'a, Message> {
     let ChangePassphraseDialog {
+        operation_id: _,
         volume: _,
         current_passphrase,
         new_passphrase,
@@ -109,6 +110,14 @@ pub fn change_passphrase<'a>(state: ChangePassphraseDialog) -> Element<'a, Messa
     )
 }
 
+fn encryption_passphrase_input(
+    passphrase: String,
+    show_passphrase: bool,
+) -> text_input::TextInput<'static, Message> {
+    // Visual reveal must not turn a secret into an ordinary accessible text field.
+    text_input::secure_input("", passphrase, None, !show_passphrase).label(fl!("passphrase"))
+}
+
 pub fn edit_encryption_options<'a>(state: EditEncryptionOptionsDialog) -> Element<'a, Message> {
     let EditEncryptionOptionsDialog {
         volume: _,
@@ -158,11 +167,7 @@ pub fn edit_encryption_options<'a>(state: EditEncryptionOptionsDialog) -> Elemen
         name_input = name_input.on_input(|t| EditEncryptionOptionsMessage::NameUpdate(t).into());
     }
 
-    let mut passphrase_input = if show_passphrase {
-        text_input(fl!("passphrase"), passphrase.clone()).label(fl!("passphrase"))
-    } else {
-        text_input::secure_input("", passphrase.clone(), None, true).label(fl!("passphrase"))
-    };
+    let mut passphrase_input = encryption_passphrase_input(passphrase.clone(), show_passphrase);
     if controls_enabled && !running {
         passphrase_input =
             passphrase_input.on_input(|t| EditEncryptionOptionsMessage::PassphraseUpdate(t).into());
@@ -296,6 +301,10 @@ pub fn edit_encryption_options<'a>(state: EditEncryptionOptionsDialog) -> Elemen
         footer,
     )
 }
+
+#[cfg(test)]
+#[path = "../../../tests/unit/views/encryption_tests.rs"]
+mod tests;
 
 pub fn unlock_encrypted<'a>(state: UnlockEncryptedDialog) -> Element<'a, Message> {
     let mut content = iced_widget::column![

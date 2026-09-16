@@ -3,7 +3,9 @@
 use crate::config::Config;
 use crate::fl;
 use crate::message::app::Message;
+use crate::runtime::AppRuntime;
 use crate::state::dialogs::ShowDialog;
+use crate::state::logical::LogicalState;
 use crate::state::network::NetworkState;
 use crate::state::sidebar::SidebarState;
 use cosmic::ApplicationExt;
@@ -21,6 +23,9 @@ pub enum ContextPage {
 /// The application model stores app-specific state used to describe its interface and
 /// drive its logic.
 pub struct AppModel {
+    /// The explicitly selected storage composition for this application run.
+    #[allow(dead_code)]
+    pub(crate) runtime: AppRuntime,
     /// Application state which is managed by the COSMIC runtime.
     pub(crate) core: Core,
     /// Display a context drawer with the designated page if defined.
@@ -43,9 +48,27 @@ pub struct AppModel {
 
     /// Network mounts state (RClone, Samba, FTP)
     pub(crate) network: NetworkState,
+    pub(crate) logical: LogicalState,
 }
 
 impl AppModel {
+    #[cfg(all(test, feature = "test-backend"))]
+    pub(crate) fn for_handler_test(runtime: AppRuntime) -> Self {
+        Self {
+            runtime,
+            core: Core::default(),
+            context_page: ContextPage::default(),
+            nav: nav_bar::Model::default(),
+            sidebar: SidebarState::default(),
+            config: Config::default(),
+            image_op_operation_id: None,
+            dialog: None,
+            filesystem_tools: Vec::new(),
+            network: NetworkState::new(),
+            logical: LogicalState::default(),
+        }
+    }
+
     /// Updates the header and window titles.
     pub fn update_title(&mut self) -> Task<Message> {
         let mut window_title = fl!("app-title");

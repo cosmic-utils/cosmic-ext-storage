@@ -96,25 +96,25 @@ impl UsageCategory {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct UsageCategoryTotal {
     pub category: UsageCategory,
     pub bytes: u64,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct UsageTopFileEntry {
     pub path: PathBuf,
     pub bytes: u64,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct UsageCategoryTopFiles {
     pub category: UsageCategory,
     pub files: Vec<UsageTopFileEntry>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct UsageScanRequest {
     pub scan_id: String,
     pub top_files_per_category: usize,
@@ -122,19 +122,19 @@ pub struct UsageScanRequest {
     pub parallelism_preset: UsageScanParallelismPreset,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct UsageDeleteFailure {
     pub path: String,
     pub reason: String,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct UsageDeleteResult {
     pub deleted: Vec<String>,
     pub failed: Vec<UsageDeleteFailure>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct UsageScanResult {
     pub categories: Vec<UsageCategoryTotal>,
     pub top_files_by_category: Vec<UsageCategoryTopFiles>,
@@ -147,36 +147,6 @@ pub struct UsageScanResult {
     pub elapsed_ms: u128,
 }
 
+#[path = "../tests/unit/usage_scan_tests.rs"]
 #[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn usage_scan_request_and_delete_result_roundtrip() {
-        let request = UsageScanRequest {
-            scan_id: "scan-1".into(),
-            top_files_per_category: 20,
-            show_all_files: false,
-            parallelism_preset: UsageScanParallelismPreset::Balanced,
-        };
-        let json = serde_json::to_string(&request).expect("serialize request");
-        let parsed: UsageScanRequest = serde_json::from_str(&json).expect("parse request");
-        assert_eq!(parsed.scan_id, "scan-1");
-        assert_eq!(
-            parsed.parallelism_preset,
-            UsageScanParallelismPreset::Balanced
-        );
-
-        let result = UsageDeleteResult {
-            deleted: vec!["/tmp/a".into()],
-            failed: vec![UsageDeleteFailure {
-                path: "/tmp/b".into(),
-                reason: "permission denied".into(),
-            }],
-        };
-        let json = serde_json::to_string(&result).expect("serialize result");
-        let parsed: UsageDeleteResult = serde_json::from_str(&json).expect("parse result");
-        assert_eq!(parsed.deleted.len(), 1);
-        assert_eq!(parsed.failed.len(), 1);
-    }
-}
+mod tests;

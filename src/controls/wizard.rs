@@ -198,8 +198,26 @@ pub(crate) fn selectable_tile<'a, Message: Clone + 'static>(
     width: Length,
     height: Length,
 ) -> Element<'a, Message> {
+    // Suggested buttons provide the selected surface, but their foreground
+    // does not propagate reliably through a custom container. Set both text
+    // and icon colors explicitly so selected tiles stay readable on every
+    // accent palette.
+    let content = widget::container(content).style(move |theme| {
+        let cosmic = theme.cosmic();
+        let foreground = if selected {
+            cosmic.on_accent_color()
+        } else {
+            cosmic.background(false).component.on
+        };
+
+        cosmic::iced::widget::container::Style {
+            text_color: Some(foreground.into()),
+            icon_color: Some(foreground.into()),
+            ..Default::default()
+        }
+    });
     let mut tile = button::custom(
-        widget::container(content)
+        content
             .padding(16)
             .width(width)
             .height(height)
@@ -219,22 +237,6 @@ pub(crate) fn selectable_tile<'a, Message: Clone + 'static>(
     tile.into()
 }
 
+#[path = "../../tests/unit/controls/wizard_tests.rs"]
 #[cfg(test)]
-mod tests {
-    use super::wizard_step_is_clickable;
-
-    #[test]
-    fn breadcrumb_previous_step_is_clickable() {
-        assert!(wizard_step_is_clickable(1, 3));
-    }
-
-    #[test]
-    fn breadcrumb_current_step_is_not_clickable() {
-        assert!(!wizard_step_is_clickable(2, 2));
-    }
-
-    #[test]
-    fn breadcrumb_future_step_is_not_clickable() {
-        assert!(!wizard_step_is_clickable(3, 2));
-    }
-}
+mod tests;

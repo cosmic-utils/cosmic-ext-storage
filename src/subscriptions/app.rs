@@ -31,23 +31,27 @@ pub(crate) fn subscription(app: &AppModel) -> Subscription<Message> {
         // Disk hotplug comes directly from the block backend rather than a
         // project-owned D-Bus signal protocol.
         Subscription::run_with(
-            std::any::TypeId::of::<DiskEventSubscription>(),
-            |_: &std::any::TypeId| {
+            (
+                std::any::TypeId::of::<DiskEventSubscription>(),
+                OperationContext(app.runtime.operations()),
+            ),
+            |(_, operations): &(std::any::TypeId, OperationContext)| {
+                let operations = operations.0.clone();
                 cosmic::iced::stream::channel::<Message>(
                     4,
                     move |mut output: cosmic::iced::futures::channel::mpsc::Sender<Message>| async move {
-                        let Ok(operations) = crate::operations::shared().await else {
+                        let Ok(mut events) = device_messages(operations).await else {
                             return;
                         };
-                        let Ok(mut events) = operations.registry.block.device_events().await else {
-                            return;
-                        };
-                        while let Some(Ok(event)) = events.next().await {
-                            let message = match event {
-                                DeviceEvent::Added(device) => Message::DriveAdded(device),
-                                DeviceEvent::Removed(device) => Message::DriveRemoved(device),
-                            };
-                            _ = output.send(message).await;
+                        while let Some(event) = events.next().await {
+                            match event {
+                                Ok(message) => {
+                                    if output.send(message).await.is_err() {
+                                        break;
+                                    }
+                                }
+                                Err(error) => tracing::warn!(%error, "Device event stream failed"),
+                            }
                         }
                     },
                 )
@@ -59,56 +63,99 @@ pub(crate) fn subscription(app: &AppModel) -> Subscription<Message> {
             .map(|update| Message::UpdateConfig(update.config)),
     ];
 
-    // When an image operation is running, poll progress and wait for operation_completed.
-    if let Some(ref operation_id) = app.image_op_operation_id {
-        let operation_id = operation_id.clone();
+    // The subscription and headless tests use the same status-to-message adapter.
+    if let Some(operation_id) = &app.image_op_operation_id {
         subs.push(Subscription::run_with(
-            (std::any::TypeId::of::<ImageOperationSubscription>(), operation_id),
-            |(_, operation_id): &(std::any::TypeId, String)| cosmic::iced::stream::channel::<Message>(32, {
+            (
+                std::any::TypeId::of::<ImageOperationSubscription>(),
+                operation_id.clone(),
+                OperationContext(app.runtime.operations()),
+            ),
+            |(_, operation_id, operations): &(std::any::TypeId, String, OperationContext)| {
                 let operation_id = operation_id.clone();
-                move |mut output: cosmic::iced::futures::channel::mpsc::Sender<Message>| async move {
-                    let Ok(client) = ImageClient::new().await else {
-                        _ = output
-                            .send(Message::ImageOperationDialog(
-                                ImageOperationDialogMessage::Complete(Err(
-                                    "Failed to create image client".to_string(),
-                                )),
-                            ))
-                            .await;
-                        return;
-                    };
+                let client = ImageClient::with_operations(operations.0.clone());
+                cosmic::iced::stream::channel::<Message>(32, move |mut output: cosmic::iced::futures::channel::mpsc::Sender<Message>| async move {
                     loop {
-                        tokio::select! {
-                            result = client.wait_for_operation_completion(&operation_id) => {
-                                let result = result.map_err(|e| e.to_string());
-                                _ = output
-                                    .send(Message::ImageOperationDialog(
-                                        ImageOperationDialogMessage::Complete(result),
-                                    ))
-                                    .await;
-                                return;
-                            }
-                            _ = tokio::time::sleep(Duration::from_millis(400)) => {
-                                if let Ok(status) = client.get_operation_status(&operation_id).await
-                                {
-                                    _ = output
-                                        .send(Message::ImageOperationDialog(
-                                            ImageOperationDialogMessage::Progress(
-                                                operation_id.clone(),
-                                                status.bytes_completed,
-                                                status.total_bytes,
-                                                status.speed_bytes_per_sec,
-                                            ),
-                                        ))
-                                        .await;
-                                }
-                            }
+                        let (message, terminal) =
+                            image_status_message(&client, &operation_id).await;
+                        if output.send(message).await.is_err() || terminal {
+                            return;
                         }
+                        tokio::time::sleep(Duration::from_millis(400)).await;
                     }
-                }
-            }),
+                })
+            },
         ));
     }
 
     Subscription::batch(subs)
+}
+
+#[derive(Clone)]
+struct OperationContext(std::sync::Arc<crate::operations::StorageOperations>);
+
+impl std::hash::Hash for OperationContext {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        std::ptr::hash(std::sync::Arc::as_ptr(&self.0), state);
+    }
+}
+
+/// Convert one actual adapter status to a production message. No window or
+/// scheduler is needed to test progress, terminal state, errors or stale IDs.
+pub(crate) async fn image_status_message(
+    client: &ImageClient,
+    operation_id: &str,
+) -> (Message, bool) {
+    use storage_types::WorkflowState;
+    let result = match client.workflow_status(operation_id).await {
+        Ok(status) => match status.state {
+            WorkflowState::Pending | WorkflowState::Running => {
+                return (
+                    Message::ImageOperationDialog(ImageOperationDialogMessage::Progress(
+                        operation_id.into(),
+                        status.bytes_completed,
+                        status.bytes_total,
+                        status.speed_bytes_per_sec,
+                    )),
+                    false,
+                );
+            }
+            WorkflowState::Completed => Ok(()),
+            WorkflowState::Cancelled => Err("Operation cancelled".into()),
+            WorkflowState::Failed => Err(status
+                .message
+                .unwrap_or_else(|| "Image operation failed".into())),
+        },
+        Err(error) => Err(error.to_string()),
+    };
+    (
+        Message::ImageOperationDialog(ImageOperationDialogMessage::Complete {
+            operation_id: operation_id.into(),
+            result,
+        }),
+        true,
+    )
+}
+
+type DeviceMessages = std::pin::Pin<
+    Box<dyn futures_util::Stream<Item = Result<Message, storage_contracts::StorageError>> + Send>,
+>;
+
+pub(crate) async fn device_messages(
+    operations: std::sync::Arc<crate::operations::StorageOperations>,
+) -> Result<DeviceMessages, storage_contracts::StorageError> {
+    Ok(Box::pin(
+        operations
+            .registry
+            .block
+            .device_events()
+            .await?
+            .map(|event| {
+                event.map(|event| match event {
+                    DeviceEvent::Added(device) => Message::DriveAdded(device),
+                    DeviceEvent::Removed(device) => Message::DriveRemoved(device),
+                    DeviceEvent::Refresh => Message::LoadDrivesIncremental,
+                })
+            }),
+    ))
 }

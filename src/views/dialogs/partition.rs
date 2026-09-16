@@ -52,6 +52,7 @@ pub fn create_partition<'a>(state: CreatePartitionDialog) -> Element<'a, Message
             if create.table_type != "dos" {
                 content = content.push(
                     text_input(fl!("volume-name"), create.name.clone())
+                        .id(cosmic::widget::Id::new("create.name"))
                         .label(fl!("volume-name"))
                         .on_input(|t| CreateMessage::NameUpdate(t).into()),
                 );
@@ -101,10 +102,8 @@ pub fn create_partition<'a>(state: CreatePartitionDialog) -> Element<'a, Message
             basics_has_selection = selected_in_filtered.is_some();
 
             content = content.push(caption(fl!("filesystem-type")));
-            content = content.push(dropdown(
-                dropdown_labels,
-                selected_in_filtered,
-                move |selected_idx| {
+            content = content.push(
+                dropdown(dropdown_labels, selected_in_filtered, move |selected_idx| {
                     let original_idx = partition_types
                         .iter()
                         .position(|orig| {
@@ -112,8 +111,10 @@ pub fn create_partition<'a>(state: CreatePartitionDialog) -> Element<'a, Message
                         })
                         .unwrap_or(0);
                     CreateMessage::PartitionTypeUpdate(original_idx).into()
-                },
-            ));
+                })
+                .name(fl!("filesystem-type"))
+                .id(cosmic::widget::Id::new("create.filesystem")),
+            );
 
             if has_missing_tools {
                 let warning_text = container(caption(format!("⚠ {}", fl!("fs-tools-warning"))))
@@ -162,6 +163,8 @@ pub fn create_partition<'a>(state: CreatePartitionDialog) -> Element<'a, Message
                 button::text("-")
                     .on_press(CreateMessage::SizeUpdate((size - step).max(0.) as u64).into()),
                 text_input("", size_text)
+                    .accessible_name(fl!("partition-size"))
+                    .id(cosmic::widget::Id::new("create.size"))
                     .width(iced::Length::Fixed(100.))
                     .on_input(move |v| match v.trim().parse::<f64>() {
                         Ok(value) if value >= 0.0 => {
@@ -185,6 +188,8 @@ pub fn create_partition<'a>(state: CreatePartitionDialog) -> Element<'a, Message
                 button::text("-")
                     .on_press(CreateMessage::SizeUpdate((size + step).min(len) as u64).into()),
                 text_input("", free_text)
+                    .accessible_name(fl!("free-space"))
+                    .id(cosmic::widget::Id::new("create.free-space"))
                     .width(iced::Length::Fixed(100.))
                     .on_input(move |v| match v.trim().parse::<f64>() {
                         Ok(free_value) if free_value >= 0.0 => {
@@ -339,6 +344,7 @@ pub fn format_partition<'a>(state: FormatPartitionDialog) -> Element<'a, Message
         step,
         running,
         filesystem_tools,
+        ..
     } = state;
 
     let size_pretty = bytes_to_pretty(&create.size, false);
@@ -521,6 +527,7 @@ pub fn format_partition<'a>(state: FormatPartitionDialog) -> Element<'a, Message
 
 pub fn edit_partition<'a>(state: EditPartitionDialog) -> Element<'a, Message> {
     let EditPartitionDialog {
+        operation_id: _,
         volume: _,
         step,
         partition_types,
@@ -679,6 +686,7 @@ pub fn edit_partition<'a>(state: EditPartitionDialog) -> Element<'a, Message> {
 
 pub fn resize_partition<'a>(state: ResizePartitionDialog) -> Element<'a, Message> {
     let ResizePartitionDialog {
+        operation_id: _,
         volume: _,
         step: wizard_step,
         min_size_bytes,

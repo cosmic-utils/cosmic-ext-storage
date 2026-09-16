@@ -1,10 +1,16 @@
 use crate::models::{UiDrive, UiVolume};
+use storage_contracts::{
+    BtrfsResizeRequest, ConfirmedLogicalAction, LogicalAction, LogicalDeviceCandidate,
+};
 use storage_types::{
-    CreatePartitionInfo, FilesystemToolInfo, PartitionTypeInfo, ProcessInfo, SmartAttribute,
-    SmartStatus, VolumeInfo,
+    BtrfsSubvolumeRef, CreatePartitionInfo, FilesystemToolInfo, LogicalEntityId, PartitionTypeInfo,
+    ProcessInfo, SmartAttribute, SmartStatus, VolumeInfo,
 };
 
+use crate::state::logical::LogicalDevicePickerAction;
+
 #[derive(Debug, Clone)]
+#[allow(clippy::large_enum_variant)]
 pub enum ShowDialog {
     DeletePartition(DeletePartitionDialog),
     AddPartition(CreatePartitionDialog),
@@ -24,8 +30,9 @@ pub enum ShowDialog {
     AttachDiskImage(Box<AttachDiskImageDialog>),
     ImageOperation(Box<ImageOperationDialog>),
     UnmountBusy(UnmountBusyDialog),
-    BtrfsCreateSubvolume(BtrfsCreateSubvolumeDialog),
-    BtrfsCreateSnapshot(BtrfsCreateSnapshotDialog),
+    LogicalActionForm(LogicalActionFormDialog),
+    LogicalDevicePicker(LogicalDevicePickerDialog),
+    LogicalActionConfirmation(LogicalActionConfirmationDialog),
     Info {
         title: String,
         body: String,
@@ -38,6 +45,7 @@ pub enum ShowDialog {
 
 #[derive(Debug, Clone)]
 pub struct FormatPartitionDialog {
+    pub operation_id: Option<uuid::Uuid>,
     pub volume: VolumeInfo,
     pub info: CreatePartitionInfo,
     pub step: FormatPartitionStep,
@@ -62,6 +70,7 @@ impl FormatPartitionStep {
 
 #[derive(Debug, Clone)]
 pub struct EditPartitionDialog {
+    pub operation_id: Option<uuid::Uuid>,
     pub volume: VolumeInfo,
     pub step: EditPartitionStep,
     pub partition_types: Vec<PartitionTypeInfo>,
@@ -92,6 +101,7 @@ impl EditPartitionStep {
 
 #[derive(Debug, Clone)]
 pub struct ResizePartitionDialog {
+    pub operation_id: Option<uuid::Uuid>,
     pub volume: VolumeInfo,
     pub step: ResizePartitionStep,
     pub min_size_bytes: u64,
@@ -144,8 +154,9 @@ pub struct TakeOwnershipDialog {
     pub running: bool,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub struct ChangePassphraseDialog {
+    pub operation_id: Option<uuid::Uuid>,
     pub volume: VolumeInfo,
     pub current_passphrase: String,
     pub new_passphrase: String,
@@ -154,8 +165,18 @@ pub struct ChangePassphraseDialog {
     pub running: bool,
 }
 
+impl std::fmt::Debug for ChangePassphraseDialog {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("ChangePassphraseDialog")
+            .field("operation_id", &self.operation_id)
+            .field("running", &self.running)
+            .finish_non_exhaustive()
+    }
+}
+
 #[derive(Debug, Clone)]
 pub struct EditMountOptionsDialog {
+    pub operation_id: Option<uuid::Uuid>,
     pub target: FilesystemTarget,
     pub step: EditMountOptionsStep,
     pub use_defaults: bool,
@@ -248,6 +269,8 @@ pub enum ImageOperationKind {
 
 #[derive(Debug, Clone)]
 pub struct ImageOperationDialog {
+    pub request_id: Option<uuid::Uuid>,
+    pub cancel_requested: bool,
     pub kind: ImageOperationKind,
     pub drive: UiDrive,
     pub partition: Option<VolumeInfo>,
@@ -270,12 +293,14 @@ pub struct SmartDataDialog {
 
 #[derive(Debug, Clone)]
 pub struct DeletePartitionDialog {
+    pub operation_id: Option<uuid::Uuid>,
     pub name: String,
     pub running: bool,
 }
 
 #[derive(Debug, Clone)]
 pub struct CreatePartitionDialog {
+    pub operation_id: Option<uuid::Uuid>,
     pub info: CreatePartitionInfo,
     pub step: CreatePartitionStep,
     pub running: bool,
@@ -308,13 +333,28 @@ pub struct FormatDiskDialog {
     pub running: bool,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub struct UnlockEncryptedDialog {
+    pub operation_id: Option<uuid::Uuid>,
     pub partition_path: String,
     pub partition_name: String,
     pub passphrase: String,
     pub error: Option<String>,
     pub running: bool,
+}
+
+impl std::fmt::Debug for UnlockEncryptedDialog {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter
+            .debug_struct("UnlockEncryptedDialog")
+            .field("operation_id", &self.operation_id)
+            .field("partition_path", &self.partition_path)
+            .field("partition_name", &self.partition_name)
+            .field("passphrase", &"<redacted>")
+            .field("has_error", &self.error.is_some())
+            .field("running", &self.running)
+            .finish()
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -325,23 +365,221 @@ pub struct UnmountBusyDialog {
     pub device_path: String,
 }
 
+/// The input portion of a logical operation.  It contains semantic values
+/// only: selected device and subvolume identities are already typed values
+/// captured from the current topology, never strings read from a form.
 #[derive(Debug, Clone)]
-pub struct BtrfsCreateSubvolumeDialog {
-    pub mount_point: String,
-    pub block_path: String,
-    pub name: String,
-    pub running: bool,
+pub enum LogicalActionForm {
+    CreateLvmLogicalVolume {
+        volume_group: LogicalEntityId,
+        name: String,
+        size_bytes: String,
+    },
+    ResizeLvmLogicalVolume {
+        logical_volume: LogicalEntityId,
+        size_bytes: String,
+    },
+    ResizeBtrfsFilesystem {
+        filesystem: LogicalEntityId,
+        size_bytes: String,
+    },
+    SetBtrfsLabel {
+        filesystem: LogicalEntityId,
+        label: String,
+    },
+    CreateBtrfsSubvolume {
+        filesystem: LogicalEntityId,
+        name: String,
+    },
+    CreateBtrfsSnapshot {
+        filesystem: LogicalEntityId,
+        source: BtrfsSubvolumeRef,
+        destination: String,
+        readonly: bool,
+    },
+}
+
+impl LogicalActionForm {
+    /// Reopen a failed input-taking operation without rebuilding identity from
+    /// display strings. Actions not represented by a form return `None`.
+    pub fn from_action(action: &LogicalAction) -> Option<Self> {
+        match action {
+            LogicalAction::CreateLvmLogicalVolume {
+                volume_group,
+                name,
+                size_bytes,
+            } => Some(Self::CreateLvmLogicalVolume {
+                volume_group: volume_group.clone(),
+                name: name.clone(),
+                size_bytes: size_bytes.to_string(),
+            }),
+            LogicalAction::ResizeLvmLogicalVolume {
+                logical_volume,
+                size_bytes,
+            } => Some(Self::ResizeLvmLogicalVolume {
+                logical_volume: logical_volume.clone(),
+                size_bytes: size_bytes.to_string(),
+            }),
+            LogicalAction::ResizeBtrfsFilesystem {
+                filesystem,
+                request: BtrfsResizeRequest::AbsoluteBytes(size_bytes),
+            } => Some(Self::ResizeBtrfsFilesystem {
+                filesystem: filesystem.clone(),
+                size_bytes: size_bytes.to_string(),
+            }),
+            LogicalAction::SetBtrfsLabel { filesystem, label } => Some(Self::SetBtrfsLabel {
+                filesystem: filesystem.clone(),
+                label: label.clone(),
+            }),
+            LogicalAction::CreateBtrfsSubvolume { filesystem, name } => {
+                Some(Self::CreateBtrfsSubvolume {
+                    filesystem: filesystem.clone(),
+                    name: name.clone(),
+                })
+            }
+            LogicalAction::CreateBtrfsSnapshot {
+                filesystem,
+                source,
+                destination,
+                readonly,
+            } => Some(Self::CreateBtrfsSnapshot {
+                filesystem: filesystem.clone(),
+                source: source.clone(),
+                destination: destination.clone(),
+                readonly: *readonly,
+            }),
+            _ => None,
+        }
+    }
+
+    pub fn title(&self) -> &'static str {
+        match self {
+            Self::CreateLvmLogicalVolume { .. } => "Create logical volume",
+            Self::ResizeLvmLogicalVolume { .. } => "Resize logical volume",
+            Self::ResizeBtrfsFilesystem { .. } => "Resize Btrfs filesystem",
+            Self::SetBtrfsLabel { .. } => "Set Btrfs label",
+            Self::CreateBtrfsSubvolume { .. } => "Create Btrfs subvolume",
+            Self::CreateBtrfsSnapshot { .. } => "Create Btrfs snapshot",
+        }
+    }
+
+    pub fn submit_label(&self) -> &'static str {
+        match self {
+            Self::CreateBtrfsSubvolume { .. } | Self::CreateBtrfsSnapshot { .. } => "Create",
+            _ => "Review",
+        }
+    }
+
+    pub fn set_primary_text(&mut self, text: String) {
+        match self {
+            Self::CreateLvmLogicalVolume { name, .. }
+            | Self::SetBtrfsLabel { label: name, .. }
+            | Self::CreateBtrfsSubvolume { name, .. }
+            | Self::CreateBtrfsSnapshot {
+                destination: name, ..
+            } => *name = text,
+            Self::ResizeLvmLogicalVolume { .. } | Self::ResizeBtrfsFilesystem { .. } => {}
+        }
+    }
+
+    pub fn set_size_text(&mut self, text: String) {
+        match self {
+            Self::CreateLvmLogicalVolume { size_bytes, .. }
+            | Self::ResizeLvmLogicalVolume { size_bytes, .. }
+            | Self::ResizeBtrfsFilesystem { size_bytes, .. } => *size_bytes = text,
+            Self::SetBtrfsLabel { .. }
+            | Self::CreateBtrfsSubvolume { .. }
+            | Self::CreateBtrfsSnapshot { .. } => {}
+        }
+    }
+
+    pub fn set_readonly(&mut self, readonly: bool) {
+        if let Self::CreateBtrfsSnapshot {
+            readonly: value, ..
+        } = self
+        {
+            *value = readonly;
+        }
+    }
+
+    pub fn action(&self) -> Result<LogicalAction, String> {
+        let parse_size = |text: &str| {
+            text.parse::<u64>()
+                .ok()
+                .filter(|size| *size > 0)
+                .ok_or_else(|| "Enter a non-zero size in bytes.".to_string())
+        };
+        let action = match self {
+            Self::CreateLvmLogicalVolume {
+                volume_group,
+                name,
+                size_bytes,
+            } => LogicalAction::CreateLvmLogicalVolume {
+                volume_group: volume_group.clone(),
+                name: name.clone(),
+                size_bytes: parse_size(size_bytes)?,
+            },
+            Self::ResizeLvmLogicalVolume {
+                logical_volume,
+                size_bytes,
+            } => LogicalAction::ResizeLvmLogicalVolume {
+                logical_volume: logical_volume.clone(),
+                size_bytes: parse_size(size_bytes)?,
+            },
+            Self::ResizeBtrfsFilesystem {
+                filesystem,
+                size_bytes,
+            } => LogicalAction::ResizeBtrfsFilesystem {
+                filesystem: filesystem.clone(),
+                request: BtrfsResizeRequest::AbsoluteBytes(parse_size(size_bytes)?),
+            },
+            Self::SetBtrfsLabel { filesystem, label } => LogicalAction::SetBtrfsLabel {
+                filesystem: filesystem.clone(),
+                label: label.clone(),
+            },
+            Self::CreateBtrfsSubvolume { filesystem, name } => {
+                LogicalAction::CreateBtrfsSubvolume {
+                    filesystem: filesystem.clone(),
+                    name: name.clone(),
+                }
+            }
+            Self::CreateBtrfsSnapshot {
+                filesystem,
+                source,
+                destination,
+                readonly,
+            } => LogicalAction::CreateBtrfsSnapshot {
+                filesystem: filesystem.clone(),
+                source: source.clone(),
+                destination: destination.clone(),
+                readonly: *readonly,
+            },
+        };
+        action.validate().map_err(|error| error.to_string())?;
+        Ok(action)
+    }
+}
+
+/// A focused input form that precedes the immutable preflight review.
+#[derive(Debug, Clone)]
+pub struct LogicalActionFormDialog {
+    pub form: LogicalActionForm,
     pub error: Option<String>,
 }
 
+/// Candidate rows are copied from one current preflight response.  The UI can
+/// display blocked rows but only a `Ready` row may emit a block reference.
 #[derive(Debug, Clone)]
-pub struct BtrfsCreateSnapshotDialog {
-    pub mount_point: String,
-    pub block_path: String,
-    pub subvolumes: Vec<storage_types::BtrfsSubvolume>,
-    pub selected_source_index: usize,
-    pub snapshot_name: String,
-    pub read_only: bool,
+pub struct LogicalDevicePickerDialog {
+    pub picker: LogicalDevicePickerAction,
+    pub candidates: Vec<LogicalDeviceCandidate>,
+}
+
+/// A typed logical action awaiting an explicit user confirmation.
+#[derive(Debug, Clone)]
+pub struct LogicalActionConfirmationDialog {
+    pub confirmed: ConfirmedLogicalAction,
+    pub title: String,
+    pub body: String,
     pub running: bool,
-    pub error: Option<String>,
 }

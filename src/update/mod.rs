@@ -1,22 +1,28 @@
 mod btrfs;
 mod drive;
 mod image;
+mod logical;
 mod nav;
 mod network;
 mod smart;
 pub(crate) mod volumes;
+
+#[cfg(all(test, feature = "test-backend"))]
+#[path = "../../tests/unit/update/production_handler_tests.rs"]
+mod production_handler_tests;
 
 use std::collections::HashSet;
 
 use crate::app::APP_ID;
 use crate::app::REPOSITORY;
 use crate::config::{Config, LoggingLevel};
-use crate::errors::ui::{UiErrorContext, log_error_and_show_dialog};
 use crate::fl;
 use crate::logging;
 use crate::message::app::{ImagePathPickerKind, Message};
 use crate::message::network::NetworkMessage;
-use crate::models::load_all_drives;
+use crate::models::load::{
+    build_drive_timed_with_operations, load_drive_candidates_with_operations,
+};
 use crate::operations::FilesystemsClient;
 use crate::state::app::AppModel;
 use crate::state::dialogs::ShowDialog;
@@ -26,10 +32,40 @@ use cosmic::app::Task;
 use cosmic::cosmic_config::CosmicConfigEntry;
 use cosmic::dialog::file_chooser;
 use cosmic::widget::nav_bar;
+use storage_contracts::ConfirmedLogicalAction;
 use storage_types::{UsageCategory, UsageScanParallelismPreset};
 
 const USAGE_TOP_FILES_MIN: u32 = 1;
 const USAGE_TOP_FILES_MAX: u32 = 1000;
+
+fn execute_confirmed_logical_action(
+    app: &mut AppModel,
+    confirmed: ConfirmedLogicalAction,
+) -> Task<Message> {
+    if app.logical.confirmation.as_ref() != Some(&confirmed) {
+        return Task::none();
+    }
+    let entity = logical::action_entity(&confirmed.action);
+    let generation = match app.logical.begin_action(confirmed.action.clone(), entity) {
+        Ok(generation) => generation,
+        Err(error) => {
+            app.logical.action_status = Some(error);
+            return Task::none();
+        }
+    };
+    let operations = app.runtime.operations();
+    Task::perform(
+        async move {
+            let result = operations
+                .execute_logical_action(confirmed)
+                .await
+                .map(|_| ())
+                .map_err(|error| error.to_string());
+            Message::LogicalActionFinished { generation, result }
+        },
+        |message| message.into(),
+    )
+}
 
 fn visible_usage_categories(result: &storage_types::UsageScanResult) -> Vec<UsageCategory> {
     result
@@ -74,12 +110,20 @@ fn usage_filtered_file_paths(state: &UsageTabState) -> Vec<String> {
 /// Find the segment index and whether the volume is a child for a given device path
 /// Handles messages emitted by the application and its widgets.
 pub(crate) fn update(app: &mut AppModel, message: Message) -> Task<Message> {
+    let filesystems = FilesystemsClient::with_operations(app.runtime.operations());
     match message {
         Message::OpenRepositoryUrl => {
-            _ = open::that_detached(REPOSITORY);
+            let desktop = app.runtime.desktop();
+            let repository = REPOSITORY.to_string();
+            return Task::perform(async move { desktop.open_url(&repository).await }, |_| {
+                Message::None.into()
+            });
         }
         Message::OpenPath(path) => {
-            _ = open::that_detached(path);
+            let desktop = app.runtime.desktop();
+            return Task::perform(async move { desktop.reveal(&path).await }, |_| {
+                Message::None.into()
+            });
         }
         Message::ToggleContextPage(context_page) => {
             if app.context_page == context_page {
@@ -97,6 +141,417 @@ pub(crate) fn update(app: &mut AppModel, message: Message) -> Task<Message> {
         Message::FilesystemToolsLoaded(tools) => {
             app.filesystem_tools = tools;
         }
+        Message::LoadDrivesIncremental => {
+            let operations = app.runtime.operations();
+            let load_id = app.sidebar.start_drive_loading();
+            return Task::perform(
+                async move {
+                    load_drive_candidates_with_operations(operations)
+                        .await
+                        .map_err(|error| error.to_string())
+                },
+                move |result| Message::DriveListLoaded { load_id, result }.into(),
+            );
+        }
+        Message::DriveListLoaded { load_id, result } => {
+            if app.sidebar.load_id != Some(load_id) || !app.sidebar.awaiting_drive_list {
+                return Task::none();
+            }
+            app.sidebar.awaiting_drive_list = false;
+            match result {
+                Ok(disks) => {
+                    app.sidebar.pending_devices =
+                        disks.iter().map(|disk| disk.device.clone()).collect();
+                    if app.sidebar.pending_devices.len() != disks.len()
+                        || app.sidebar.pending_devices.contains("")
+                    {
+                        app.sidebar.drive_load_error =
+                            Some("Invalid or duplicate device identity in refresh".into());
+                        app.sidebar.finish_drive_loading();
+                        return Task::none();
+                    }
+                    app.sidebar.drive_builds_pending = disks.len();
+                    if disks.is_empty() {
+                        return Task::done(Message::DriveLoadFinished { load_id }.into());
+                    }
+                    return Task::batch(disks.into_iter().map(|disk| {
+                        let device = disk.device.clone();
+                        Task::perform(
+                            build_drive_timed_with_operations(disk, app.runtime.operations()),
+                            move |(result, elapsed_ms)| {
+                                Message::DriveLoaded {
+                                    load_id,
+                                    device: device.clone(),
+                                    result,
+                                    elapsed_ms,
+                                }
+                                .into()
+                            },
+                        )
+                    }));
+                }
+                Err(error) => {
+                    app.sidebar.drive_load_error = Some(error);
+                    app.sidebar.finish_drive_loading();
+                }
+            }
+        }
+        Message::DriveLoaded {
+            load_id,
+            device,
+            result,
+            elapsed_ms,
+        } => {
+            if app.sidebar.load_id != Some(load_id) || !app.sidebar.pending_devices.remove(&device)
+            {
+                return Task::none();
+            }
+            tracing::debug!(elapsed_ms, "incremental drive load completed");
+            match result {
+                Ok(drive) if drive.device() == device => app.sidebar.pending_drives.push(drive),
+                Ok(_) => {
+                    app.sidebar.drive_load_error =
+                        Some("Drive identity changed during refresh".into())
+                }
+                Err(error) => app.sidebar.drive_load_error = Some(error),
+            }
+            app.sidebar.drive_builds_pending = app.sidebar.pending_devices.len();
+            if app.sidebar.drive_builds_pending == 0 {
+                return Task::done(Message::DriveLoadFinished { load_id }.into());
+            }
+        }
+        Message::DriveLoadFinished { load_id } => {
+            if app.sidebar.load_id != Some(load_id)
+                || app.sidebar.awaiting_drive_list
+                || !app.sidebar.pending_devices.is_empty()
+            {
+                return Task::none();
+            }
+            let drives = app.sidebar.take_pending_drives();
+            app.sidebar.finish_drive_loading();
+            if app.sidebar.drive_load_error.is_none() {
+                return nav::update_nav(app, drives, None, false);
+            }
+        }
+        Message::LogicalViewRequested { device_path } => {
+            app.network.select(None, None);
+            app.network.clear_editor();
+            app.sidebar.selected_child = None;
+            app.logical.request_view(device_path.clone());
+            if app.logical.loading && device_path.is_none() {
+                return Task::none();
+            }
+            if let Some(device_path) = device_path {
+                let operations = app.runtime.operations();
+                let generation = app.logical.candidate_generation;
+                return Task::perform(
+                    async move {
+                        let result = operations
+                            .capture_logical_candidate(device_path.clone())
+                            .await
+                            .map_err(|error| error.to_string());
+                        Message::LogicalCandidateCaptured {
+                            generation,
+                            device_path,
+                            result,
+                        }
+                    },
+                    |message| message.into(),
+                );
+            }
+            return Task::done(cosmic::Action::App(Message::LoadLogicalEntities));
+        }
+        Message::LogicalCandidateCaptured {
+            generation,
+            device_path,
+            result,
+        } => {
+            if !app.logical.view_requested || generation != app.logical.candidate_generation {
+                return Task::none();
+            }
+            match result {
+                Ok(anchor) => {
+                    app.logical.request_candidate(Some(anchor));
+                    return Task::done(cosmic::Action::App(Message::LoadLogicalEntities));
+                }
+                Err(error) => {
+                    app.logical.selected_device = Some(device_path);
+                    app.logical.candidate_resolution =
+                        Some(storage_types::LogicalCandidateResolution::Unavailable {
+                            source: "UDisks".into(),
+                            reason: error,
+                        });
+                }
+            }
+        }
+        Message::LoadLogicalEntities => {
+            let generation = app.logical.begin_load();
+            let request = storage_types::LogicalLoadRequest {
+                anchor: app.logical.selected_candidate.clone(),
+            };
+            let operations = app.runtime.operations();
+            return Task::perform(
+                async move {
+                    let result = operations
+                        .load_logical_topology_for(request)
+                        .await
+                        .map_err(|error| error.to_string());
+                    Message::LogicalEntitiesLoaded { generation, result }
+                },
+                |message| message.into(),
+            );
+        }
+        Message::LogicalEntitiesLoaded { generation, result } => {
+            app.logical.finish_load_result(generation, result);
+        }
+        Message::LogicalSelectionChanged(entity) => app.logical.select(entity),
+        Message::LogicalActionFormRequested(form) => {
+            if app.dialog.is_none() && app.logical.pending.is_none() {
+                app.dialog = Some(ShowDialog::LogicalActionForm(
+                    crate::state::dialogs::LogicalActionFormDialog { form, error: None },
+                ));
+            }
+        }
+        Message::LogicalActionForm(message) => {
+            let Some(ShowDialog::LogicalActionForm(dialog)) = app.dialog.as_mut() else {
+                return Task::none();
+            };
+            match message {
+                crate::message::dialogs::LogicalActionFormMessage::PrimaryTextUpdate(value) => {
+                    dialog.form.set_primary_text(value);
+                    dialog.error = None;
+                }
+                crate::message::dialogs::LogicalActionFormMessage::SizeUpdate(value) => {
+                    dialog.form.set_size_text(value);
+                    dialog.error = None;
+                }
+                crate::message::dialogs::LogicalActionFormMessage::ReadOnlyUpdate(value) => {
+                    dialog.form.set_readonly(value);
+                }
+                crate::message::dialogs::LogicalActionFormMessage::Cancel => {
+                    app.dialog = None;
+                }
+                crate::message::dialogs::LogicalActionFormMessage::Submit => {
+                    match dialog.form.action() {
+                        Ok(action) => {
+                            app.dialog = None;
+                            return Task::done(cosmic::Action::App(
+                                Message::LogicalActionPrompted(action),
+                            ));
+                        }
+                        Err(error) => dialog.error = Some(error),
+                    }
+                }
+            }
+        }
+        Message::LogicalDevicePickerRequested(picker) => {
+            if app.dialog.is_some() || app.logical.pending.is_some() {
+                return Task::none();
+            }
+            let request_key = app.logical.begin_device_picker(picker);
+            app.logical.action_status = Some("Loading current eligible devices…".into());
+            let operations = app.runtime.operations();
+            return Task::perform(
+                async move {
+                    let result = operations
+                        .preflight_logical_action(storage_contracts::LogicalPreflightRequest {
+                            request_key: request_key.clone(),
+                        })
+                        .await
+                        .map_err(|error| error.to_string());
+                    Message::LogicalPreflightLoaded {
+                        request_key,
+                        result,
+                    }
+                },
+                |message| message.into(),
+            );
+        }
+        Message::LogicalDevicePickerSelected(device) => {
+            let Some(ShowDialog::LogicalDevicePicker(dialog)) = app.dialog.as_ref() else {
+                return Task::none();
+            };
+            let selected = dialog.candidates.iter().any(|candidate| {
+                matches!(candidate, storage_contracts::LogicalDeviceCandidate::Ready { device: ready, .. } if ready == &device)
+            });
+            if !selected {
+                app.logical.action_status =
+                    Some("That device is no longer an eligible candidate.".into());
+                return Task::none();
+            }
+            let Some(ShowDialog::LogicalDevicePicker(dialog)) = app.dialog.take() else {
+                unreachable!("the checked device picker dialog remains active")
+            };
+            app.logical.invalidate_draft();
+            return Task::done(cosmic::Action::App(Message::LogicalActionPrompted(
+                dialog.picker.action(device),
+            )));
+        }
+        Message::LogicalDevicePickerCancelled => {
+            if matches!(app.dialog, Some(ShowDialog::LogicalDevicePicker(_))) {
+                app.dialog = None;
+                app.logical.invalidate_draft();
+                app.logical.action_status = None;
+            }
+        }
+        Message::LogicalActionPrompted(action) => {
+            if app.dialog.is_some() || app.logical.pending.is_some() {
+                return Task::none();
+            }
+            let target = logical::action_entity(&action);
+            let request_key = app.logical.begin_draft(action, target);
+            app.logical.action_status = Some("Reviewing current logical storage…".into());
+            let operations = app.runtime.operations();
+            return Task::perform(
+                async move {
+                    let result = operations
+                        .preflight_logical_action(storage_contracts::LogicalPreflightRequest {
+                            request_key: request_key.clone(),
+                        })
+                        .await
+                        .map_err(|error| error.to_string());
+                    Message::LogicalPreflightLoaded {
+                        request_key,
+                        result,
+                    }
+                },
+                |message| message.into(),
+            );
+        }
+        Message::LogicalPreflightLoaded {
+            request_key,
+            result,
+        } => match result {
+            Ok(preflight) => {
+                if preflight.key.request_key != request_key
+                    || !app.logical.accept_preflight(preflight.clone())
+                {
+                    return Task::none();
+                }
+                if let Some(picker) = app.logical.device_picker.take() {
+                    match &preflight.availability {
+                        storage_contracts::LogicalPreflightAvailability::Ready => {
+                            app.logical.action_status = None;
+                            app.dialog = Some(ShowDialog::LogicalDevicePicker(
+                                crate::state::dialogs::LogicalDevicePickerDialog {
+                                    picker,
+                                    candidates: preflight.device_candidates.clone(),
+                                },
+                            ));
+                        }
+                        storage_contracts::LogicalPreflightAvailability::Blocked { reason } => {
+                            app.logical.action_status = Some(reason.clone());
+                        }
+                    }
+                    return Task::none();
+                }
+                match &preflight.availability {
+                    storage_contracts::LogicalPreflightAvailability::Ready => {
+                        let confirmed = match app.logical.confirm_draft() {
+                            Ok(confirmed) => confirmed,
+                            Err(error) => {
+                                app.logical.action_status = Some(error);
+                                return Task::none();
+                            }
+                        };
+                        if app.logical.draft.as_ref().is_some_and(|draft| {
+                            logical::executes_from_single_step_form(&draft.action)
+                        }) {
+                            app.logical.action_status = Some(
+                                match &confirmed.action {
+                                    storage_contracts::LogicalAction::CreateBtrfsSnapshot {
+                                        ..
+                                    } => "Creating snapshot…",
+                                    _ => "Creating subvolume…",
+                                }
+                                .into(),
+                            );
+                            return Task::done(cosmic::Action::App(Message::LogicalActionExecute(
+                                confirmed,
+                            )));
+                        }
+                        app.logical.action_status = Some("Ready for confirmation".into());
+                        if let Some(draft) = &app.logical.draft {
+                            app.dialog = Some(ShowDialog::LogicalActionConfirmation(
+                                crate::state::dialogs::LogicalActionConfirmationDialog {
+                                    title: format!(
+                                        "Confirm {}",
+                                        logical::action_label(&draft.action)
+                                    ),
+                                    body: logical::action_confirmation_body(&draft.action),
+                                    confirmed,
+                                    running: false,
+                                },
+                            ));
+                        }
+                    }
+                    storage_contracts::LogicalPreflightAvailability::Blocked { reason } => {
+                        app.logical.action_status = Some(reason.clone());
+                    }
+                }
+            }
+            Err(error) => {
+                if app.logical.preflight_request.as_ref() == Some(&request_key) {
+                    app.logical.action_status = Some(error);
+                }
+            }
+        },
+        Message::LogicalActionCancelled => {
+            if app.logical.pending.is_none() {
+                app.logical.action_status = None;
+                app.logical.invalidate_draft();
+                if matches!(app.dialog, Some(ShowDialog::LogicalActionConfirmation(_))) {
+                    app.dialog = None;
+                }
+            }
+        }
+        Message::LogicalActionConfirmed(confirmed) => {
+            if let Some(ShowDialog::LogicalActionConfirmation(dialog)) = app.dialog.as_mut() {
+                if dialog.confirmed != confirmed || dialog.running {
+                    return Task::none();
+                }
+                dialog.running = true;
+            } else {
+                return Task::none();
+            }
+            return execute_confirmed_logical_action(app, confirmed);
+        }
+        Message::LogicalActionExecute(confirmed) => {
+            return execute_confirmed_logical_action(app, confirmed);
+        }
+        Message::LogicalActionProgressed {
+            generation,
+            progress,
+        } => {
+            app.logical.progress(generation, progress);
+        }
+        Message::LogicalActionFinished { generation, result } => {
+            let succeeded = result.is_ok();
+            let failure = result.as_ref().err().cloned();
+            if app.logical.finish_action(generation, result) {
+                if matches!(app.dialog, Some(ShowDialog::LogicalActionConfirmation(_))) {
+                    app.dialog = None;
+                }
+                if succeeded {
+                    app.logical.invalidate_draft();
+                    return Task::batch([
+                        Task::done(cosmic::Action::App(Message::LoadLogicalEntities)),
+                        Task::done(cosmic::Action::App(Message::LoadDrivesIncremental)),
+                    ]);
+                }
+                if let (Some(draft), Some(error)) = (&app.logical.draft, failure)
+                    && let Some(form) =
+                        crate::state::dialogs::LogicalActionForm::from_action(&draft.action)
+                {
+                    app.dialog = Some(ShowDialog::LogicalActionForm(
+                        crate::state::dialogs::LogicalActionFormDialog {
+                            form,
+                            error: Some(error),
+                        },
+                    ));
+                }
+            }
+        }
         Message::UsageScanLoad {
             scan_id,
             top_files_per_category,
@@ -106,19 +561,16 @@ pub(crate) fn update(app: &mut AppModel, message: Message) -> Task<Message> {
         } => {
             return Task::perform(
                 async move {
-                    let result = match FilesystemsClient::new().await {
-                        Ok(client) => client
-                            .get_usage_scan(
-                                &scan_id,
-                                top_files_per_category,
-                                &mount_points,
-                                show_all_files,
-                                parallelism_preset,
-                            )
-                            .await
-                            .map_err(|e| e.to_string()),
-                        Err(e) => Err(e.to_string()),
-                    };
+                    let result = filesystems
+                        .get_usage_scan(
+                            &scan_id,
+                            top_files_per_category,
+                            &mount_points,
+                            show_all_files,
+                            parallelism_preset,
+                        )
+                        .await
+                        .map_err(|e| e.to_string());
 
                     Message::UsageScanLoaded { scan_id, result }
                 },
@@ -202,14 +654,11 @@ pub(crate) fn update(app: &mut AppModel, message: Message) -> Task<Message> {
 
                 return Task::perform(
                     async move {
-                        let result = match FilesystemsClient::new().await {
-                            Ok(client) => client
-                                .authorize_usage_show_all_files()
-                                .await
-                                .map(|_| ())
-                                .map_err(|e| e.to_string()),
-                            Err(e) => Err(e.to_string()),
-                        };
+                        let result = filesystems
+                            .authorize_usage_show_all_files()
+                            .await
+                            .map(|_| ())
+                            .map_err(|e| e.to_string());
 
                         Message::UsageShowAllFilesAuthCompleted { result }
                     },
@@ -251,13 +700,7 @@ pub(crate) fn update(app: &mut AppModel, message: Message) -> Task<Message> {
                     return Task::done(cosmic::Action::App(Message::UsageConfigureRequested));
                 }
 
-                let scan_id = format!(
-                    "usage-{}",
-                    std::time::SystemTime::now()
-                        .duration_since(std::time::UNIX_EPOCH)
-                        .map(|duration| duration.as_millis())
-                        .unwrap_or(0)
-                );
+                let scan_id = format!("usage-{}", uuid::Uuid::new_v4());
 
                 let mount_points = volumes_control.usage_state.scan_mount_points.clone();
                 let show_all_files = volumes_control.usage_state.show_all_files;
@@ -302,13 +745,10 @@ pub(crate) fn update(app: &mut AppModel, message: Message) -> Task<Message> {
 
                 return Task::perform(
                     async move {
-                        let result = match FilesystemsClient::new().await {
-                            Ok(client) => client
-                                .list_usage_mount_points()
-                                .await
-                                .map_err(|e| e.to_string()),
-                            Err(e) => Err(e.to_string()),
-                        };
+                        let result = filesystems
+                            .list_usage_mount_points()
+                            .await
+                            .map_err(|e| e.to_string());
 
                         Message::UsageWizardMountPointsLoaded { result }
                     },
@@ -317,7 +757,9 @@ pub(crate) fn update(app: &mut AppModel, message: Message) -> Task<Message> {
             }
         }
         Message::UsageWizardMountPointsLoaded { result } => {
-            if let Some(volumes_control) = app.nav.active_data_mut::<VolumesControl>() {
+            if let Some(volumes_control) = app.nav.active_data_mut::<VolumesControl>()
+                && volumes_control.usage_state.wizard_open
+            {
                 volumes_control.usage_state.wizard_loading_mounts = false;
                 match result {
                     Ok(mut mount_points) => {
@@ -401,7 +843,10 @@ pub(crate) fn update(app: &mut AppModel, message: Message) -> Task<Message> {
         }
         Message::UsageWizardStartScan => {
             if let Some(volumes_control) = app.nav.active_data_mut::<VolumesControl>() {
-                if volumes_control.usage_state.wizard_loading_mounts {
+                if volumes_control.usage_state.wizard_loading_mounts
+                    || volumes_control.usage_state.loading
+                    || !volumes_control.usage_state.wizard_open
+                {
                     return Task::none();
                 }
 
@@ -422,14 +867,11 @@ pub(crate) fn update(app: &mut AppModel, message: Message) -> Task<Message> {
                 {
                     return Task::perform(
                         async move {
-                            let result = match FilesystemsClient::new().await {
-                                Ok(client) => client
-                                    .authorize_usage_show_all_files()
-                                    .await
-                                    .map(|_| ())
-                                    .map_err(|e| e.to_string()),
-                                Err(e) => Err(e.to_string()),
-                            };
+                            let result = filesystems
+                                .authorize_usage_show_all_files()
+                                .await
+                                .map(|_| ())
+                                .map_err(|e| e.to_string());
 
                             Message::UsageWizardShowAllFilesAuthCompleted { result }
                         },
@@ -437,13 +879,7 @@ pub(crate) fn update(app: &mut AppModel, message: Message) -> Task<Message> {
                     );
                 }
 
-                let scan_id = format!(
-                    "usage-{}",
-                    std::time::SystemTime::now()
-                        .duration_since(std::time::UNIX_EPOCH)
-                        .map(|duration| duration.as_millis())
-                        .unwrap_or(0)
-                );
+                let scan_id = format!("usage-{}", uuid::Uuid::new_v4());
 
                 let mount_points = volumes_control
                     .usage_state
@@ -559,27 +995,35 @@ pub(crate) fn update(app: &mut AppModel, message: Message) -> Task<Message> {
                 }
 
                 volumes_control.usage_state.deleting = true;
+                let operation_id = uuid::Uuid::new_v4();
+                volumes_control.usage_state.delete_operation_id = Some(operation_id);
                 volumes_control.usage_state.operation_status = None;
                 let selected_paths = volumes_control.usage_state.selected_paths.clone();
 
                 return Task::perform(
                     async move {
-                        let result = match FilesystemsClient::new().await {
-                            Ok(client) => client
-                                .delete_usage_files(&selected_paths)
-                                .await
-                                .map_err(|e| e.to_string()),
-                            Err(e) => Err(e.to_string()),
-                        };
+                        let result = filesystems
+                            .delete_usage_files(&selected_paths)
+                            .await
+                            .map_err(|e| e.to_string());
 
-                        Message::UsageDeleteCompleted { result }
+                        Message::UsageDeleteCompleted {
+                            operation_id,
+                            result,
+                        }
                     },
                     |msg| msg.into(),
                 );
             }
         }
-        Message::UsageDeleteCompleted { result } => {
-            if let Some(volumes_control) = app.nav.active_data_mut::<VolumesControl>() {
+        Message::UsageDeleteCompleted {
+            operation_id,
+            result,
+        } => {
+            if let Some(volumes_control) = app.nav.active_data_mut::<VolumesControl>()
+                && volumes_control.usage_state.delete_operation_id == Some(operation_id)
+            {
+                volumes_control.usage_state.delete_operation_id = None;
                 volumes_control.usage_state.deleting = false;
                 match result {
                     Ok(delete_result) => {
@@ -800,49 +1244,56 @@ pub(crate) fn update(app: &mut AppModel, message: Message) -> Task<Message> {
                 return Task::none();
             };
 
-            return volumes_control.update(message, &mut app.dialog);
+            return volumes_control.update(message, &mut app.dialog, app.runtime.operations());
         }
 
         Message::FormatDisk(msg) => {
             return drive::format_disk(app, msg);
         }
         Message::DriveRemoved(_drive_model) => {
-            return Task::perform(
-                async {
-                    match load_all_drives().await {
-                        Ok(drives) => Some(drives),
-                        Err(e) => {
-                            tracing::error!(%e, "failed to refresh drives after drive removal");
-                            None
-                        }
-                    }
-                },
-                move |drives| match drives {
-                    None => Message::None.into(),
-                    Some(drives) => Message::UpdateNav(drives, None).into(),
-                },
-            );
+            return Task::done(cosmic::Action::App(Message::LoadDrivesIncremental));
         }
         Message::DriveAdded(_drive_model) => {
-            return Task::perform(
-                async {
-                    match load_all_drives().await {
-                        Ok(drives) => Some(drives),
-                        Err(e) => {
-                            tracing::error!(%e, "failed to refresh drives after drive add");
-                            None
-                        }
-                    }
-                },
-                move |drives| match drives {
-                    None => Message::None.into(),
-                    Some(drives) => Message::UpdateNav(drives, None).into(),
-                },
-            );
+            return Task::done(cosmic::Action::App(Message::LoadDrivesIncremental));
         }
         Message::None => {}
+        Message::VolumeDialogOperationCompleted {
+            operation_id,
+            message,
+        } => {
+            let active = match app.dialog.as_ref() {
+                Some(ShowDialog::AddPartition(state)) => {
+                    state.running && state.operation_id == Some(operation_id)
+                }
+                Some(ShowDialog::FormatPartition(state)) => {
+                    state.running && state.operation_id == Some(operation_id)
+                }
+                Some(ShowDialog::UnlockEncrypted(state)) => {
+                    state.running && state.operation_id == Some(operation_id)
+                }
+                Some(ShowDialog::DeletePartition(state)) => {
+                    state.running && state.operation_id == Some(operation_id)
+                }
+                Some(ShowDialog::EditPartition(state)) => {
+                    state.running && state.operation_id == Some(operation_id)
+                }
+                Some(ShowDialog::ResizePartition(state)) => {
+                    state.running && state.operation_id == Some(operation_id)
+                }
+                Some(ShowDialog::EditMountOptions(state)) => {
+                    state.running && state.operation_id == Some(operation_id)
+                }
+                Some(ShowDialog::ChangePassphrase(state)) => {
+                    state.running && state.operation_id == Some(operation_id)
+                }
+                _ => false,
+            };
+            if active {
+                return update(app, *message);
+            }
+        }
         Message::UpdateNav(drive_models, selected) => {
-            return nav::update_nav(app, drive_models, selected);
+            return nav::update_nav(app, drive_models, selected, true);
         }
 
         // BTRFS management
@@ -875,18 +1326,19 @@ pub(crate) fn update(app: &mut AppModel, message: Message) -> Task<Message> {
                 .map(|v| (v.detail_tab, v.btrfs_state.clone(), v.usage_state.clone()));
 
             // Update drives while preserving child volume selection
-            let task = nav::update_nav(app, drive_models, None);
+            let task = nav::update_nav(app, drive_models, None, true);
 
             // Restore child selection if provided
             if let Some(device_path) = child_device_path {
-                app.sidebar.selected_child = Some(crate::state::sidebar::SidebarNodeKey::Volume(
-                    device_path.clone(),
-                ));
+                app.sidebar.selected_child = None;
 
                 if let Some(control) = app.nav.active_data_mut::<VolumesControl>()
                     && let Some((segment_idx, is_child)) =
                         crate::state::volumes::find_segment_for_volume(control, &device_path)
                 {
+                    app.sidebar.selected_child = Some(
+                        crate::state::sidebar::SidebarNodeKey::Volume(device_path.clone()),
+                    );
                     control.selected_volume = if is_child {
                         Some(device_path.clone())
                     } else {
@@ -962,6 +1414,7 @@ pub(crate) fn update(app: &mut AppModel, message: Message) -> Task<Message> {
         Message::SidebarSelectDrive { device_path } => {
             app.network.select(None, None);
             app.network.clear_editor();
+            app.logical.leave_view();
             app.sidebar.selected_child = None;
             if let Some(id) = app.sidebar.drive_entities.get(&device_path).copied() {
                 return on_nav_select(app, id);
@@ -971,8 +1424,15 @@ pub(crate) fn update(app: &mut AppModel, message: Message) -> Task<Message> {
             app.sidebar.selected_child = None;
         }
         Message::SidebarSelectChild { device_path } => {
+            if !app.sidebar.drives.iter().any(|drive| {
+                crate::state::volumes::find_volume_in_ui_tree(&drive.volumes, &device_path)
+                    .is_some()
+            }) {
+                return Task::none();
+            }
             app.network.select(None, None);
             app.network.clear_editor();
+            app.logical.leave_view();
             app.sidebar.selected_child = Some(SidebarNodeKey::Volume(device_path.clone()));
 
             // Find which drive contains this volume node
@@ -1058,34 +1518,12 @@ pub(crate) fn update(app: &mut AppModel, message: Message) -> Task<Message> {
             let Some(device_to_unmount) = node.device().map(|s| s.to_string()) else {
                 return Task::none();
             };
-            let device_path_for_closure = device_path.clone();
-            let device = drive_model.device().to_string();
-
-            return Task::perform(
-                async move {
-                    let fs_client = FilesystemsClient::new().await.map_err(|e| {
-                        anyhow::anyhow!("Failed to create filesystems client: {}", e)
-                    })?;
-                    fs_client
-                        .unmount(&device_to_unmount, false, false)
-                        .await
-                        .map_err(|e| anyhow::anyhow!("Failed to unmount: {}", e))?;
-                    load_all_drives()
-                        .await
-                        .map_err(|e| anyhow::anyhow!("Failed to reload drives: {}", e))
-                },
-                move |res| match res {
-                    Ok(drives) => Message::UpdateNav(drives, None).into(),
-                    Err(e) => {
-                        let ctx = UiErrorContext {
-                            operation: "sidebar_volume_unmount",
-                            device_path: Some(device_path_for_closure.as_str()),
-                            device: Some(device.as_str()),
-                            drive_path: None,
-                        };
-                        log_error_and_show_dialog(fl!("unmount-failed"), e, ctx).into()
-                    }
-                },
+            return volumes::mount::unmount_device(
+                app.runtime.operations(),
+                device_to_unmount,
+                node.volume.mount_points.first().cloned(),
+                device_path,
+                false,
             );
         }
         Message::SmartDialog(msg) => {
@@ -1117,12 +1555,6 @@ pub(crate) fn update(app: &mut AppModel, message: Message) -> Task<Message> {
         }
         Message::ImageOperationDialog(msg) => {
             return image::image_operation_dialog(app, msg);
-        }
-        Message::ImageOperationStarted(operation_id) => {
-            app.image_op_operation_id = Some(operation_id.clone());
-            if let Some(ShowDialog::ImageOperation(state)) = app.dialog.as_mut() {
-                state.operation_id = Some(operation_id);
-            }
         }
         Message::UnmountBusy(msg) => {
             use crate::message::dialogs::UnmountBusyMessage;
@@ -1156,7 +1588,11 @@ pub(crate) fn update(app: &mut AppModel, message: Message) -> Task<Message> {
                     if let Some((device_path, _, _)) = dialog_data {
                         // Retry the unmount operation
                         if let Some(volumes) = app.nav.active_data::<VolumesControl>() {
-                            return retry_unmount(volumes, device_path);
+                            return volumes::mount::child_unmount(
+                                volumes,
+                                device_path,
+                                app.runtime.operations(),
+                            );
                         }
                     }
                 }
@@ -1168,70 +1604,12 @@ pub(crate) fn update(app: &mut AppModel, message: Message) -> Task<Message> {
                             "User requested kill processes and unmount"
                         );
 
-                        let device_path_for_selection = device.clone();
-                        return Task::perform(
-                            async move {
-                                let fs_client = match FilesystemsClient::new().await {
-                                    Ok(c) => c,
-                                    Err(e) => {
-                                        tracing::error!(?e, "Failed to create filesystems client");
-                                        return Err(None);
-                                    }
-                                };
-                                // Unmount with kill_processes=true so the service kills blocking processes
-                                let unmount_result =
-                                    match fs_client.unmount(&device, false, true).await {
-                                        Ok(r) => r,
-                                        Err(e) => {
-                                            tracing::error!(?e, "Failed to unmount with kill");
-                                            return Err(None);
-                                        }
-                                    };
-                                if unmount_result.success {
-                                    match load_all_drives().await {
-                                        Ok(drives) => Ok(drives),
-                                        Err(e) => {
-                                            tracing::error!(
-                                                ?e,
-                                                "Failed to reload drives after unmount"
-                                            );
-                                            Err(None)
-                                        }
-                                    }
-                                } else if !unmount_result.blocking_processes.is_empty() {
-                                    let device_for_tuple = device.clone();
-                                    Err(Some((
-                                        device_for_tuple,
-                                        mount_point,
-                                        unmount_result.blocking_processes,
-                                        device,
-                                    )))
-                                } else {
-                                    if let Some(err) = unmount_result.error {
-                                        tracing::error!("unmount with kill failed: {}", err);
-                                    }
-                                    Err(None)
-                                }
-                            },
-                            move |result| match result {
-                                Ok(drives) => Message::UpdateNavWithChildSelection(
-                                    drives,
-                                    Some(device_path_for_selection.clone()),
-                                )
-                                .into(),
-                                Err(Some((device, mount_point, processes, device_path))) => {
-                                    Message::Dialog(Box::new(ShowDialog::UnmountBusy(
-                                        crate::state::dialogs::UnmountBusyDialog {
-                                            device,
-                                            mount_point,
-                                            processes,
-                                            device_path,
-                                        },
-                                    )))
-                                    .into()
-                                }
-                                Err(None) => Message::None.into(),
-                            },
+                        return volumes::mount::unmount_device(
+                            app.runtime.operations(),
+                            device.clone(),
+                            Some(mount_point),
+                            device,
+                            true,
                         );
                     } else {
                         app.dialog = None;
@@ -1242,7 +1620,11 @@ pub(crate) fn update(app: &mut AppModel, message: Message) -> Task<Message> {
         Message::RetryUnmountAfterKill(device_path) => {
             tracing::debug!("Retrying unmount after killing processes");
             if let Some(volumes) = app.nav.active_data::<VolumesControl>() {
-                return retry_unmount(volumes, device_path);
+                return volumes::mount::child_unmount(
+                    volumes,
+                    device_path,
+                    app.runtime.operations(),
+                );
             }
         }
 
@@ -1251,10 +1633,8 @@ pub(crate) fn update(app: &mut AppModel, message: Message) -> Task<Message> {
             return network::handle_network_message(app, msg);
         }
         Message::LoadNetworkRemotes => {
+            app.sidebar.set_network_loading(true);
             return network::handle_network_message(app, NetworkMessage::LoadRemotes);
-        }
-        Message::NetworkRemotesLoaded(result) => {
-            return network::handle_network_message(app, NetworkMessage::RemotesLoaded(result));
         }
     }
     Task::none()
@@ -1279,103 +1659,6 @@ pub(crate) fn on_nav_select(app: &mut AppModel, id: nav_bar::Id) -> Task<Message
 
         app.update_title()
     } else {
-        Task::none()
-    }
-}
-
-/// Helper function to retry unmount operation on a volume by device path
-fn retry_unmount(volumes: &VolumesControl, device_path: String) -> Task<Message> {
-    // Find the volume node
-    let node =
-        crate::state::volumes::find_volume_in_ui_tree(&volumes.volumes, &device_path).cloned();
-
-    if let Some(node) = node {
-        let device = node
-            .volume
-            .device_path
-            .clone()
-            .unwrap_or_else(|| device_path.clone());
-        let mount_point = node.volume.mount_points.first().cloned();
-        let device_path_for_retry = device_path.clone();
-        let device_path_for_selection = device_path.clone();
-
-        Task::perform(
-            async move {
-                let fs_client = match FilesystemsClient::new().await {
-                    Ok(c) => c,
-                    Err(e) => {
-                        tracing::error!(?e, "Failed to create filesystems client");
-                        return Err(None);
-                    }
-                };
-
-                let unmount_result = match fs_client.unmount(&device, false, false).await {
-                    Ok(r) => r,
-                    Err(e) => {
-                        tracing::error!(?e, "Failed to unmount");
-                        return Err(None);
-                    }
-                };
-
-                if unmount_result.success {
-                    // Success - reload drives
-                    match load_all_drives().await {
-                        Ok(drives) => Ok(drives),
-                        Err(e) => {
-                            tracing::error!(?e, "Failed to reload drives after unmount");
-                            Err(None)
-                        }
-                    }
-                } else if !unmount_result.blocking_processes.is_empty() {
-                    // Device is busy with processes
-                    let mp = mount_point.unwrap_or_default();
-                    tracing::warn!(
-                        mount_point = %mp,
-                        process_count = unmount_result.blocking_processes.len(),
-                        "Unmount still busy after retry"
-                    );
-                    Err(Some((
-                        device,
-                        mp,
-                        unmount_result.blocking_processes,
-                        device_path_for_retry,
-                    )))
-                } else {
-                    // Generic error
-                    if let Some(err) = unmount_result.error {
-                        tracing::error!("unmount retry failed: {}", err);
-                    } else {
-                        tracing::error!("unmount retry failed with unknown error");
-                    }
-                    Err(None)
-                }
-            },
-            move |result| match result {
-                Ok(drives) => Message::UpdateNavWithChildSelection(
-                    drives,
-                    Some(device_path_for_selection.clone()),
-                )
-                .into(),
-                Err(Some((device, mount_point, processes, device_path))) => {
-                    // Still busy - show dialog again
-                    Message::Dialog(Box::new(ShowDialog::UnmountBusy(
-                        crate::state::dialogs::UnmountBusyDialog {
-                            device,
-                            mount_point,
-                            processes,
-                            device_path,
-                        },
-                    )))
-                    .into()
-                }
-                Err(None) => {
-                    // Generic error already logged
-                    Message::None.into()
-                }
-            },
-        )
-    } else {
-        tracing::warn!("Volume not found for retry: {}", device_path);
         Task::none()
     }
 }

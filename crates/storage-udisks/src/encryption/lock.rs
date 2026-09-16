@@ -12,10 +12,18 @@ pub async fn lock_luks(device_path: &str) -> Result<(), DiskError> {
     let connection = crate::manager::shared_connection()
         .await
         .map_err(|e| DiskError::ConnectionFailed(e.to_string()))?;
+    lock_luks_with_connection(connection.as_ref(), device_path).await
+}
 
-    let encrypted_path = crate::disk::resolve::block_object_path_for_device(device_path).await?;
+pub(crate) async fn lock_luks_with_connection(
+    connection: &zbus::Connection,
+    device_path: &str,
+) -> Result<(), DiskError> {
+    let encrypted_path =
+        crate::disk::resolve::block_object_path_for_device_with_connection(connection, device_path)
+            .await?;
 
-    let encrypted_proxy = EncryptedProxy::builder(&connection)
+    let encrypted_proxy = EncryptedProxy::builder(connection)
         .path(&encrypted_path)?
         .build()
         .await

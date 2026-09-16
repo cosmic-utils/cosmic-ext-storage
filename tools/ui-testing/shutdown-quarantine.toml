@@ -1,0 +1,16 @@
+# Narrow, expiring allowance for the diagnosed pinned SCTK cleanup race.
+# Any dependency, case, or environment change requires explicit revalidation.
+id = "iced-pinned-wayland-proxy-teardown"
+owner = "cosmic-ext-storage maintainers"
+# 2026-10-13 00:00:00 UTC
+expires_unix = 1791849600
+case_id = "live_scenario_reload"
+case_sha256 = "a2233684796ffdff2a02e97e0f57bb48f857a1c01b0dceeef0e33d537407bd90"
+# Reviewed instrumentation-only Containerfile change: same pinned OS/GDB,
+# libcosmic/iced and stack signature. No dependency upgrade or expiry extension.
+environment_sha256 = "66c8e39ffdc0ab59f8c7741e8ea3f67b3b8e3d5adc58fc963eb1d28394484017"
+# Pinned focus/tooltip repairs only: eighteen git-source replacements, no
+# package/version additions or upgrades. Fresh new-pin reload reproduced the
+# same ordered post-close stack; see dependency-fix-ledger.md for revalidation.
+# Case, environment, signature, owner and expiry are unchanged.
+cargo_lock_sha256 = "3666c9738e009f594a10b5fe3c71575eeddffd534c64db90124869cf688b7476"

@@ -1,0 +1,16 @@
+[test-groups]
+storage-lab = { max-threads = 1 }
+
+[profile.storage-lab]
+fail-fast = false
+retries = 0
+slow-timeout = { period = "5m", terminate-after = 1 }
+
+[profile.storage-lab.junit]
+path = "junit.xml"
+store-failure-output = true
+store-success-output = true
+
+[[profile.storage-lab.overrides]]
+filter = 'package(storage-lab-tests)'
+test-group = 'storage-lab'

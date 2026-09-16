@@ -1,0 +1,19 @@
+schema_version = 1
+id = "busy_unmount"
+scenario = "tests/ui/scenarios/physical/busy-unmount.toml"
+
+[semantic_ready]
+role = "application"
+name = "COSMIC Storage"
+
+[[step]]
+action = "activate"
+[step.selector]
+role = "button"
+name = "Unmount"
+
+[[checkpoint]]
+golden = "tests/ui/goldens/busy_unmount.json"
+[checkpoint.selector]
+role = "dialog"
+name = "Unmount"

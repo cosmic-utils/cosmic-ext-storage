@@ -46,6 +46,8 @@ pub(super) fn create_disk_from(app: &mut AppModel) -> Task<Message> {
 
     app.dialog = Some(ShowDialog::ImageOperation(
         ImageOperationDialog {
+            request_id: None,
+            cancel_requested: false,
             kind: ImageOperationKind::CreateFromDrive,
             drive,
             partition: None,
@@ -68,6 +70,8 @@ pub(super) fn restore_image_to(app: &mut AppModel) -> Task<Message> {
 
     app.dialog = Some(ShowDialog::ImageOperation(
         ImageOperationDialog {
+            request_id: None,
+            cancel_requested: false,
             kind: ImageOperationKind::RestoreToDrive,
             drive,
             partition: None,
@@ -111,6 +115,8 @@ pub(super) fn create_disk_from_partition(app: &mut AppModel) -> Task<Message> {
 
     app.dialog = Some(ShowDialog::ImageOperation(
         ImageOperationDialog {
+            request_id: None,
+            cancel_requested: false,
             kind: ImageOperationKind::CreateFromPartition,
             drive,
             partition: Some(partition),
@@ -154,6 +160,8 @@ pub(super) fn restore_image_to_partition(app: &mut AppModel) -> Task<Message> {
 
     app.dialog = Some(ShowDialog::ImageOperation(
         ImageOperationDialog {
+            request_id: None,
+            cancel_requested: false,
             kind: ImageOperationKind::RestoreToPartition,
             drive,
             partition: Some(partition),

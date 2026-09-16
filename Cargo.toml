@@ -6,6 +6,9 @@ license = "GPL-3.0-only"
 description = "A Storage utility for the COSMIC™ desktop"
 repository = "https://github.com/cosmic-utils/cosmic-ext-storage"
 
+[lib]
+doctest = false
+
 [features]
 default = [
     "btrfs-tools",
@@ -27,12 +30,22 @@ fs-btrfs = []
 fs-vfat = []
 fs-ntfs = []
 fs-exfat = []
+ui-test = ["rust-embed/debug-embed"]
+test-backend = [
+    "dep:test-backend",
+    "dep:tempfile",
+    "dep:base64",
+    "dep:serde_json",
+    "dep:sha2",
+    "ui-test",
+]
 
 [build-dependencies]
 vergen = { workspace = true }
 
 [dependencies]
 anyhow.workspace = true
+async-trait.workspace = true
 futures-util.workspace = true
 i18n-embed.workspace = true
 i18n-embed-fl.workspace = true
@@ -54,6 +67,17 @@ tracing-appender.workspace = true
 tracing-subscriber.workspace = true
 uuid.workspace = true
 which.workspace = true
+test-backend = { path = "crates/test-backend", optional = true }
+tempfile = { version = "=3.27.0", optional = true }
+base64 = { workspace = true, optional = true }
+serde_json = { workspace = true, optional = true }
+sha2 = { workspace = true, optional = true }
+
+[dev-dependencies]
+rstest.workspace = true
+tokio = { workspace = true, features = ["test-util"] }
+storage-lab-tests = { path = "crates/storage-lab-tests" }
+zbus.workspace = true
 
 [workspace]
 members = [
@@ -62,12 +86,16 @@ members = [
     "crates/storage-btrfs",
     "crates/storage-types",
     "crates/storage-contracts",
+    "crates/test-backend",
     "crates/storage-sys",
+    "crates/storage-lab-tests",
+    "crates/ui-e2e-runner",
 ]
 default-members = ["."]
 resolver = "2"
 
 [workspace.dependencies]
+rstest = { version = "=0.27.0", default-features = false }
 futures-util = "0.3.31"
 i18n-embed-fl = "0.10.0"
 open = "5.3.2"
@@ -97,6 +125,8 @@ uuid = { version = "1.21.0", features = ["serde", "v4"] }
 chrono = { version = "0.4.44", features = ["serde"] }
 clap = { version = "4.5.60", features = ["derive"] }
 async-trait = "0.1.89"
+base64 = "0.22.1"
+sha2 = "0.10.9"
 
 # workspace dependencies
 storage-udisks = { package = "storage-udisks", path = "crates/storage-udisks", version = "0.1.0" }
@@ -111,8 +141,11 @@ version = "0.16"
 features = ["fluent-system", "desktop-requester"]
 
 [workspace.dependencies.libcosmic]
-git = "https://github.com/pop-os/libcosmic.git"
-rev = "ef162b8e16ba4493e05c169cd56c7b9f77f0fda5"
+# Maintained accessibility bridge, button routing and widget-focus publication.
+# Repairs on our existing pin, not unvalidated upstream master. Scope and removal
+# conditions are recorded in docs/plans/5-testing-v2/dependency-fix-ledger.md.
+git = "https://github.com/stoorps/libcosmic.git"
+rev = "2ca5a4174bb76a742ef5d6d09d056bd9cc9b25c6"
 features = [
     # Accessibility support
     "a11y",

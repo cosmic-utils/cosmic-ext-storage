@@ -1,0 +1,19 @@
+schema_version = 1
+id = "network_mount"
+scenario = "tests/ui/scenarios/network/mount.toml"
+
+[semantic_ready]
+role = "application"
+name = "COSMIC Storage"
+
+[[step]]
+action = "type"
+[step.selector]
+role = "textbox"
+name = "Remote name"
+
+[[checkpoint]]
+golden = "tests/ui/goldens/network_mount.json"
+[checkpoint.selector]
+role = "application"
+name = "COSMIC Storage"

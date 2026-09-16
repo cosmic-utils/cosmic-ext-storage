@@ -1,4 +1,4 @@
-use crate::models::{UiDrive, load_all_drives};
+use crate::models::{UiDrive, load::load_all_drives_with_operations};
 use cosmic::Task;
 use std::future::Future;
 
@@ -14,6 +14,7 @@ fn perform_volume_operation<F, Fut>(
     operation: F,
     operation_name: &'static str,
     preserve_selection: Option<String>,
+    operations: std::sync::Arc<crate::operations::StorageOperations>,
 ) -> Task<cosmic::Action<Message>>
 where
     F: FnOnce() -> Fut + Send + 'static,
@@ -22,7 +23,9 @@ where
     Task::perform(
         async move {
             operation().await.map_err(|e| anyhow::anyhow!(e))?;
-            load_all_drives().await.map_err(|e| anyhow::anyhow!(e))
+            load_all_drives_with_operations(operations)
+                .await
+                .map_err(|e| anyhow::anyhow!(e))
         },
         move |result: Result<Vec<UiDrive>, anyhow::Error>| match result {
             Ok(drives) => {
@@ -37,7 +40,10 @@ where
     )
 }
 
-pub(super) fn mount(control: &mut VolumesControl) -> Task<cosmic::Action<Message>> {
+pub(super) fn mount(
+    control: &mut VolumesControl,
+    operations: std::sync::Arc<crate::operations::StorageOperations>,
+) -> Task<cosmic::Action<Message>> {
     let Some(volume) = control
         .segments
         .get(control.selected_segment)
@@ -52,14 +58,15 @@ pub(super) fn mount(control: &mut VolumesControl) -> Task<cosmic::Action<Message
         .unwrap_or_else(|| volume.label.clone());
     let device_path_for_selection = device.clone();
 
+    let client = FilesystemsClient::with_operations(operations.clone());
     perform_volume_operation(
         || async move {
-            let client = FilesystemsClient::new().await?;
             client.mount(&device, "", MountOptions::default()).await?;
             Ok(())
         },
         "mount",
         Some(device_path_for_selection),
+        operations,
     )
 }
 
@@ -73,10 +80,13 @@ enum UnmountResult {
         processes: Vec<storage_types::ProcessInfo>,
         device_path: String,
     },
-    GenericError,
+    GenericError(String),
 }
 
-pub(super) fn unmount(control: &mut VolumesControl) -> Task<cosmic::Action<Message>> {
+pub(super) fn unmount(
+    control: &mut VolumesControl,
+    operations: std::sync::Arc<crate::operations::StorageOperations>,
+) -> Task<cosmic::Action<Message>> {
     let Some(volume) = control
         .segments
         .get(control.selected_segment)
@@ -94,84 +104,13 @@ pub(super) fn unmount(control: &mut VolumesControl) -> Task<cosmic::Action<Messa
         .device_path
         .clone()
         .unwrap_or_else(|| volume.label.clone());
-    let device_path_for_retry = device_path.clone();
-
-    Task::perform(
-        async move {
-            let client = match FilesystemsClient::new().await {
-                Ok(c) => c,
-                Err(e) => {
-                    tracing::error!(?e, "Failed to create client");
-                    return UnmountResult::GenericError;
-                }
-            };
-
-            let unmount_result = match client.unmount(&device, false, false).await {
-                Ok(r) => r,
-                Err(e) => {
-                    tracing::error!(?e, "Failed to unmount");
-                    return UnmountResult::GenericError;
-                }
-            };
-
-            if unmount_result.success {
-                // Success - reload drives
-                match load_all_drives().await {
-                    Ok(drives) => UnmountResult::Success(drives),
-                    Err(e) => {
-                        tracing::error!(?e, "Failed to reload drives");
-                        UnmountResult::GenericError
-                    }
-                }
-            } else if !unmount_result.blocking_processes.is_empty() {
-                // Device is busy with processes
-                let mp = mount_point.unwrap_or_default();
-                UnmountResult::Busy {
-                    device,
-                    mount_point: mp,
-                    processes: unmount_result.blocking_processes,
-                    device_path: device_path_for_retry,
-                }
-            } else {
-                // Generic error
-                if let Some(err) = unmount_result.error {
-                    tracing::error!("unmount failed: {}", err);
-                } else {
-                    tracing::error!("unmount failed with unknown error");
-                }
-                UnmountResult::GenericError
-            }
-        },
-        move |result| match result {
-            UnmountResult::Success(drives) => {
-                Message::UpdateNavWithChildSelection(drives, Some(device_path.clone())).into()
-            }
-            UnmountResult::Busy {
-                device,
-                mount_point,
-                processes,
-                device_path,
-            } => {
-                // Show busy dialog
-                Message::Dialog(Box::new(ShowDialog::UnmountBusy(UnmountBusyDialog {
-                    device,
-                    mount_point,
-                    processes,
-                    device_path,
-                })))
-                .into()
-            }
-            UnmountResult::GenericError => {
-                // Generic error already logged
-                Message::None.into()
-            }
-        },
-    )
+    unmount_device(operations, device, mount_point, device_path, false)
 }
 
 pub(super) fn child_mount(
     control: &mut VolumesControl,
     device_path: String,
+    operations: std::sync::Arc<crate::operations::StorageOperations>,
 ) -> Task<cosmic::Action<Message>> {
     let Some(node) =
         crate::state::volumes::find_volume_in_ui_tree(&control.volumes, &device_path).cloned()
@@ -186,11 +125,9 @@ pub(super) fn child_mount(
         .unwrap_or_else(|| device_path.clone());
     let device_path_for_selection = device_path.clone();
 
+    let client = FilesystemsClient::with_operations(operations.clone());
     perform_volume_operation(
         || async move {
-            let client = FilesystemsClient::new()
-                .await
-                .map_err(|e| anyhow::anyhow!("Failed to create client: {}", e))?;
             let _mount_point = client
                 .mount(&device, "", MountOptions::default())
                 .await
@@ -199,12 +136,14 @@ pub(super) fn child_mount(
         },
         "child mount",
         Some(device_path_for_selection),
+        operations,
     )
 }
 
-pub(super) fn child_unmount(
-    control: &mut VolumesControl,
+pub(crate) fn child_unmount(
+    control: &VolumesControl,
     device_path: String,
+    operations: std::sync::Arc<crate::operations::StorageOperations>,
 ) -> Task<cosmic::Action<Message>> {
     let Some(node) =
         crate::state::volumes::find_volume_in_ui_tree(&control.volumes, &device_path).cloned()
@@ -218,34 +157,39 @@ pub(super) fn child_unmount(
         .clone()
         .unwrap_or_else(|| device_path.clone());
     let mount_point = node.volume.mount_points.first().cloned();
+    unmount_device(operations, device, mount_point, device_path, false)
+}
+
+/// One production path for segment, child, sidebar and busy-dialog retries.
+pub(crate) fn unmount_device(
+    operations: std::sync::Arc<crate::operations::StorageOperations>,
+    device: String,
+    mount_point: Option<String>,
+    device_path: String,
+    kill_processes: bool,
+) -> Task<cosmic::Action<Message>> {
     let device_path_for_selection = device_path.clone();
     let device_path_for_retry = device_path.clone();
 
     Task::perform(
         async move {
-            let client = match FilesystemsClient::new().await {
-                Ok(c) => c,
-                Err(e) => {
-                    tracing::error!(?e, "Failed to create client");
-                    return UnmountResult::GenericError;
-                }
-            };
+            let client = FilesystemsClient::with_operations(operations.clone());
 
-            let unmount_result = match client.unmount(&device, false, false).await {
+            let unmount_result = match client.unmount(&device, false, kill_processes).await {
                 Ok(r) => r,
                 Err(e) => {
                     tracing::error!(?e, "Failed to unmount");
-                    return UnmountResult::GenericError;
+                    return UnmountResult::GenericError(e.to_string());
                 }
             };
 
             if unmount_result.success {
                 // Success - reload drives
-                match load_all_drives().await {
+                match load_all_drives_with_operations(operations).await {
                     Ok(drives) => UnmountResult::Success(drives),
                     Err(e) => {
                         tracing::error!(?e, "Failed to reload drives");
-                        UnmountResult::GenericError
+                        UnmountResult::GenericError(e.to_string())
                     }
                 }
             } else if !unmount_result.blocking_processes.is_empty() {
@@ -259,12 +203,11 @@ pub(super) fn child_unmount(
                 }
             } else {
                 // Generic error
-                if let Some(err) = unmount_result.error {
-                    tracing::error!("child unmount failed: {}", err);
-                } else {
-                    tracing::error!("child unmount failed with unknown error");
-                }
-                UnmountResult::GenericError
+                UnmountResult::GenericError(
+                    unmount_result
+                        .error
+                        .unwrap_or_else(|| "Unknown unmount failure".into()),
+                )
             }
         },
         move |result| match result {
@@ -288,10 +231,11 @@ pub(super) fn child_unmount(
                 })))
                 .into()
             }
-            UnmountResult::GenericError => {
-                // Generic error already logged
-                Message::None.into()
-            }
+            UnmountResult::GenericError(error) => Message::Dialog(Box::new(ShowDialog::Info {
+                title: crate::fl!("unmount-failed"),
+                body: error,
+            }))
+            .into(),
         },
     )
 }

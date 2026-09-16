@@ -1,0 +1,195 @@
+# Machine-readable traceability source. ui-plan-check expands one row per method
+# from contract-surface-v1.toml; this file intentionally never repeats method IDs.
+schema_version = 1
+contract_inventory = "docs/plans/4-testing/contract-surface-v1.toml"
+workflow_v2_cross_cutting_tests = [
+  "update::production_handler_tests::reload::selected_runtimes_remain_isolated_through_real_handlers",
+  "update::production_handler_tests::encryption::passphrase_change_validates_redacts_and_rejects_late_completion::case_2_mismatch",
+  "update::production_handler_tests::encryption::passphrase_change_validates_redacts_and_rejects_late_completion::case_1_empty",
+  "update::production_handler_tests::encryption::passphrase_change_validates_redacts_and_rejects_late_completion::case_3_valid",
+  "update::production_handler_tests::network::delete_requires_review_preserves_other_scope_and_rejects_stale_results::case_2_failure",
+  "update::production_handler_tests::network::delete_requires_review_preserves_other_scope_and_rejects_stale_results::case_1_success",
+  "update::production_handler_tests::network::overlapping_loads_reject_stale_success_error_and_duplicate",
+  "update::production_handler_tests::volume_dialogs::missing_volume_does_not_start_or_strand_delete",
+  "update::production_handler_tests::volume_dialogs::real_volume_operations_report_unsupported_and_reject_stale_completion::case_1_delete",
+  "update::production_handler_tests::volume_dialogs::mount_option_form_updates_real_fields_and_cancels",
+  "update::production_handler_tests::volume_dialogs::real_volume_operations_report_unsupported_and_reject_stale_completion::case_3_resize",
+  "update::production_handler_tests::volume_dialogs::real_volume_operations_report_unsupported_and_reject_stale_completion::case_4_mount_defaults",
+  "update::production_handler_tests::volume_dialogs::real_volume_operations_report_unsupported_and_reject_stale_completion::case_5_mount_custom",
+  "update::production_handler_tests::volume_dialogs::edit_and_resize_navigation_validate_bounds_and_cancel",
+  "update::production_handler_tests::volume_dialogs::real_volume_operations_report_unsupported_and_reject_stale_completion::case_2_edit",
+  "update::production_handler_tests::network::failed_rename_preserves_original_remote",
+  "update::production_handler_tests::network::successful_rename_updates_selection_and_rejects_duplicate",
+]
+
+[[generated_contract_rows]]
+families = [
+  "BackendMetadata", "DiskDiscovery", "DeviceEventSource", "DriveOperations",
+  "PartitionOperations", "FilesystemOperations", "EncryptionOperations",
+  "ImageDeviceOperations (temporary native-only bridge)", "BtrfsOperations",
+  "LogicalTopologySource", "LogicalOperations", "NetworkDriveBackend",
+  "FilesystemToolDiscovery", "UsageOperations", "ImageWorkflowOperations",
+  "DesktopServices"
+]
+ui_entry_point = "none unless a flow below names it"
+state_dto = "derived from inventory state column"
+configured_error = "StorageError selected by behaviour rule"
+transition = "inventory default or typed StateTransition"
+fixture = "tests/ui/scenarios/empty.toml"
+in_process_test = "generated_cases_cover_success_error_trace_and_transition_for_every_modelled_operation"
+e2e_case = "none"
+runtime_field = "AppRuntime.operations or AppRuntime.desktop"
+
+[[flow]]
+id = "physical_partition_format"
+ui_entry_point = "LoadDrivesIncremental; partition create/format dialog"
+operations = ["discovery.list_disks", "discovery.list_volumes", "partition.create_partition", "filesystem.format"]
+fixture = "tests/ui/scenarios/physical/partition-format.toml"
+branches = ["open", "validation", "cancel", "success", "configured_error", "refresh"]
+in_process_test = "scenario_partition_adapter_creates_owned_device"
+e2e_case = "physical_partition_format"
+runtime_field = "AppRuntime.operations"
+application_workflow_tests = [
+  "update::production_handler_tests::create_routes_to_selected_runtime_and_refreshes_actual_models",
+  "update::production_handler_tests::create_cancel_and_missing_dialog_have_no_effect::case_1_cancel",
+  "update::production_handler_tests::create_cancel_and_missing_dialog_have_no_effect::case_2_no_dialog",
+  "update::production_handler_tests::create_submission_revalidates_form_without_side_effects::case_1_zero_size",
+  "update::production_handler_tests::create_submission_revalidates_form_without_side_effects::case_2_oversized",
+  "update::production_handler_tests::create_submission_revalidates_form_without_side_effects::case_3_missing_tool",
+  "update::production_handler_tests::create_submission_revalidates_form_without_side_effects::case_4_missing_secret",
+  "update::production_handler_tests::create_submission_revalidates_form_without_side_effects::case_5_mismatched_secret",
+  "update::production_handler_tests::create_failure_surfaces_error_without_refreshing_navigation",
+  "update::production_handler_tests::format_uses_selected_runtime_and_handles_invalid_targets::case_1_success",
+  "update::production_handler_tests::format_uses_selected_runtime_and_handles_invalid_targets::case_2_missing_device",
+  "update::production_handler_tests::format_uses_selected_runtime_and_handles_invalid_targets::case_3_missing_tool",
+  "update::production_handler_tests::create_completion_does_not_close_a_replacement_idle_dialog",
+  "update::production_handler_tests::old_partition_completion_cannot_replace_a_new_running_dialog::case_1_success",
+  "update::production_handler_tests::old_partition_completion_cannot_replace_a_new_running_dialog::case_2_failure"
+]
+
+[[flow]]
+id = "busy_unmount"
+ui_entry_point = "volume unmount and blocking-process dialog"
+operations = ["filesystem.unmount", "filesystem.get_mount_point", "filesystem.blocking_processes", "filesystem.kill_processes"]
+fixture = "tests/ui/scenarios/physical/busy-unmount.toml"
+branches = ["open", "busy_error", "cancel", "retry", "refresh"]
+in_process_test = "configured_backend_error_remains_actionable"
+e2e_case = "busy_unmount"
+runtime_field = "AppRuntime.operations"
+application_workflow_tests = [
+  "update::production_handler_tests::mount::busy_result_routes_to_dialog_and_retry_preserves_mounted_state::case_1_segment",
+  "update::production_handler_tests::mount::busy_result_routes_to_dialog_and_retry_preserves_mounted_state::case_2_child",
+  "update::production_handler_tests::mount::busy_result_routes_to_dialog_and_retry_preserves_mounted_state::case_3_sidebar",
+  "update::production_handler_tests::mount::unsupported_kill_is_an_error_not_a_fake_unmount_success",
+  "update::production_handler_tests::mount::child_mount_and_unmount_refresh_real_state"
+]
+
+[[flow]]
+id = "luks_unlock"
+ui_entry_point = "encryption unlock dialog"
+operations = ["encryption.list_luks_devices", "encryption.unlock_luks"]
+fixture = "tests/ui/scenarios/physical/luks.toml"
+branches = ["open", "validation", "configured_error", "success", "refresh"]
+in_process_test = "configured_backend_error_remains_actionable"
+e2e_case = "luks_unlock"
+runtime_field = "AppRuntime.operations"
+application_workflow_tests = [
+  "update::production_handler_tests::encryption::wrong_secret_retries_successfully_then_locks_actual_model",
+  "update::production_handler_tests::encryption::cancelled_or_missing_target_never_unlocks::case_1_cancel",
+  "update::production_handler_tests::encryption::cancelled_or_missing_target_never_unlocks::case_2_missing_partition",
+  "update::production_handler_tests::encryption::cancelled_unlock_failure_cannot_reopen_a_secret_dialog"
+]
+
+[[flow]]
+id = "logical_preflight_confirmation"
+ui_entry_point = "logical picker, preflight, confirmation, refresh"
+operations = ["logical.list_entities", "logical.capture_candidate", "logical.preflight", "logical.execute", "discovery.device_events"]
+fixture = "tests/ui/scenarios/logical/preflight.toml"
+branches = ["open", "blocked", "stale", "cancel", "success", "refresh"]
+in_process_test = "scenario_partition_adapter_creates_owned_device"
+e2e_case = "logical_preflight_confirmation"
+runtime_field = "AppRuntime.operations"
+application_workflow_tests = [
+  "update::production_handler_tests::logical::confirmation_executes_once_and_schedules_both_real_refreshes",
+  "update::production_handler_tests::logical::cancelled_confirmation_and_changed_identity_cannot_execute",
+  "update::production_handler_tests::logical::cancelled_preflight_cannot_reopen_confirmation",
+  "update::production_handler_tests::logical::stale_candidate_capture_cannot_change_current_selection::case_1_replaced",
+  "update::production_handler_tests::logical::stale_candidate_capture_cannot_change_current_selection::case_2_left_view",
+  "update::production_handler_tests::logical::stale_topology_does_not_replace_current_candidate_resolution",
+  "update::production_handler_tests::logical::operation_failure_clears_pending_without_success_refresh",
+  "update::production_handler_tests::logical::action_form_validates_input_and_cancel_clears_actual_dialog"
+]
+
+[[flow]]
+id = "network_mount"
+ui_entry_point = "network remote create/test/mount form"
+operations = ["network.configuration_schema", "network.create_config", "network.test_config", "network.mount", "network.mount_status"]
+fixture = "tests/ui/scenarios/network/mount.toml"
+branches = ["open", "validation", "configured_error", "success", "refresh"]
+in_process_test = "network_scenario_exercises_crud_and_mount_state"
+e2e_case = "network_mount"
+runtime_field = "AppRuntime.operations"
+application_workflow_tests = [
+  "update::production_handler_tests::network::create_select_mount_status_unmount_use_real_handlers",
+  "update::production_handler_tests::network::create_validation_conflict_and_retry_preserve_form",
+  "update::production_handler_tests::network::cancelled_create_completion_cannot_replace_new_wizard",
+  "update::production_handler_tests::network::editor_save_rejects_duplicate_and_stale_completion",
+  "update::production_handler_tests::network::old_status_cannot_overwrite_mount_and_errors_are_visible",
+  "update::production_handler_tests::network::invalid_provider_or_missing_schema_field_never_submits::case_1_unsupported",
+  "update::production_handler_tests::network::invalid_provider_or_missing_schema_field_never_submits::case_2_missing_required",
+  "update::production_handler_tests::network::editor_conflict_retry_updates_backend_and_completion_is_once"
+]
+
+[[flow]]
+id = "image_usage_progress"
+ui_entry_point = "image and usage progress dialogs"
+operations = ["desktop.select_image", "image.start_copy", "image.copy_status", "image.cancel_copy", "usage.start_scan", "usage.scan_status", "usage.delete_files"]
+fixture = "tests/ui/scenarios/workflows/image-usage.toml"
+branches = ["open", "pending", "advance_clock", "progress", "cancel", "completion", "configured_error"]
+in_process_test = "scenario_image_and_usage_adapters_issue_operation_ids"
+e2e_case = "image_usage_progress"
+runtime_field = "AppRuntime.operations,AppRuntime.desktop"
+application_workflow_tests = [
+  "update::production_handler_tests::image_usage::image_start_uses_selected_adapter_and_rejects_duplicate",
+  "update::production_handler_tests::image_usage::stale_image_start_cannot_bind_to_replacement_dialog",
+  "update::production_handler_tests::image_usage::image_progress_terminal_and_cleanup_use_actual_subscription_messages::case_1_complete",
+  "update::production_handler_tests::image_usage::image_progress_terminal_and_cleanup_use_actual_subscription_messages::case_2_cancel",
+  "update::production_handler_tests::image_usage::image_cancel_before_start_completion_is_honoured",
+  "update::production_handler_tests::image_usage::image_validation_and_adapter_errors_allow_retry::case_1_missing_path",
+  "update::production_handler_tests::image_usage::image_validation_and_adapter_errors_allow_retry::case_2_unknown_asset",
+  "update::production_handler_tests::image_usage::image_validation_and_adapter_errors_allow_retry::case_3_host_path",
+  "update::production_handler_tests::image_usage::usage_wizard_scan_selection_delete_and_refresh_use_real_state",
+  "update::production_handler_tests::image_usage::usage_old_scan_and_delete_cannot_change_replacement_state",
+  "update::production_handler_tests::image_usage::usage_cancelled_wizard_and_invalid_selection_never_start",
+  "update::production_handler_tests::image_usage::usage_running_adapter_waits_for_virtual_completion",
+  "update::production_handler_tests::image_usage::usage_unsupported_adapter_surfaces_error_without_success"
+]
+
+[[flow]]
+id = "keyboard_accessibility"
+ui_entry_point = "all test-case dialogs using keyboard navigation"
+operations = []
+fixture = "tests/ui/scenarios/accessibility/keyboard.toml"
+branches = ["focus", "disabled_reason", "cancel", "submit"]
+in_process_test = "keyboard_case_manifest_is_present"
+e2e_case = "keyboard_accessibility"
+runtime_field = "AppRuntime"
+
+[[flow]]
+id = "live_scenario_reload"
+ui_entry_point = "scenario diagnostic state and subscribed pages"
+operations = ["discovery.device_events"]
+fixture = "tests/ui/scenarios/reload/live.toml"
+branches = ["atomic_replace", "semantic_reload", "valid_reload", "invalid_reload", "in_flight_cancel", "refresh_once"]
+in_process_test = "scenario_reload_is_atomic_and_refreshes_once"
+e2e_case = "live_scenario_reload"
+runtime_field = "AppRuntime.scenario_control,AppRuntime.operations"
+application_workflow_tests = [
+  "update::production_handler_tests::reload::late_list_cannot_restart_or_replace_completed_refresh",
+  "update::production_handler_tests::reload::refresh_keeps_published_models_until_all_builds_succeed",
+  "update::production_handler_tests::reload::background_refresh_preserves_running_dialog",
+  "update::production_handler_tests::reload::scenario_reload_event_refreshes_actual_models_and_rejects_invalid_overlay",
+  "update::production_handler_tests::reload::duplicate_build_and_old_finish_cannot_publish_over_new_refresh",
+  "update::production_handler_tests::reload::duplicate_device_candidates_are_rejected_without_publishing",
+  "update::production_handler_tests::reload::refresh_preserves_valid_selection_and_drops_missing_identity"
+]

@@ -78,6 +78,7 @@ pub(super) fn open_change_passphrase(
     }
 
     *dialog = Some(ShowDialog::ChangePassphrase(ChangePassphraseDialog {
+        operation_id: None,
         volume,
         current_passphrase: String::new(),
         new_passphrase: String::new(),
@@ -182,6 +183,7 @@ pub(super) fn unlock_message(
     control: &mut VolumesControl,
     unlock_message: UnlockMessage,
     dialog: &mut Option<ShowDialog>,
+    operations: std::sync::Arc<crate::operations::StorageOperations>,
 ) -> Task<cosmic::Action<Message>> {
     let d = match dialog.as_mut() {
         Some(d) => d,
@@ -209,6 +211,8 @@ pub(super) fn unlock_message(
             }
 
             state.running = true;
+            let operation_id = uuid::Uuid::new_v4();
+            state.operation_id = Some(operation_id);
 
             let partition_path = state.partition_path.clone();
             let partition_name = state.partition_name.clone();
@@ -230,10 +234,13 @@ pub(super) fn unlock_message(
                     "unlock missing partition in model"
                 );
                 return Task::done(
-                    Message::Dialog(Box::new(ShowDialog::Info {
-                        title: fl!("unlock-failed"),
-                        body: fl!("unlock-missing-partition", name = partition_name),
-                    }))
+                    Message::VolumeDialogOperationCompleted {
+                        operation_id,
+                        message: Box::new(Message::Dialog(Box::new(ShowDialog::Info {
+                            title: fl!("unlock-failed"),
+                            body: fl!("unlock-missing-partition", name = partition_name),
+                        }))),
+                    }
                     .into(),
                 );
             };
@@ -241,43 +248,48 @@ pub(super) fn unlock_message(
             let device_path_for_selection = partition_path.clone();
             Task::perform(
                 async move {
-                    let luks_client = LuksClient::new()
-                        .await
-                        .map_err(|e| anyhow::anyhow!("Failed to create LUKS client: {}", e))?;
+                    let luks_client = LuksClient::with_operations(operations.clone());
                     let device = &p.device;
                     luks_client
                         .unlock(device, &passphrase_for_task)
                         .await
                         .map_err(|e| anyhow::anyhow!("Failed to unlock: {}", e))?;
-                    load_all_drives().await.map_err(|e| e.into())
+                    crate::models::load::load_all_drives_with_operations(operations)
+                        .await
+                        .map_err(|e| e.into())
                 },
-                move |result: Result<Vec<UiDrive>, anyhow::Error>| match result {
-                    Ok(drives) => {
-                        // After unlock, select the unlocked volume (which may have new child nodes)
-                        Message::UpdateNavWithChildSelection(
-                            drives,
-                            Some(device_path_for_selection.clone()),
-                        )
-                        .into()
+                move |result: Result<Vec<UiDrive>, anyhow::Error>| {
+                    Message::VolumeDialogOperationCompleted {
+                        operation_id,
+                        message: Box::new(match result {
+                            Ok(drives) => {
+                                // After unlock, select the unlocked volume (which may have new child nodes)
+                                Message::UpdateNavWithChildSelection(
+                                    drives,
+                                    Some(device_path_for_selection.clone()),
+                                )
+                            }
+                            Err(e) => {
+                                tracing::error!(
+                                    ?e,
+                                    operation = "unlock_encrypted",
+                                    device_path = %partition_path,
+                                    "unlock encrypted dialog error"
+                                );
+                                Message::Dialog(Box::new(ShowDialog::UnlockEncrypted(
+                                    UnlockEncryptedDialog {
+                                        operation_id: None,
+                                        partition_path: partition_path.clone(),
+                                        partition_name: partition_name.clone(),
+                                        passphrase: passphrase.clone(),
+                                        error: Some(e.to_string()),
+                                        running: false,
+                                    },
+                                )))
+                            }
+                        }),
                     }
-                    Err(e) => {
-                        tracing::error!(
-                            ?e,
-                            operation = "unlock_encrypted",
-                            device_path = %partition_path,
-                            "unlock encrypted dialog error"
-                        );
-                        Message::Dialog(Box::new(ShowDialog::UnlockEncrypted(
-                            UnlockEncryptedDialog {
-                                partition_path: partition_path.clone(),
-                                partition_name: partition_name.clone(),
-                                passphrase: passphrase.clone(),
-                                error: Some(e.to_string()),
-                                running: false,
-                            },
-                        )))
-                        .into()
-                    }
+                    .into()
                 },
             )
         }
@@ -345,6 +357,7 @@ pub(super) fn change_passphrase_message(
     _control: &mut VolumesControl,
     msg: ChangePassphraseMessage,
     dialog: &mut Option<ShowDialog>,
+    operations: std::sync::Arc<crate::operations::StorageOperations>,
 ) -> Task<cosmic::Action<Message>> {
     let Some(ShowDialog::ChangePassphrase(state)) = dialog.as_mut() else {
         return Task::none();
@@ -382,12 +395,12 @@ pub(super) fn change_passphrase_message(
             let volume = state.volume.clone();
             let current = state.current_passphrase.clone();
             let new = state.new_passphrase.clone();
+            let operation_id = uuid::Uuid::new_v4();
+            state.operation_id = Some(operation_id);
 
             Task::perform(
                 async move {
-                    let luks_client = LuksClient::new()
-                        .await
-                        .map_err(|e| anyhow::anyhow!("Failed to create LUKS client: {}", e))?;
+                    let luks_client = LuksClient::with_operations(operations.clone());
                     let device = volume
                         .device_path
                         .as_ref()
@@ -396,15 +409,26 @@ pub(super) fn change_passphrase_message(
                         .change_passphrase(device, &current, &new)
                         .await
                         .map_err(|e| anyhow::anyhow!("Failed to change passphrase: {}", e))?;
-                    load_all_drives().await.map_err(|e| e.into())
+                    crate::models::load::load_all_drives_with_operations(operations)
+                        .await
+                        .map_err(|e| e.into())
                 },
-                |result: Result<Vec<UiDrive>, anyhow::Error>| match result {
-                    Ok(drives) => Message::UpdateNav(drives, None).into(),
-                    Err(e) => {
-                        let ctx = UiErrorContext::new("change_passphrase");
-                        log_error_and_show_dialog(fl!("change-passphrase").to_string(), e, ctx)
-                            .into()
+                move |result: Result<Vec<UiDrive>, anyhow::Error>| {
+                    Message::VolumeDialogOperationCompleted {
+                        operation_id,
+                        message: Box::new(match result {
+                            Ok(drives) => Message::UpdateNav(drives, None),
+                            Err(e) => {
+                                let ctx = UiErrorContext::new("change_passphrase");
+                                log_error_and_show_dialog(
+                                    fl!("change-passphrase").to_string(),
+                                    e,
+                                    ctx,
+                                )
+                            }
+                        }),
                     }
+                    .into()
                 },
             )
         }
@@ -552,7 +576,10 @@ pub(super) fn edit_encryption_options_message(
     }
 }
 
-pub(super) fn lock_container(control: &mut VolumesControl) -> Task<cosmic::Action<Message>> {
+pub(super) fn lock_container(
+    control: &mut VolumesControl,
+    operations: std::sync::Arc<crate::operations::StorageOperations>,
+) -> Task<cosmic::Action<Message>> {
     let segment = control.segments.get(control.selected_segment).cloned();
     if let Some(s) = segment
         && let Some(p) = s.volume
@@ -565,12 +592,8 @@ pub(super) fn lock_container(control: &mut VolumesControl) -> Task<cosmic::Actio
         let device_path_for_selection = p.device_path.clone().unwrap_or_else(|| p.label.clone());
         return Task::perform(
             async move {
-                let fs_client = FilesystemsClient::new()
-                    .await
-                    .map_err(|e| anyhow::anyhow!("Failed to create filesystems client: {}", e))?;
-                let luks_client = LuksClient::new()
-                    .await
-                    .map_err(|e| anyhow::anyhow!("Failed to create LUKS client: {}", e))?;
+                let fs_client = FilesystemsClient::with_operations(operations.clone());
+                let luks_client = LuksClient::with_operations(operations.clone());
 
                 for device in &mounted_children {
                     fs_client
@@ -588,7 +611,9 @@ pub(super) fn lock_container(control: &mut VolumesControl) -> Task<cosmic::Actio
                     .await
                     .map_err(|e| anyhow::anyhow!("Failed to lock: {}", e))?;
 
-                load_all_drives().await.map_err(|e| e.into())
+                crate::models::load::load_all_drives_with_operations(operations)
+                    .await
+                    .map_err(|e| e.into())
             },
             move |result: Result<Vec<UiDrive>, anyhow::Error>| match result {
                 Ok(drives) => {

@@ -5,12 +5,11 @@ use crate::message::volumes::VolumesControlMessage;
 use crate::state::dialogs::ShowDialog;
 use crate::state::volumes::{DetailTab, VolumesControl};
 
-mod btrfs;
 mod create;
 mod encryption;
 mod filesystem;
 pub(crate) mod helpers;
-mod mount;
+pub(crate) mod mount;
 mod mount_options;
 mod partition;
 mod selection;
@@ -20,6 +19,7 @@ impl VolumesControl {
         &mut self,
         message: VolumesControlMessage,
         dialog: &mut Option<ShowDialog>,
+        operations: std::sync::Arc<crate::operations::StorageOperations>,
     ) -> Task<cosmic::Action<Message>> {
         match message {
             VolumesControlMessage::SegmentSelected(index) => {
@@ -65,15 +65,17 @@ impl VolumesControl {
                 segment_index,
                 device_path,
             } => selection::select_volume(self, segment_index, device_path, dialog),
-            VolumesControlMessage::Mount => mount::mount(self),
-            VolumesControlMessage::Unmount => mount::unmount(self),
-            VolumesControlMessage::ChildMount(device_path) => mount::child_mount(self, device_path),
+            VolumesControlMessage::Mount => mount::mount(self, operations),
+            VolumesControlMessage::Unmount => mount::unmount(self, operations),
+            VolumesControlMessage::ChildMount(device_path) => {
+                mount::child_mount(self, device_path, operations)
+            }
             VolumesControlMessage::ChildUnmount(device_path) => {
-                mount::child_unmount(self, device_path)
+                mount::child_unmount(self, device_path, operations)
             }
 
-            VolumesControlMessage::LockContainer => encryption::lock_container(self),
-            VolumesControlMessage::Delete => partition::delete(self, dialog),
+            VolumesControlMessage::LockContainer => encryption::lock_container(self, operations),
+            VolumesControlMessage::Delete => partition::delete(self, dialog, operations),
             VolumesControlMessage::OpenFormatPartition => {
                 partition::open_format_partition(self, dialog)
             }
@@ -87,7 +89,7 @@ impl VolumesControl {
                 filesystem::open_edit_filesystem_label(self, dialog)
             }
             VolumesControlMessage::OpenEditMountOptions => {
-                mount_options::open_edit_mount_options(self, dialog)
+                mount_options::open_edit_mount_options(self, dialog, operations)
             }
             VolumesControlMessage::OpenCheckFilesystem => {
                 filesystem::open_check_filesystem(self, dialog)
@@ -110,43 +112,33 @@ impl VolumesControl {
             VolumesControlMessage::OpenEditEncryptionOptions => {
                 encryption::open_edit_encryption_options(self, dialog)
             }
-            VolumesControlMessage::OpenBtrfsCreateSubvolume => {
-                btrfs::open_create_subvolume(self, dialog)
-            }
-            VolumesControlMessage::OpenBtrfsCreateSnapshot => {
-                btrfs::open_create_snapshot(self, dialog)
-            }
 
-            VolumesControlMessage::CreateMessage(msg) => create::create_message(self, msg, dialog),
+            VolumesControlMessage::CreateMessage(msg) => {
+                create::create_message(self, msg, dialog, operations)
+            }
             VolumesControlMessage::UnlockMessage(unlock_message) => {
-                encryption::unlock_message(self, unlock_message, dialog)
+                encryption::unlock_message(self, unlock_message, dialog, operations)
             }
             VolumesControlMessage::EditPartitionMessage(msg) => {
-                partition::edit_partition_message(self, msg, dialog)
+                partition::edit_partition_message(self, msg, dialog, operations)
             }
             VolumesControlMessage::ResizePartitionMessage(msg) => {
-                partition::resize_partition_message(self, msg, dialog)
+                partition::resize_partition_message(self, msg, dialog, operations)
             }
             VolumesControlMessage::EditFilesystemLabelMessage(msg) => {
                 filesystem::edit_filesystem_label_message(self, msg, dialog)
             }
             VolumesControlMessage::EditMountOptionsMessage(msg) => {
-                mount_options::edit_mount_options_message(self, msg, dialog)
+                mount_options::edit_mount_options_message(self, msg, dialog, operations)
             }
             VolumesControlMessage::TakeOwnershipMessage(msg) => {
                 encryption::take_ownership_message(self, msg, dialog)
             }
             VolumesControlMessage::ChangePassphraseMessage(msg) => {
-                encryption::change_passphrase_message(self, msg, dialog)
+                encryption::change_passphrase_message(self, msg, dialog, operations)
             }
             VolumesControlMessage::EditEncryptionOptionsMessage(msg) => {
                 encryption::edit_encryption_options_message(self, msg, dialog)
-            }
-            VolumesControlMessage::BtrfsCreateSubvolumeMessage(msg) => {
-                btrfs::btrfs_create_subvolume_message(self, msg, dialog)
-            }
-            VolumesControlMessage::BtrfsCreateSnapshotMessage(msg) => {
-                btrfs::btrfs_create_snapshot_message(self, msg, dialog)
             }
         }
     }

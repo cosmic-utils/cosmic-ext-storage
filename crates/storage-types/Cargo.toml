@@ -13,3 +13,6 @@ anyhow.workspace = true
 num-format.workspace = true
 toml.workspace = true
 serde_json.workspace = true
+
+[dev-dependencies]
+rstest.workspace = true

@@ -20,6 +20,7 @@ pub enum DetailTab {
 
 #[derive(Debug, Clone)]
 pub struct UsageTabState {
+    pub delete_operation_id: Option<uuid::Uuid>,
     pub loading: bool,
     pub progress_processed_bytes: u64,
     pub progress_estimated_total_bytes: u64,
@@ -49,6 +50,7 @@ pub struct UsageTabState {
 impl Default for UsageTabState {
     fn default() -> Self {
         Self {
+            delete_operation_id: None,
             loading: false,
             progress_processed_bytes: 0,
             progress_estimated_total_bytes: 0,

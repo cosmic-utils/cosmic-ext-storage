@@ -1,0 +1,410 @@
+# Testing V2 remaining execution
+
+Current direction (2026-09-16): the approved
+[non-rendered regrouping](non-rendered-testing-plan.md) supersedes the earlier
+rendered execution sequence below. Actual application handlers now replace the
+parallel workflow harness; rendered execution is default-off and dependency
+patching is frozen. See [production-logic traceability](production-logic-traceability.md)
+for each app fix, regression and cleanup. Earlier measurements and dependency
+investigations below remain historical, not current acceptance evidence.
+
+Status: deterministic regressions, approved Bash extraction and pinned
+focus/tooltip repairs are implemented. Full form flows require a decision on
+missing custom-widget accessibility support; collector integration and
+coverage/approval gates also remain outstanding. No final acceptance or coverage
+completion claimed; the sections below retain the chronology of earlier blockers.
+
+Started on 2026-09-14 from `4-ui-testing` commit
+`5ff5e049756c5389f74a2bb0622b9612c219730f`, on branch
+`codex/testing-v2-completion`. The only pre-existing edit was the approved
+remaining-phase implementation-plan update; it is preserved on this branch.
+Completed phases and historical evidence are not being rewritten.
+
+Branch correction (2026-09-14): at the user's request, fast-forwarded both
+local commits (`455fff7`, `9cec518`) into `4-ui-testing` and deleted the local
+`codex/testing-v2-completion` branch. It had never been pushed and had no
+remote branch or PR. All subsequent implementation belongs directly on
+`4-ui-testing`; another branch requires an explicit request. The active plan
+now reflects this, including final coverage comparison against the existing
+PR's actual base rather than against `4-ui-testing` itself.
+
+## Baseline and early feasibility
+
+Evidence is saved under ignored `target/testing-v2-completion/`.
+Current Cargo/Nextest discovery, strict Clippy and host baseline gates passed:
+282 host tests, 36 explicitly ignored native/probe entries, 26 Python tests,
+and 80 required inventory entries before this batch. Formatting passed.
+The fresh combined run `run-eu4hrjun` used the exact starting commit as
+its changed-code base and retained valid source/input/ELF evidence. Host,
+native and UI exit statuses were zero. All 17 instrumented native cases
+passed in 141.493s (Nextest `06f120d6-a713-4758-80c7-ecebb083cef6`).
+Reload completed all nine steps and matched the unchanged known shutdown
+quarantine. The separate normal UI capability check also passed.
+
+Rust baseline: 11,547/29,348 lines (39.35%) and 1,336/3,471 functions (38.49%).
+Acceptance failed on all ten package/aggregate scopes and the seven absent
+executed UI cases. There were no changed-code failures when comparing the
+unchanged starting code to its exact base; this is not a waiver of the final
+changed-code gate. Nine fewer lines were observed than in the dated adoption
+run, with the same definitions and covered function count; do not claim a
+regression or a gain from that runtime-dependent variation without a
+source-aligned rerun. The baseline reports were saved before source edits.
+
+Full per-file missing line/function identities are in
+`baseline/gap-ledger.json` (SHA-256
+`ce0ea3c8f63333a09ad3e45cdb5785edf1d21620705bd4d38304aa1c9b11dfd5`).
+See [the gap ledger](remaining-gap-ledger.md) for scope totals and work owners.
+
+Before large gap-filling batches, evaluate established non-Rust collectors
+with small success/failure/unexecuted-code probes. This work must not invent
+metrics for unsupported source or treat a passing script test as coverage.
+No GUI/toolchain/Rust dependency pins, quarantine scope or thresholds changed.
+
+## Non-Rust collector proof
+
+Python: installed `coverage==7.16.1` only in an ignored local virtualenv.
+Its JSON format 3 records named function regions including an uncalled
+function with zero body hits. Both a successful call and a deliberate
+exception retain usable coverage, and the exception exits 1. The existing
+26 Python tests pass under instrumentation. Their line measurements are:
+
+| Script | Covered / executable lines |
+| --- | ---: |
+| `tools/testing/coverage.py` | 202 / 273 |
+| `tools/testing/run_coverage.py` | 137 / 287 |
+| `tools/ui-testing/assert_tests.py` | 32 / 179 |
+| `tools/ui-testing/debug-app.py` | 27 / 27 |
+
+These are unit-suite observations only. The debugger test uses its existing
+fake GDB module; this is not new live-GDB collection evidence. Child processes,
+container execution, source inventory and function-metric validation still
+need integration before final support coverage can pass.
+
+Shell: the upstream v43 release has no matching Docker `v43` tag. Tested the
+available official `kcov/kcov:v42` image by immutable digest
+`sha256:30c442617f3d8e040bf0ec2cba19cc2ee517b668f3a3d50b2d3de1c435138a8a`;
+its binary reports `kcov v41-31-g3a8c`. This is a probe dependency, not an
+adopted project pin or a replacement for either pinned application image.
+
+- Success/failure probe: exits 0/7 preserved, uncalled function body remains
+  uncovered, reports contain 4/7 and 5/7 hit lines respectively.
+- Interpreter probe: normal `/bin/sh` prints `interpreter=posix-sh`; kcov
+  prints `interpreter=5.1.4(1)-release`. It substitutes Bash for the shebang.
+- The inline `sh -ec` child prints success, but its body lines remain marked
+  uncovered in kcov. This is not valid evidence that the child did not run,
+  and must not be hidden with an exclusion.
+- `--bash-parser=/bin/dash` preserves the interpreter and exits 0, but reports
+  0/9 hit lines despite observed execution. This alternative fails feasibility.
+- Kcov's Cobertura output supplies lines, not a verified function inventory.
+  Current maintained `.sh` scripts declare no shell functions; do not turn
+  that observation into a general function-coverage claim for future helpers.
+
+The [kcov manual](https://raw.githubusercontent.com/SimonKagstrom/kcov/v43/doc/kcov.1)
+documents Bash parsing and optional `/bin/sh` interception via substitution.
+[ShellSpec's coverage documentation](https://github.com/shellspec/shellspec#code-coverage)
+restricts measurement to shells with DEBUG traps (Bash, zsh, ksh), so adding
+that runner does not solve Dash measurement. Python format/reference:
+[coverage.py JSON reporting](https://coverage.readthedocs.io/en/7.16.1/commands/cmd_json.html).
+
+Decision approved (2026-09-14): explicitly standardize maintained runtime test
+scripts on Bash in normal and instrumented runs, extracting inline child-shell
+code into tracked scripts and preserving one execution path. No second runner,
+custom trace collector, threshold reduction or unsupported metric is approved.
+Probe sources/reports remain under the ignored evidence directory; they have
+not become a maintained execution mechanism. Build recipes still need their
+own measurement-boundary audit.
+
+## First deterministic regression batch
+
+Moved the old `models::helpers::tests::{test_build_simple_tree,test_build_nested_tree}`
+assertion bodies into scenario-feature-gated integration target `volume_models`.
+The functions retain their names; their target/module identity intentionally
+changes. Removed the old optional host-D-Bus constructor and early returns.
+The new rstest fixture derives `FilesystemsClient` from the existing owned
+root `scenario` fixture. No product algorithm or storage transport changed.
+
+Added four named empty/foreign/orphan/anonymous-root cases and one coherent
+nested mutation sequence covering lookup, ownership-preserving clone,
+mount-state queries, updates and direct/nested removals. Cargo and Nextest
+both pass all seven cases with no skips. Added their exact discovered names
+to the required manifest and its active validation appendix. Default-feature
+builds explicitly do not include this scenario-only target; ordinary CI's
+all-feature suite and mandatory named inventory select it.
+
+After the batch: workspace Nextest passes 287 tests (36 explicit ignored
+native/probe entries), default library tests pass 39, strict workspace
+all-feature/all-target Clippy passes, Python passes 26, all 87 required names
+validate, and formatting/diff checks pass. The seven model cases also pass
+with `DBUS_SYSTEM_BUS_ADDRESS=unix:path=/nonexistent/cosmic-test-bus`, proving
+the removed environmental dependency cannot silently bypass their assertions.
+Logs are `models-no-dbus.log`, `models-clippy.log`, `default-tests.log` and
+`host-after-models.log` in the evidence directory.
+
+This batch does not claim a new full coverage percentage. Fresh final
+instrumentation is required after these test/source/manifest changes. The
+remaining seven UI cases, non-Rust integration, threshold work, hosted failure
+probes, visual review and required-check administration are still unfinished.
+
+## Approved Bash/runtime extraction
+
+Implemented directly on `4-ui-testing`, with no new branch:
+
+- Native entrypoint and exact-test launcher now explicitly use `/bin/bash`,
+  retaining `set -eu` rather than silently adding pipeline-failure behavior.
+- Replaced the duplicated UI bootstrap with `container-runner.sh`, called by
+  `run-capability.sh` and `run-case.sh`. Both now mount source read-only and
+  artifacts writable. Case arguments reject traversal and invalid coverage
+  booleans before starting the container.
+- Extracted lab device/service diagnostics and profile archiving into
+  `collect-evidence.sh`. Rust still owns Testcontainers lifecycle, exit checks,
+  cleanup interpretation and exec-stream archive transport before teardown.
+  Archive targets are passed as arguments and validated, not interpolated
+  into shell source. The diagnostic best-effort behavior is unchanged.
+- Extracted the terminal input probe into `input-probe.sh`. Removed all four
+  runtime `sh -ec` snippets from the two Rust runners and the duplicated UI
+  snippet from Just/the case launcher. No application/GUI dependency, UI image
+  lock or shutdown-quarantine scope changed. Build-time Containerfile commands
+  remain separately inventoried work, not silently excluded coverage.
+- Added four host contract tests and two explicitly container-only tests to
+  the existing Python unittest suite. Host discovery runs 30 checks and marks
+  the two container checks skipped; the existing `test-lab` and `ui-e2e`
+  recipes each enable their matching container check locally and in CI.
+  Explicit local execution of both container checks passes. They cover both UI
+  modes, exact argv/mount isolation, 0/7/139 exit propagation, invalid arguments,
+  and profile archive success/non-instrumented/missing-binary outcomes.
+
+Normal execution after the runtime extraction: 17 native cases pass in
+116.753 seconds (one deliberate ignored probe remains unselected), capability
+passes, and all nine reload steps pass with the unchanged known-shutdown
+quarantine warning. Strict workspace/all-feature/all-target Clippy, Bash syntax,
+Rust formatting and diff checks pass. Logs are under the ignored
+`target/testing-v2-completion/bash/` evidence directory.
+
+The same immutable kcov probe image now observes both named children when
+started by a parent Bash script: `input-probe.sh` has 3/3 executable lines hit;
+the services-only invocation of `collect-evidence.sh` has 4/14, retaining device
+and profile branches as uncovered. Parent success/failure exits remain 0/7.
+This resolves the specific inline-child measurement problem. It does **not**
+adopt that image as the runtime, establish a shell function metric, measure
+across Docker/privilege boundaries, or pass the support-code coverage gate.
+The probe's Bash 5.1.4 is not the pinned runtime's Bash 5.2.15; actual collector
+integration in that runtime remains required.
+
+Fresh combined instrumentation after the refactor: `run-wd_l49sl`, with
+`just coverage origin/main` resolving the comparison base to
+`0ba27cc2caac19acb7a8d98747f8b65058dab877`. Host, native and UI execution exit
+codes are all zero; native runs 17 tests in 144.213 seconds. The deliberate
+inner-failure case also supplies its archive before outcome checking. The
+report accepts 89 profiles in 12 matching build groups, including real app
+and runner UI profiles. No build-input/provenance/transport failure occurred.
+
+Rust totals: **11,682 / 29,342 lines (39.81%)**, **1,360 / 3,471 functions
+(39.18%)**. These include the preceding model-test batch; they are not a claim
+that extracting shell code alone increased application coverage. Runtime
+shell extraction also changes Rust source line locations/definitions, so the
+previous raw denominator is not identical.
+
+Acceptance correctly exits 1: seven missing executed UI cases (one diagnostic),
+ten package/aggregate threshold diagnostics, 4,950 changed uncovered lines
+and 707 changed uncovered functions. The changed-code findings compare the
+whole branch against `main`; the initial baseline compared against its own
+starting commit, so its eleven diagnostics are not directly comparable to
+these 5,668. No threshold was relaxed. Complete non-Rust support coverage,
+remaining UI programs and later approval/admin gates are still outstanding.
+Saved report copies are under `target/testing-v2-completion/bash/reports/`;
+full raw matching profiles/build groups remain in `target/coverage/run-wd_l49sl`.
+
+## Continued execution: UI runtime and focus
+
+The next executable keyboard probe exposed and fixed the case-name-dependent
+Sway Unix-socket overflow. The runner now owns a short private temporary runtime
+directory with the existing pinned `tempfile` crate, preserving artifact paths
+and teardown ownership. Two mandatory rstest regressions pass; all 70 runner
+tests, strict Clippy, normal capability and the original reload flow pass.
+Cargo.lock and GUI/image/quarantine bindings are unchanged.
+
+At that point the next gate was blocked on widget-focus publication in pinned iced:
+every accessibility update hardcodes focus to the window root. The keyboard
+inventory remains unconverted; the exploratory program and failed artifacts
+are preserved. See [the diagnosis, upstream-fix audit and scoped proposal](keyboard-focus-blocker.md).
+No dependency repair, new PR, focus-assertion waiver or quarantine expansion
+was made in that batch. Fresh combined coverage is required after these source changes.
+
+## Approved pinned focus-publication repairs
+
+The user subsequently approved the narrow repair and requested an upstreaming
+record for each fix. Implemented two separate iced commits on the previous
+exact pin: publish the UI's actual focused widget ID, then forward existing
+window Focused/Unfocused events to AccessKit. Neither changes Wayland lifetime
+or focus policy. Their corresponding libcosmic commits only bump the iced
+submodule. The app remains on `4-ui-testing`; only dependency fork branches
+were published, with no upstream PR. See [the complete dependency fix ledger](dependency-fix-ledger.md)
+for all retained earlier patches as well as these two new repairs.
+
+The app-only keyboard-device keeper preserves an attached virtual keyboard
+through per-key wtype invocations, checks actual device readiness/liveness,
+and kills/reaps its child. Its mandatory rstest cleanup/early-exit regression
+passes. This is harness behavior, not an upstream dependency patch.
+
+The real normal-mode diagnostic now passes exact forward/back focus assertions
+on Volume, Usage and Keyboard Scenario Disk, with a clean shutdown. Its full
+program is [retained separately](keyboard-focus-probe.toml). It does not cover
+dialog activation, disabled-reason, cancellation or submission, so the required
+keyboard flow remains planned rather than being replaced by a smaller probe.
+
+The new dependency pin initially fails the old shutdown-quarantine binding,
+as intended: reload completes all nine semantic steps, then reproduces the
+same ordered, post-close SIGSEGV stack. Rebinding only the lockfile hash is
+explicitly recorded in the ledger, with fresh normal/instrumented revalidation.
+The case, environment, signature, owner and expiry remain unchanged. This is
+not a Wayland-crash repair or a waiver for any keyboard failure.
+
+Fresh normal and instrumented reload runs pass their nine semantic steps with
+that warning. The instrumented 13-step focus probe also passes and shuts down
+cleanly. Existing collection validation accepts both runs' pre-close flush,
+app/runner profiles, matching binaries and input provenance; pinned LLVM merges
+and maps both profile sets without warnings. Workspace Nextest passes 290 tests
+(36 explicit ignores), strict Clippy and formatting pass, and all 90 required
+names validate. Host Python passes 30 tests with two explicit container-only
+skips; the normal capability run additionally passes the UI container check.
+The ledger contains the exact run IDs, hashes, commands and limitations.
+
+No fresh combined coverage percentage is claimed for this batch. The remaining
+UI programs, coverage thresholds, support-code measurement, hosted failure
+probes, visual review and required-check administration remain outstanding.
+
+## Continued execution: tooltip forwarding and create validation
+
+Resumed from `0a52ec5` directly on `4-ui-testing`. The next real UI run exposed
+the standard iced Tooltip's absent content-tree forwarding. No compatible
+upstream fix was found in the current/historical PR search or current source.
+The one-method repair plus real-widget regression is a separate fork commit,
+iced `b852a3354`, integrated by libcosmic `7a4912de`. It does not change tooltip
+behavior, focus policy, hidden overlays or Wayland lifetime. All earlier patches
+and other submodule pins are retained. [Fix 8](dependency-fix-ledger.md) records the
+scope, red/green evidence and exact dependency chain; no upstream PR was opened.
+
+The expanded keyboard diagnostic passes 35 steps, including exact focus,
+keyboard activation, cancellation, unchanged scenario generation/operation
+sequence, and the original complete free extent. The early selector error was
+an incorrect expected capitalization (`Create partition` versus `Create Partition`),
+not a failed tooltip repair. The corrected probe traverses the actual pinned
+control order. An attempted `/ok/world/revision` assertion was also rejected;
+the real protocol exposes `/ok/generation` and `/ok/last_sequence`, both of
+which the final probe checks as zero. Failed exploratory runs are retained.
+
+Ten new owned-value rstest tests cover the real create-dialog navigation
+validator: filesystem availability, unrelated/missing tools, unknown table,
+stale index, zero/minimum/maximum/oversized sizes, and the distinct final-step
+behavior. No product validation algorithm changed. They use root library tests,
+so the existing required-name validator now supports standard Cargo `--lib`
+discovery, with a regression for its command/features and missing/duplicate/
+ignored identities. No dispatcher, forwarding test layer or new dependency
+was introduced. Required names and the active validation appendix are updated
+together. Exact Cargo and Nextest selection each execute one generated case;
+real parent-only/stale library selections are rejected.
+
+Workspace Nextest passes 300 tests (36 explicit ignored native/probe entries),
+strict Clippy passes, Python discovers 34 tests with 32 passes and two explicit
+container-only skips, and the required validator accepts 100 named tests.
+Normal capability and the UI container contract also pass. Evidence is under
+ignored `target/testing-v2-completion/tooltip/`; dependency, normal/instrumented
+UI and lockfile/quarantine evidence are detailed in the fix ledger.
+
+Inventory audit caught an existing false-green risk: ordinary libtest listing
+does not mark ignored tests. The validator now separately discovers ignored
+tests and rejects required matches, or a failed ignored-test discovery. Its
+regression uses libtest's actual listing format; a real ignored
+`test-backend::fixture_composition::panic_cleanup_probe` is rejected before
+execution (`ignored-selection.log`). This covers every Rust target kind,
+without changing planned UI-case inventory into an execution claim.
+
+The full form-flow gate now requires new accessibility implementations in
+COSMIC's custom text input and dropdown, including secure-value handling and
+targeted editing/selection actions. Their visible controls are absent from the
+real AT-SPI tree; current upstream source has the same omissions. This is
+broader than another forwarding backport. See [the blocker and recommended scope](form-accessibility-blocker.md).
+The exact partial [dialog probe](keyboard-dialog-probe.toml) is archived outside
+the required-case directory; do not count it as completed keyboard acceptance.
+No broader widget protocol implementation, alternate input test mechanism,
+threshold waiver, quarantine expansion or Wayland-lifetime repair was made.
+
+### Approved widget work started, 2026-09-15
+
+The user approved custom text-input/dropdown accessibility. A local text-input
+patch now exists in the pinned libcosmic checkout; no dependency revision was
+promoted into the app. Its scope and newly discovered integration requirements
+are recorded in [the form findings](form-accessibility-blocker.md).
+Inline dropdown menus require an iced overlay accessibility publication path;
+exclusive accessibility focus also remains a runtime TODO. Additional iced
+scope was raised with the user before changing iced. The Linux adapter lacks
+EditableText, so the runner's existing text-edit operation also needs a verified
+keyboard-input refinement. No AccessKit upgrade, app pin change, quarantine
+change, upstream PR or fresh coverage percentage is implied by this local work.
+
+### Approved iced overlay publication, 2026-09-15
+
+The user approved only the additional overlay publication scope in the
+follow-up. Iced commit `7192a2dca` implements that path through Overlay, Group,
+message Map, Nested, UserInterface and the existing window adapter caller.
+Four initial runtime regressions failed against the old publication path:
+only the base node was returned. All six final overlay regressions now pass;
+the two iced-widget, six iced-winit and 29 libcosmic library tests also pass.
+The libcosmic build without accessibility passes, with upstream warnings.
+
+This is a local, independently committed iced change; it has not been pushed
+or promoted into the app. The libcosmic checkout points its working submodule
+at the commit while preserving the uncommitted text-input draft. App branch
+`4-ui-testing`, Cargo.lock, dependency revision and quarantine remain unchanged.
+The dropdown must still provide accessible options through this new path;
+exclusive focus routing remains unapproved and untouched. See
+[fix 10 and its verification details](dependency-fix-ledger.md#10-publish-open-iced-overlay-trees-local-not-promoted).
+
+### Resumed integration and real form validation, 2026-09-15
+
+The later exclusive-focus scope was explicitly approved. The preceding
+local-only entries are historical, not the current integration status.
+Fork fixes 9–13 are committed and pushed: iced `d38647d7a`, libcosmic
+`2ca5a4174bb76a742ef5d6d09d056bd9cc9b25c6`. The working app pin changes only
+eighteen Cargo.lock git source URLs, without package/version changes. Lock
+SHA-256: `280c127111a6b97f060f1a5fc052861020cc1fea01177552e356bcc5c3bcc14b`.
+
+The runner uses exclusively verified field focus and stdin-fed keyboard input,
+with 86 passing tests including new text-target and typed stale-node error
+regressions. Read observations may restart within the existing signal-driven
+deadline; input actions do not repeat. Unicode entry and actual AT-SPI Text
+readback now pass in the real app. Named-button numeric identity is independently
+documented as fix 13. See the ledger for all fork scopes and red/green evidence.
+
+Normal reload `live_scenario_reload-13-1789496995745363928` passes all nine
+functional steps and shuts down cleanly. Normal form diagnostic
+`form_accessibility_probe-12-1789497112055077790` completes 15 steps through
+text editing, dropdown selection and zero-size entry, then fails because
+AccessKit reports disabled Next as enabled. The exact diagnostic is archived
+outside required-case discovery. [Upstream already fixed this separate
+AccessKit defect](accesskit-disabled-state-blocker.md); permission to backport
+that fix was requested. AccessKit has not been changed.
+
+Additional app-only work preserves protected accessibility semantics when
+encryption-options visually reveals a passphrase (two widget-tree regressions,
+one red before/both green after). Bounded, generic-error startup secret input
+now shares scenario composition; eight parser tests pass, but anonymous-pipe
+runner transport and the actual LUKS flow are not implemented yet.
+
+Current host checks: all 59 application library tests, all 86 runner tests,
+six runtime-contract tests, strict workspace/all-feature/all-target Clippy,
+formatting and diff checks pass. These are not fresh combined coverage or
+instrumented UI acceptance. New-pin instrumented form/reload validation is
+outstanding; the quarantine's hash, case, matcher, owner and expiry are
+unchanged. No required UI case was promoted and no upstream PR was opened.
+
+### Regrouping decision, 2026-09-15
+
+The user subsequently paused further dependency fixes and agreed to default-off
+rendered UI execution, while retaining backend testing and prioritising the
+actual application's non-rendered business logic. The audit found that the
+current workflow reducer entry points are test-feature-only and are not called
+by normal UI handlers. The [new execution plan](non-rendered-testing-plan.md)
+addresses that production/test divergence and scopes coverage honestly. This
+entry records the decision and plan only; execution switches are not implemented
+yet. The AccessKit backport proposal is paused.

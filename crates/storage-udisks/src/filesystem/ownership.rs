@@ -13,13 +13,22 @@ use zbus::zvariant::Value;
 /// * `device` - Device path (e.g., "/dev/sda1")
 /// * `recursive` - Take ownership of child mounts
 pub async fn take_filesystem_ownership(device: &str, recursive: bool) -> Result<(), DiskError> {
-    let connection = crate::manager::shared_connection().await.map_err(|e| {
-        DiskError::ConnectionFailed(format!("Failed to connect to system bus: {}", e))
-    })?;
+    let connection = crate::manager::shared_connection()
+        .await
+        .map_err(|e| DiskError::ConnectionFailed(e.to_string()))?;
+    take_filesystem_ownership_with_connection(connection.as_ref(), device, recursive).await
+}
 
-    let block_path = crate::disk::resolve::block_object_path_for_device(device).await?;
+pub(crate) async fn take_filesystem_ownership_with_connection(
+    connection: &zbus::Connection,
+    device: &str,
+    recursive: bool,
+) -> Result<(), DiskError> {
+    let block_path =
+        crate::disk::resolve::block_object_path_for_device_with_connection(connection, device)
+            .await?;
 
-    let fs_proxy = FilesystemProxy::builder(&connection)
+    let fs_proxy = FilesystemProxy::builder(connection)
         .path(&block_path)
         .map_err(|e| DiskError::InvalidPath(format!("Invalid filesystem path: {}", e)))?
         .build()

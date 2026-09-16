@@ -1,0 +1,226 @@
+# Bootstrap contract-surface draft. Phase 0a must complete selector and transition
+# bindings before ratification; Phase 1 then generates identical operation IDs
+# from the trait declarations and compares the generated inventory to this file.
+schema_version = 1
+operation_id_style = "dot-separated lower_snake_case"
+legacy_image_device_until_phase = 4
+
+[defaults]
+read = "state_snapshot"
+mutation = "unsupported"
+stream = "pending_until_event_or_shutdown"
+redaction = "typed_request_redaction"
+selector = "all_of(RequestSelector)"
+
+[[family]]
+contract = "BackendMetadata"
+methods = ["metadata.id", "metadata.capabilities"]
+default = "state_snapshot"
+state = "backend"
+
+[[family]]
+contract = "DiskDiscovery"
+methods = ["discovery.list_disks", "discovery.list_volumes"]
+default = "state_snapshot"
+state = "disks,volumes"
+
+[[family]]
+contract = "DeviceEventSource"
+methods = ["discovery.device_events"]
+default = "pending_until_event_or_shutdown"
+state = "event_queues"
+
+[[family]]
+contract = "DriveOperations"
+methods = [
+  "drive.smart_info", "drive.start_smart_selftest", "drive.eject",
+  "drive.power_off", "drive.standby", "drive.wakeup", "drive.safe_remove"
+]
+default = "unsupported"
+state = "disks,smart"
+
+[[family]]
+contract = "PartitionOperations"
+methods = [
+  "partition.list_partitions", "partition.create_partition_table",
+  "partition.create_partition", "partition.create_partition_with_filesystem",
+  "partition.delete_partition", "partition.resize_partition",
+  "partition.set_partition_type", "partition.set_partition_flags",
+  "partition.set_partition_name"
+]
+default = "unsupported"
+state = "partitions,volumes,filesystems"
+
+[[family]]
+contract = "FilesystemOperations"
+methods = [
+  "filesystem.list_filesystems", "filesystem.format", "filesystem.mount",
+  "filesystem.get_mount_point", "filesystem.unmount", "filesystem.blocking_processes",
+  "filesystem.kill_processes", "filesystem.check", "filesystem.label",
+  "filesystem.set_label", "filesystem.mount_options", "filesystem.reset_mount_options",
+  "filesystem.set_mount_options", "filesystem.take_ownership"
+]
+default = "unsupported"
+state = "filesystems,volumes"
+
+[[family]]
+contract = "EncryptionOperations"
+methods = [
+  "encryption.list_luks_devices", "encryption.format_luks", "encryption.unlock_luks",
+  "encryption.lock_luks", "encryption.change_passphrase", "encryption.options",
+  "encryption.set_options", "encryption.clear_options"
+]
+default = "unsupported"
+state = "luks,filesystems,volumes"
+redacted_request_fields = ["passphrase", "current", "next"]
+
+[[family]]
+contract = "ImageDeviceOperations (temporary native-only bridge)"
+methods = ["image_device.open_for_backup", "image_device.open_for_restore", "image_device.loop_setup"]
+default = "native_only_unsupported"
+state = "none"
+status = "retired_after_phase_4"
+redacted_request_fields = ["image_path"]
+
+[[family]]
+contract = "BtrfsOperations"
+methods = [
+  "btrfs.list_subvolumes", "btrfs.create_subvolume", "btrfs.create_snapshot",
+  "btrfs.delete_subvolume", "btrfs.set_readonly", "btrfs.set_default",
+  "btrfs.default_subvolume", "btrfs.deleted_subvolumes", "btrfs.filesystem_usage"
+]
+default = "unsupported"
+state = "btrfs"
+
+[[family]]
+contract = "LogicalTopologySource"
+methods = ["logical.source", "logical.availability", "logical.list_entities"]
+default = "state_snapshot"
+state = "logical.sources,logical.entities"
+
+[[family]]
+contract = "LogicalOperations"
+methods = ["logical.capture_candidate", "logical.preflight", "logical.execute"]
+default = "unsupported"
+state = "logical.candidates,logical.preflights,logical.entities"
+
+[[family]]
+contract = "NetworkDriveBackend"
+methods = [
+  "network.id", "network.capabilities", "network.configuration_schema",
+  "network.list_configs", "network.create_config", "network.update_config",
+  "network.delete_config", "network.test_config", "network.mount", "network.unmount",
+  "network.mount_status", "network.mount_on_login", "network.set_mount_on_login"
+]
+default = "unsupported"
+state = "network"
+
+[[family]]
+contract = "FilesystemToolDiscovery"
+methods = ["tools.list_filesystem_tools"]
+default = "state_snapshot"
+state = "filesystem_tools"
+
+[[family]]
+contract = "UsageOperations"
+methods = [
+  "usage.list_mounts", "usage.authorize_show_all_files", "usage.start_scan",
+  "usage.scan_status", "usage.wait_for_scan", "usage.delete_files"
+]
+default = "unsupported"
+state = "usage"
+
+[[family]]
+contract = "ImageWorkflowOperations"
+methods = [
+  "image.create", "image.attach", "image.start_copy", "image.copy_status",
+  "image.wait_for_copy", "image.cancel_copy", "image.forget_copy"
+]
+default = "unsupported"
+state = "images"
+
+[[family]]
+contract = "DesktopServices"
+methods = ["desktop.select_image", "desktop.reveal", "desktop.open_url"]
+default = "unsupported"
+state = "desktop"
+
+[[override]]
+operation = "drive.smart_info"
+default = "state_snapshot"
+
+[[override]]
+operation = "partition.list_partitions"
+default = "state_snapshot"
+
+[[override]]
+operation = "filesystem.list_filesystems"
+default = "state_snapshot"
+
+[[override]]
+operation = "filesystem.get_mount_point"
+default = "state_snapshot"
+
+[[override]]
+operation = "filesystem.blocking_processes"
+default = "state_snapshot"
+
+[[override]]
+operation = "filesystem.check"
+default = "state_snapshot"
+
+[[override]]
+operation = "filesystem.label"
+default = "state_snapshot"
+
+[[override]]
+operation = "filesystem.mount_options"
+default = "state_snapshot"
+
+[[override]]
+operation = "encryption.list_luks_devices"
+default = "state_snapshot"
+
+[[override]]
+operation = "encryption.options"
+default = "state_snapshot"
+
+[[override]]
+operation = "btrfs.list_subvolumes"
+default = "state_snapshot"
+
+[[override]]
+operation = "btrfs.default_subvolume"
+default = "state_snapshot"
+
+[[override]]
+operation = "btrfs.deleted_subvolumes"
+default = "state_snapshot"
+
+[[override]]
+operation = "btrfs.filesystem_usage"
+default = "state_snapshot"
+
+[[override]]
+operation = "network.id"
+default = "state_snapshot"
+
+[[override]]
+operation = "network.capabilities"
+default = "state_snapshot"
+
+[[override]]
+operation = "network.configuration_schema"
+default = "state_snapshot"
+
+[[override]]
+operation = "network.list_configs"
+default = "state_snapshot"
+
+[[override]]
+operation = "network.mount_status"
+default = "state_snapshot"
+
+[[override]]
+operation = "network.mount_on_login"
+default = "state_snapshot"

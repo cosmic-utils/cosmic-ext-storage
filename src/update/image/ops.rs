@@ -10,14 +10,13 @@ use storage_types::VolumeInfo;
 /// Returns the operation_id for progress tracking and cancel.
 /// Caller is responsible for unmounting before restore (this function does it).
 pub(super) async fn start_image_operation(
+    operations: std::sync::Arc<crate::operations::StorageOperations>,
     kind: ImageOperationKind,
     drive: UiDrive,
     partition: Option<VolumeInfo>,
     image_path: String,
 ) -> anyhow::Result<String> {
-    let image_client = ImageClient::new()
-        .await
-        .map_err(|e| anyhow::anyhow!("Failed to create image client: {}", e))?;
+    let image_client = ImageClient::with_operations(operations.clone());
 
     match kind {
         ImageOperationKind::CreateFromDrive => {
@@ -43,9 +42,7 @@ pub(super) async fn start_image_operation(
             Ok(operation_id)
         }
         ImageOperationKind::RestoreToDrive => {
-            let fs_client = FilesystemsClient::new()
-                .await
-                .map_err(|e| anyhow::anyhow!("Failed to create filesystems client: {}", e))?;
+            let fs_client = FilesystemsClient::with_operations(operations.clone());
             for p in &drive.volumes_flat {
                 if p.is_mounted() {
                     let device = p
@@ -53,10 +50,7 @@ pub(super) async fn start_image_operation(
                         .device_path
                         .as_ref()
                         .ok_or_else(|| anyhow::anyhow!("Partition has no device path"))?;
-                    fs_client
-                        .unmount(device, false, false)
-                        .await
-                        .map_err(|e| anyhow::anyhow!("Failed to unmount {}: {}", device, e))?;
+                    unmount_for_restore(&fs_client, device).await?;
                 }
             }
             let device = &drive.disk.device;
@@ -71,17 +65,12 @@ pub(super) async fn start_image_operation(
                 anyhow::bail!("No partition selected");
             };
             if p.is_mounted() {
-                let fs_client = FilesystemsClient::new()
-                    .await
-                    .map_err(|e| anyhow::anyhow!("Failed to create filesystems client: {}", e))?;
+                let fs_client = FilesystemsClient::with_operations(operations.clone());
                 let device = p
                     .device_path
                     .as_ref()
                     .ok_or_else(|| anyhow::anyhow!("Partition has no device path"))?;
-                fs_client
-                    .unmount(device, false, false)
-                    .await
-                    .map_err(|e| anyhow::anyhow!("Failed to unmount: {}", e))?;
+                unmount_for_restore(&fs_client, device).await?;
             }
             let device = p
                 .device_path
@@ -94,4 +83,15 @@ pub(super) async fn start_image_operation(
             Ok(operation_id)
         }
     }
+}
+
+async fn unmount_for_restore(client: &FilesystemsClient, device: &str) -> anyhow::Result<()> {
+    let result = client.unmount(device, false, false).await?;
+    if !result.success {
+        anyhow::bail!(
+            "Failed to unmount {device}: {}",
+            result.error.unwrap_or_else(|| "device is busy".into())
+        );
+    }
+    Ok(())
 }

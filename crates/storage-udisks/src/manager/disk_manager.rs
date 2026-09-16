@@ -85,8 +85,17 @@ pub struct DeviceEventStream {
 
 impl DiskManager {
     pub async fn new() -> Result<Self> {
-        let connection = shared_connection().await?;
-        Ok(Self { connection })
+        Ok(Self::from_connection(shared_connection().await?))
+    }
+
+    /// Construct a manager over an already-established D-Bus connection.
+    ///
+    /// Production uses [`Self::new`], which connects to the system bus.  This
+    /// constructor keeps transport selection at the composition root so an
+    /// isolated integration environment can supply its own private bus without
+    /// changing process-global environment state.
+    pub fn from_connection(connection: Arc<Connection>) -> Self {
+        Self { connection }
     }
 
     /// Get a reference to the cached D-Bus connection for reuse

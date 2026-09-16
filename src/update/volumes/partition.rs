@@ -1,5 +1,5 @@
 use crate::models::UiDrive;
-use crate::models::load_all_drives;
+use crate::models::load::load_all_drives_with_operations;
 use cosmic::Task;
 
 use crate::app::Message;
@@ -20,6 +20,7 @@ use crate::state::volumes::VolumesControl;
 pub(super) fn delete(
     control: &mut VolumesControl,
     dialog: &mut Option<ShowDialog>,
+    operations: std::sync::Arc<crate::operations::StorageOperations>,
 ) -> Task<cosmic::Action<Message>> {
     let d = match dialog.as_mut() {
         Some(d) => d,
@@ -38,8 +39,6 @@ pub(super) fn delete(
         return Task::none();
     }
 
-    delete_state.running = true;
-
     let Some(segment) = control.segments.get(control.selected_segment).cloned() else {
         return Task::none();
     };
@@ -47,6 +46,9 @@ pub(super) fn delete(
     let Some(p) = segment.volume else {
         return Task::none();
     };
+    delete_state.running = true;
+    let operation_id = uuid::Uuid::new_v4();
+    delete_state.operation_id = Some(operation_id);
 
     let volume_node =
         crate::state::volumes::find_volume_for_partition(&control.volumes, &p).cloned();
@@ -66,19 +68,21 @@ pub(super) fn delete(
     Task::perform(
         async move {
             if is_unlocked_crypto {
-                let fs_client = FilesystemsClient::new()
-                    .await
-                    .map_err(|e| anyhow::anyhow!("Failed to create filesystems client: {}", e))?;
-                let luks_client = LuksClient::new()
-                    .await
-                    .map_err(|e| anyhow::anyhow!("Failed to create LUKS client: {}", e))?;
+                let fs_client = FilesystemsClient::with_operations(operations.clone());
+                let luks_client = LuksClient::with_operations(operations.clone());
 
                 for v in mounted_children {
                     let device = &v;
-                    fs_client
+                    let result = fs_client
                         .unmount(device, false, false)
                         .await
                         .map_err(|e| anyhow::anyhow!("Failed to unmount {}: {}", device, e))?;
+                    if !result.success {
+                        anyhow::bail!(
+                            "Failed to unmount {device}: {}",
+                            result.error.as_deref().unwrap_or("device busy")
+                        );
+                    }
                 }
 
                 let cleartext_device = p
@@ -91,9 +95,7 @@ pub(super) fn delete(
                     .map_err(|e| anyhow::anyhow!("Failed to lock LUKS device: {}", e))?;
             }
 
-            let partitions_client = PartitionsClient::new()
-                .await
-                .map_err(|e| anyhow::anyhow!("Failed to create partitions client: {}", e))?;
+            let partitions_client = PartitionsClient::with_operations(operations.clone());
             let device = p
                 .device_path
                 .as_ref()
@@ -103,18 +105,25 @@ pub(super) fn delete(
                 .await
                 .map_err(|e| anyhow::anyhow!("Failed to delete partition: {}", e))?;
 
-            load_all_drives().await.map_err(|e| e.into())
+            load_all_drives_with_operations(operations)
+                .await
+                .map_err(|e| e.into())
         },
-        |result: Result<Vec<UiDrive>, anyhow::Error>| match result {
-            Ok(drives) => Message::UpdateNav(drives, None).into(),
-            Err(e) => {
-                tracing::error!(?e, "delete failed");
-                Message::Dialog(Box::new(ShowDialog::Info {
-                    title: fl!("delete-failed"),
-                    body: format!("{e:#}"),
-                }))
-                .into()
+        move |result: Result<Vec<UiDrive>, anyhow::Error>| {
+            Message::VolumeDialogOperationCompleted {
+                operation_id,
+                message: Box::new(match result {
+                    Ok(drives) => Message::UpdateNav(drives, None),
+                    Err(e) => {
+                        tracing::error!(?e, "delete failed");
+                        Message::Dialog(Box::new(ShowDialog::Info {
+                            title: fl!("delete-failed"),
+                            body: format!("{e:#}"),
+                        }))
+                    }
+                }),
             }
+            .into()
         },
     )
 }
@@ -162,6 +171,7 @@ pub(super) fn open_format_partition(
     };
 
     *dialog = Some(ShowDialog::FormatPartition(FormatPartitionDialog {
+        operation_id: None,
         volume,
         info,
         step: FormatPartitionStep::Basics,
@@ -222,6 +232,7 @@ pub(super) fn open_edit_partition(
     let name = volume.label.clone();
 
     *dialog = Some(ShowDialog::EditPartition(EditPartitionDialog {
+        operation_id: None,
         volume,
         step: EditPartitionStep::Basics,
         partition_types,
@@ -277,6 +288,7 @@ pub(super) fn open_resize_partition(
     let new_size_bytes = volume.size.clamp(min_size_bytes, max_size_bytes);
 
     *dialog = Some(ShowDialog::ResizePartition(ResizePartitionDialog {
+        operation_id: None,
         volume,
         step: ResizePartitionStep::Sizing,
         min_size_bytes,
@@ -292,6 +304,7 @@ pub(super) fn edit_partition_message(
     _control: &mut VolumesControl,
     msg: EditPartitionMessage,
     dialog: &mut Option<ShowDialog>,
+    operations: std::sync::Arc<crate::operations::StorageOperations>,
 ) -> Task<cosmic::Action<Message>> {
     let Some(ShowDialog::EditPartition(state)) = dialog.as_mut() else {
         return Task::none();
@@ -353,14 +366,14 @@ pub(super) fn edit_partition_message(
             let legacy = state.legacy_bios_bootable;
             let system = state.system_partition;
             let hidden = state.hidden;
+            let operation_id = uuid::Uuid::new_v4();
+            state.operation_id = Some(operation_id);
 
             return Task::perform(
                 async move {
                     let flags = storage_types::make_partition_flags_bits(legacy, system, hidden);
 
-                    let partitions_client = PartitionsClient::new().await.map_err(|e| {
-                        anyhow::anyhow!("Failed to create partitions client: {}", e)
-                    })?;
+                    let partitions_client = PartitionsClient::with_operations(operations.clone());
                     let device = volume
                         .device_path
                         .as_ref()
@@ -379,14 +392,22 @@ pub(super) fn edit_partition_message(
                         .await
                         .map_err(|e| anyhow::anyhow!("Failed to set partition flags: {}", e))?;
 
-                    load_all_drives().await.map_err(|e| e.into())
+                    load_all_drives_with_operations(operations)
+                        .await
+                        .map_err(|e| e.into())
                 },
-                |result: Result<Vec<UiDrive>, anyhow::Error>| match result {
-                    Ok(drives) => Message::UpdateNav(drives, None).into(),
-                    Err(e) => {
-                        let ctx = UiErrorContext::new("edit_partition");
-                        log_error_and_show_dialog(fl!("edit-partition").to_string(), e, ctx).into()
+                move |result: Result<Vec<UiDrive>, anyhow::Error>| {
+                    Message::VolumeDialogOperationCompleted {
+                        operation_id,
+                        message: Box::new(match result {
+                            Ok(drives) => Message::UpdateNav(drives, None),
+                            Err(e) => {
+                                let ctx = UiErrorContext::new("edit_partition");
+                                log_error_and_show_dialog(fl!("edit-partition").to_string(), e, ctx)
+                            }
+                        }),
                     }
+                    .into()
                 },
             );
         }
@@ -399,6 +420,7 @@ pub(super) fn resize_partition_message(
     _control: &mut VolumesControl,
     msg: ResizePartitionMessage,
     dialog: &mut Option<ShowDialog>,
+    operations: std::sync::Arc<crate::operations::StorageOperations>,
 ) -> Task<cosmic::Action<Message>> {
     let Some(ShowDialog::ResizePartition(state)) = dialog.as_mut() else {
         return Task::none();
@@ -446,16 +468,21 @@ pub(super) fn resize_partition_message(
             if state.max_size_bytes.saturating_sub(state.min_size_bytes) < 1024 {
                 return Task::none();
             }
+            if state.new_size_bytes < state.min_size_bytes
+                || state.new_size_bytes > state.max_size_bytes
+            {
+                return Task::none();
+            }
 
             state.running = true;
             let volume = state.volume.clone();
             let new_size = state.new_size_bytes;
+            let operation_id = uuid::Uuid::new_v4();
+            state.operation_id = Some(operation_id);
 
             return Task::perform(
                 async move {
-                    let partitions_client = PartitionsClient::new().await.map_err(|e| {
-                        anyhow::anyhow!("Failed to create partitions client: {}", e)
-                    })?;
+                    let partitions_client = PartitionsClient::with_operations(operations.clone());
                     let device = volume
                         .device_path
                         .as_ref()
@@ -464,15 +491,26 @@ pub(super) fn resize_partition_message(
                         .resize_partition(device, new_size)
                         .await
                         .map_err(|e| anyhow::anyhow!("Failed to resize partition: {}", e))?;
-                    load_all_drives().await.map_err(|e| e.into())
+                    load_all_drives_with_operations(operations)
+                        .await
+                        .map_err(|e| e.into())
                 },
-                |result: Result<Vec<UiDrive>, anyhow::Error>| match result {
-                    Ok(drives) => Message::UpdateNav(drives, None).into(),
-                    Err(e) => {
-                        let ctx = UiErrorContext::new("resize_partition");
-                        log_error_and_show_dialog(fl!("resize-partition").to_string(), e, ctx)
-                            .into()
+                move |result: Result<Vec<UiDrive>, anyhow::Error>| {
+                    Message::VolumeDialogOperationCompleted {
+                        operation_id,
+                        message: Box::new(match result {
+                            Ok(drives) => Message::UpdateNav(drives, None),
+                            Err(e) => {
+                                let ctx = UiErrorContext::new("resize_partition");
+                                log_error_and_show_dialog(
+                                    fl!("resize-partition").to_string(),
+                                    e,
+                                    ctx,
+                                )
+                            }
+                        }),
                     }
+                    .into()
                 },
             );
         }

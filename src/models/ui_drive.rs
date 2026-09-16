@@ -78,9 +78,19 @@ impl UiDrive {
     /// let ui_drive = UiDrive::new(disk_info).await?;
     /// ```
     pub async fn new(disk: DiskInfo) -> Result<Self, OperationError> {
-        let client = Arc::new(DisksClient::new().await?);
-        let partitions_client = Arc::new(PartitionsClient::new().await?);
-        let filesystems_client = Arc::new(crate::operations::FilesystemsClient::new().await?);
+        Self::with_operations(disk, crate::operations::shared().await?).await
+    }
+
+    /// Build and refresh through the application's explicitly selected context.
+    pub async fn with_operations(
+        disk: DiskInfo,
+        operations: Arc<crate::operations::StorageOperations>,
+    ) -> Result<Self, OperationError> {
+        let client = Arc::new(DisksClient::with_operations(operations.clone()));
+        let partitions_client = Arc::new(PartitionsClient::with_operations(operations.clone()));
+        let filesystems_client = Arc::new(crate::operations::FilesystemsClient::with_operations(
+            operations,
+        ));
 
         let mut drive = Self {
             disk,

@@ -14,10 +14,19 @@ pub async fn check_filesystem(device_path: &str, repair: bool) -> Result<bool, D
     let connection = crate::manager::shared_connection()
         .await
         .map_err(|e| DiskError::ConnectionFailed(e.to_string()))?;
+    check_filesystem_with_connection(connection.as_ref(), device_path, repair).await
+}
 
-    let fs_path = crate::disk::resolve::block_object_path_for_device(device_path).await?;
+pub(crate) async fn check_filesystem_with_connection(
+    connection: &zbus::Connection,
+    device_path: &str,
+    repair: bool,
+) -> Result<bool, DiskError> {
+    let fs_path =
+        crate::disk::resolve::block_object_path_for_device_with_connection(connection, device_path)
+            .await?;
 
-    let fs_proxy = FilesystemProxy::builder(&connection)
+    let fs_proxy = FilesystemProxy::builder(connection)
         .path(&fs_path)?
         .build()
         .await
@@ -41,10 +50,18 @@ pub async fn repair_filesystem(device_path: &str) -> Result<(), DiskError> {
     let connection = crate::manager::shared_connection()
         .await
         .map_err(|e| DiskError::ConnectionFailed(e.to_string()))?;
+    repair_filesystem_with_connection(connection.as_ref(), device_path).await
+}
 
-    let fs_path = crate::disk::resolve::block_object_path_for_device(device_path).await?;
+pub(crate) async fn repair_filesystem_with_connection(
+    connection: &zbus::Connection,
+    device_path: &str,
+) -> Result<(), DiskError> {
+    let fs_path =
+        crate::disk::resolve::block_object_path_for_device_with_connection(connection, device_path)
+            .await?;
 
-    let fs_proxy = FilesystemProxy::builder(&connection)
+    let fs_proxy = FilesystemProxy::builder(connection)
         .path(&fs_path)?
         .build()
         .await

@@ -1,4 +1,4 @@
-use crate::models::load_all_drives;
+use crate::models::load::load_all_drives_with_operations;
 use crate::operations::FilesystemsClient;
 use cosmic::Task;
 use storage_types::MountOptionsSettings;
@@ -16,6 +16,7 @@ use crate::state::volumes::VolumesControl;
 pub(super) fn open_edit_mount_options(
     control: &mut VolumesControl,
     dialog: &mut Option<ShowDialog>,
+    operations: std::sync::Arc<crate::operations::StorageOperations>,
 ) -> Task<cosmic::Action<Message>> {
     if dialog.is_some() {
         return Task::none();
@@ -90,8 +91,9 @@ pub(super) fn open_edit_mount_options(
     Task::perform(
         async move {
             let mut error: Option<String> = None;
-            let settings: Option<MountOptionsSettings> = match FilesystemsClient::new().await {
-                Ok(client) => match client.get_mount_options(&device_path).await {
+            let client = FilesystemsClient::with_operations(operations);
+            let settings: Option<MountOptionsSettings> =
+                match client.get_mount_options(&device_path).await {
                     Ok(opt) => opt,
                     Err(e) => {
                         tracing::error!(
@@ -103,13 +105,7 @@ pub(super) fn open_edit_mount_options(
                         error = Some(format!("{e:#}"));
                         None
                     }
-                },
-                Err(e) => {
-                    tracing::error!(?e, "Failed to create filesystems client");
-                    error = Some(format!("{e:#}"));
-                    None
-                }
-            };
+                };
 
             let (
                 use_defaults,
@@ -180,6 +176,7 @@ pub(super) fn open_edit_mount_options(
                 .unwrap_or(0);
 
             ShowDialog::EditMountOptions(EditMountOptionsDialog {
+                operation_id: None,
                 target,
                 step: EditMountOptionsStep::Behavior,
                 use_defaults,
@@ -206,6 +203,7 @@ pub(super) fn edit_mount_options_message(
     _control: &mut VolumesControl,
     msg: EditMountOptionsMessage,
     dialog: &mut Option<ShowDialog>,
+    operations: std::sync::Arc<crate::operations::StorageOperations>,
 ) -> Task<cosmic::Action<Message>> {
     let Some(ShowDialog::EditMountOptions(state)) = dialog.as_mut() else {
         return Task::none();
@@ -334,10 +332,12 @@ pub(super) fn edit_mount_options_message(
                 .cloned()
                 .unwrap_or_default();
             let filesystem_type = state.filesystem_type.clone();
+            let operation_id = uuid::Uuid::new_v4();
+            state.operation_id = Some(operation_id);
 
             Task::perform(
                 async move {
-                    let client = FilesystemsClient::new().await?;
+                    let client = FilesystemsClient::with_operations(operations.clone());
                     if use_defaults {
                         client.default_mount_options(&device_path).await?;
                     } else {
@@ -369,15 +369,24 @@ pub(super) fn edit_mount_options_message(
                             )
                             .await?;
                     }
-                    load_all_drives().await
+                    load_all_drives_with_operations(operations).await
                 },
-                move |result| match result {
-                    Ok(drives) => Message::UpdateNav(drives, None).into(),
-                    Err(e) => {
-                        let ctx = UiErrorContext::new("edit_mount_options");
-                        log_error_and_show_dialog(fl!("edit-mount-options-failed"), e.into(), ctx)
-                            .into()
+                move |result| {
+                    Message::VolumeDialogOperationCompleted {
+                        operation_id,
+                        message: Box::new(match result {
+                            Ok(drives) => Message::UpdateNav(drives, None),
+                            Err(e) => {
+                                let ctx = UiErrorContext::new("edit_mount_options");
+                                log_error_and_show_dialog(
+                                    fl!("edit-mount-options-failed"),
+                                    e.into(),
+                                    ctx,
+                                )
+                            }
+                        }),
                     }
+                    .into()
                 },
             )
         }

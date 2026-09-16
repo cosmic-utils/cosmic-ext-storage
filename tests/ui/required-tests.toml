@@ -1,0 +1,356 @@
+# Phase-0a frozen named-test manifest. assert_tests.py must reject a missing,
+# duplicate, ignored, renamed, or wrong-target entry before invoking a target.
+schema_version = 1
+
+[[target]]
+phase = "headless-discovery"
+package = "storage-udisks"
+kind = "rust-lib"
+name = "storage_udisks"
+tests = [
+  "disk::discovery::tests::connection_bus_inference_does_not_depend_on_runner_hardware::case_01_loop_precedence",
+  "disk::discovery::tests::connection_bus_inference_does_not_depend_on_runner_hardware::case_02_nvme_case_insensitive",
+  "disk::discovery::tests::connection_bus_inference_does_not_depend_on_runner_hardware::case_03_mmc",
+  "disk::discovery::tests::connection_bus_inference_does_not_depend_on_runner_hardware::case_04_mmcblk_precedence",
+  "disk::discovery::tests::connection_bus_inference_does_not_depend_on_runner_hardware::case_05_optical_path",
+  "disk::discovery::tests::connection_bus_inference_does_not_depend_on_runner_hardware::case_06_optical_flag",
+  "disk::discovery::tests::connection_bus_inference_does_not_depend_on_runner_hardware::case_07_usb_model",
+  "disk::discovery::tests::connection_bus_inference_does_not_depend_on_runner_hardware::case_08_usb_vendor",
+  "disk::discovery::tests::connection_bus_inference_does_not_depend_on_runner_hardware::case_09_ata",
+  "disk::discovery::tests::connection_bus_inference_does_not_depend_on_runner_hardware::case_10_empty_fallback",
+]
+
+[[target]]
+phase = "headless-boundaries"
+package = "storage-types"
+kind = "rust-integration"
+name = "value_boundaries"
+tests = [
+  "byte_display_numeric_and_spinner_step_agree::case_1",
+  "byte_display_numeric_and_spinner_step_agree::case_2",
+  "byte_display_numeric_and_spinner_step_agree::case_3",
+  "byte_parser_handles_units::case_2",
+  "byte_parser_handles_units::case_3",
+  "byte_display_numeric_and_spinner_step_agree::case_4",
+  "byte_parser_handles_units::case_1",
+  "byte_parser_handles_units::case_5",
+  "byte_parser_handles_units::case_4",
+  "byte_parser_handles_units::case_6",
+  "byte_parser_handles_units::case_7",
+  "byte_parser_rejects_malformed_or_unrepresentable_sizes::case_1",
+  "byte_parser_rejects_malformed_or_unrepresentable_sizes::case_2",
+  "byte_parser_rejects_malformed_or_unrepresentable_sizes::case_3",
+  "byte_parser_rejects_malformed_or_unrepresentable_sizes::case_4",
+  "byte_parser_rejects_malformed_or_unrepresentable_sizes::case_5",
+  "byte_parser_rejects_malformed_or_unrepresentable_sizes::case_6",
+  "byte_parser_rejects_malformed_or_unrepresentable_sizes::case_7",
+  "byte_parser_rejects_malformed_or_unrepresentable_sizes::case_8",
+  "byte_ranges_are_bounded_without_underflow::case_1",
+  "byte_parser_rejects_malformed_or_unrepresentable_sizes::case_9",
+  "byte_ranges_are_bounded_without_underflow::case_2",
+  "byte_ranges_are_bounded_without_underflow::case_3",
+  "byte_ranges_are_bounded_without_underflow::case_4",
+  "byte_ranges_are_bounded_without_underflow::case_5",
+  "filesystem_names_map_to_the_intended_tool::case_1",
+  "filesystem_names_map_to_the_intended_tool::case_2",
+  "filesystem_names_map_to_the_intended_tool::case_3",
+  "filesystem_names_map_to_the_intended_tool::case_4",
+  "filesystem_names_map_to_the_intended_tool::case_5",
+  "filesystem_names_map_to_the_intended_tool::case_6",
+  "filesystem_names_map_to_the_intended_tool::case_7",
+  "filesystem_names_map_to_the_intended_tool::case_8",
+  "luks_versions_are_closed::case_1",
+  "luks_versions_are_closed::case_2",
+  "luks_versions_are_closed::case_3",
+  "luks_versions_are_closed::case_4",
+  "luks_versions_are_closed::case_5",
+  "mount_progress_and_terminal_states_are_distinct::case_1",
+  "mount_progress_and_terminal_states_are_distinct::case_2",
+  "mount_progress_and_terminal_states_are_distinct::case_3",
+  "mount_progress_and_terminal_states_are_distinct::case_4",
+  "mount_progress_and_terminal_states_are_distinct::case_5",
+  "nested_volumes_preserve_identity_and_mount_capability",
+  "partition_flags_preserve_udisks_bit_positions::case_1",
+  "partition_flags_preserve_udisks_bit_positions::case_2",
+  "partition_flags_preserve_udisks_bit_positions::case_3",
+  "partition_flags_preserve_udisks_bit_positions::case_4",
+  "partition_flags_preserve_udisks_bit_positions::case_5",
+  "partition_table_aliases_are_explicit::case_1",
+  "partition_table_aliases_are_explicit::case_2",
+  "partition_table_aliases_are_explicit::case_3",
+  "partition_table_aliases_are_explicit::case_4",
+  "smart_test_names_do_not_allow_arbitrary_commands::case_1",
+  "smart_test_names_do_not_allow_arbitrary_commands::case_2",
+  "smart_test_names_do_not_allow_arbitrary_commands::case_3",
+  "smart_test_names_do_not_allow_arbitrary_commands::case_4",
+]
+
+[[target]]
+phase = "workflow-v2"
+package = "cosmic-ext-storage"
+kind = "rust-lib"
+name = "cosmic_ext_storage"
+features = ["test-backend"]
+tests = [
+  "update::production_handler_tests::encryption::passphrase_change_validates_redacts_and_rejects_late_completion::case_2_mismatch",
+  "update::production_handler_tests::encryption::passphrase_change_validates_redacts_and_rejects_late_completion::case_1_empty",
+  "update::production_handler_tests::encryption::passphrase_change_validates_redacts_and_rejects_late_completion::case_3_valid",
+  "update::production_handler_tests::network::delete_requires_review_preserves_other_scope_and_rejects_stale_results::case_2_failure",
+  "update::production_handler_tests::network::delete_requires_review_preserves_other_scope_and_rejects_stale_results::case_1_success",
+  "update::production_handler_tests::network::overlapping_loads_reject_stale_success_error_and_duplicate",
+  "update::production_handler_tests::volume_dialogs::missing_volume_does_not_start_or_strand_delete",
+  "update::production_handler_tests::volume_dialogs::real_volume_operations_report_unsupported_and_reject_stale_completion::case_1_delete",
+  "update::production_handler_tests::volume_dialogs::mount_option_form_updates_real_fields_and_cancels",
+  "update::production_handler_tests::volume_dialogs::real_volume_operations_report_unsupported_and_reject_stale_completion::case_3_resize",
+  "update::production_handler_tests::volume_dialogs::real_volume_operations_report_unsupported_and_reject_stale_completion::case_4_mount_defaults",
+  "update::production_handler_tests::volume_dialogs::real_volume_operations_report_unsupported_and_reject_stale_completion::case_5_mount_custom",
+  "update::production_handler_tests::volume_dialogs::edit_and_resize_navigation_validate_bounds_and_cancel",
+  "update::production_handler_tests::volume_dialogs::real_volume_operations_report_unsupported_and_reject_stale_completion::case_2_edit",
+  "update::production_handler_tests::network::failed_rename_preserves_original_remote",
+  "update::production_handler_tests::network::successful_rename_updates_selection_and_rejects_duplicate",
+  "update::production_handler_tests::create_routes_to_selected_runtime_and_refreshes_actual_models",
+  "update::production_handler_tests::create_cancel_and_missing_dialog_have_no_effect::case_1_cancel",
+  "update::production_handler_tests::create_cancel_and_missing_dialog_have_no_effect::case_2_no_dialog",
+  "update::production_handler_tests::create_submission_revalidates_form_without_side_effects::case_1_zero_size",
+  "update::production_handler_tests::create_submission_revalidates_form_without_side_effects::case_2_oversized",
+  "update::production_handler_tests::create_submission_revalidates_form_without_side_effects::case_3_missing_tool",
+  "update::production_handler_tests::create_submission_revalidates_form_without_side_effects::case_4_missing_secret",
+  "update::production_handler_tests::create_submission_revalidates_form_without_side_effects::case_5_mismatched_secret",
+  "update::production_handler_tests::create_failure_surfaces_error_without_refreshing_navigation",
+  "update::production_handler_tests::format_uses_selected_runtime_and_handles_invalid_targets::case_1_success",
+  "update::production_handler_tests::format_uses_selected_runtime_and_handles_invalid_targets::case_2_missing_device",
+  "update::production_handler_tests::format_uses_selected_runtime_and_handles_invalid_targets::case_3_missing_tool",
+  "update::production_handler_tests::create_completion_does_not_close_a_replacement_idle_dialog",
+  "update::production_handler_tests::old_partition_completion_cannot_replace_a_new_running_dialog::case_1_success",
+  "update::production_handler_tests::old_partition_completion_cannot_replace_a_new_running_dialog::case_2_failure",
+  "update::production_handler_tests::logical::confirmation_executes_once_and_schedules_both_real_refreshes",
+  "update::production_handler_tests::logical::cancelled_confirmation_and_changed_identity_cannot_execute",
+  "update::production_handler_tests::logical::cancelled_preflight_cannot_reopen_confirmation",
+  "update::production_handler_tests::logical::stale_candidate_capture_cannot_change_current_selection::case_1_replaced",
+  "update::production_handler_tests::logical::stale_candidate_capture_cannot_change_current_selection::case_2_left_view",
+  "update::production_handler_tests::logical::stale_topology_does_not_replace_current_candidate_resolution",
+  "update::production_handler_tests::logical::operation_failure_clears_pending_without_success_refresh",
+  "update::production_handler_tests::logical::action_form_validates_input_and_cancel_clears_actual_dialog",
+  "update::production_handler_tests::encryption::wrong_secret_retries_successfully_then_locks_actual_model",
+  "update::production_handler_tests::encryption::cancelled_or_missing_target_never_unlocks::case_1_cancel",
+  "update::production_handler_tests::encryption::cancelled_or_missing_target_never_unlocks::case_2_missing_partition",
+  "update::production_handler_tests::encryption::cancelled_unlock_failure_cannot_reopen_a_secret_dialog",
+  "update::production_handler_tests::mount::busy_result_routes_to_dialog_and_retry_preserves_mounted_state::case_1_segment",
+  "update::production_handler_tests::mount::busy_result_routes_to_dialog_and_retry_preserves_mounted_state::case_2_child",
+  "update::production_handler_tests::mount::busy_result_routes_to_dialog_and_retry_preserves_mounted_state::case_3_sidebar",
+  "update::production_handler_tests::mount::unsupported_kill_is_an_error_not_a_fake_unmount_success",
+  "update::production_handler_tests::mount::child_mount_and_unmount_refresh_real_state",
+  "update::production_handler_tests::network::create_select_mount_status_unmount_use_real_handlers",
+  "update::production_handler_tests::network::create_validation_conflict_and_retry_preserve_form",
+  "update::production_handler_tests::network::cancelled_create_completion_cannot_replace_new_wizard",
+  "update::production_handler_tests::network::editor_save_rejects_duplicate_and_stale_completion",
+  "update::production_handler_tests::network::old_status_cannot_overwrite_mount_and_errors_are_visible",
+  "update::production_handler_tests::network::invalid_provider_or_missing_schema_field_never_submits::case_1_unsupported",
+  "update::production_handler_tests::network::invalid_provider_or_missing_schema_field_never_submits::case_2_missing_required",
+  "update::production_handler_tests::network::editor_conflict_retry_updates_backend_and_completion_is_once",
+  "update::production_handler_tests::image_usage::image_start_uses_selected_adapter_and_rejects_duplicate",
+  "update::production_handler_tests::image_usage::stale_image_start_cannot_bind_to_replacement_dialog",
+  "update::production_handler_tests::image_usage::image_progress_terminal_and_cleanup_use_actual_subscription_messages::case_1_complete",
+  "update::production_handler_tests::image_usage::image_progress_terminal_and_cleanup_use_actual_subscription_messages::case_2_cancel",
+  "update::production_handler_tests::image_usage::image_cancel_before_start_completion_is_honoured",
+  "update::production_handler_tests::image_usage::image_validation_and_adapter_errors_allow_retry::case_1_missing_path",
+  "update::production_handler_tests::image_usage::image_validation_and_adapter_errors_allow_retry::case_2_unknown_asset",
+  "update::production_handler_tests::image_usage::image_validation_and_adapter_errors_allow_retry::case_3_host_path",
+  "update::production_handler_tests::image_usage::usage_wizard_scan_selection_delete_and_refresh_use_real_state",
+  "update::production_handler_tests::image_usage::usage_old_scan_and_delete_cannot_change_replacement_state",
+  "update::production_handler_tests::image_usage::usage_cancelled_wizard_and_invalid_selection_never_start",
+  "update::production_handler_tests::image_usage::usage_running_adapter_waits_for_virtual_completion",
+  "update::production_handler_tests::image_usage::usage_unsupported_adapter_surfaces_error_without_success",
+  "update::production_handler_tests::reload::late_list_cannot_restart_or_replace_completed_refresh",
+  "update::production_handler_tests::reload::refresh_keeps_published_models_until_all_builds_succeed",
+  "update::production_handler_tests::reload::background_refresh_preserves_running_dialog",
+  "update::production_handler_tests::reload::scenario_reload_event_refreshes_actual_models_and_rejects_invalid_overlay",
+  "update::production_handler_tests::reload::duplicate_build_and_old_finish_cannot_publish_over_new_refresh",
+  "update::production_handler_tests::reload::duplicate_device_candidates_are_rejected_without_publishing",
+  "update::production_handler_tests::reload::refresh_preserves_valid_selection_and_drops_missing_identity",
+  "update::production_handler_tests::reload::selected_runtimes_remain_isolated_through_real_handlers"
+]
+
+[[target]]
+phase = "testing-v2-completion"
+package = "cosmic-ext-storage"
+kind = "rust-lib"
+name = "cosmic_ext_storage"
+tests = [
+  "update::volumes::create::tests::basics_requires_a_known_available_filesystem::case_1_available",
+  "update::volumes::create::tests::basics_requires_a_known_available_filesystem::case_2_unavailable",
+  "update::volumes::create::tests::basics_requires_a_known_available_filesystem::case_3_unknown_table",
+  "update::volumes::create::tests::basics_requires_a_known_available_filesystem::case_4_stale_index",
+  "update::volumes::create::tests::sizing_requires_a_nonzero_size_within_the_extent::case_1_zero",
+  "update::volumes::create::tests::sizing_requires_a_nonzero_size_within_the_extent::case_2_minimum",
+  "update::volumes::create::tests::sizing_requires_a_nonzero_size_within_the_extent::case_3_maximum",
+  "update::volumes::create::tests::sizing_requires_a_nonzero_size_within_the_extent::case_4_oversized",
+  "update::volumes::create::tests::sizing_requires_a_nonzero_size_within_the_extent::case_5_overflow_boundary",
+  "update::volumes::create::tests::final_step_does_not_reapply_basics_or_sizing_navigation_checks"
+]
+
+[[target]]
+phase = "testing-v2-completion"
+package = "cosmic-ext-storage"
+kind = "rust-integration"
+name = "volume_models"
+features = ["test-backend"]
+tests = [
+  "test_build_simple_tree",
+  "test_build_nested_tree",
+  "tree_filters_roots::case_1_empty",
+  "tree_filters_roots::case_2_other_disk",
+  "tree_filters_roots::case_3_orphan",
+  "tree_filters_roots::case_4_no_device",
+  "nested_mutation_search_mount_and_clone_preserve_ownership"
+]
+
+[[target]]
+phase = "rstest"
+package = "test-backend"
+kind = "rust-integration"
+name = "fixture_composition"
+tests = [
+  "async_fixture_override::case_1_partition",
+  "async_fixture_override::case_2_empty",
+  "independent_mutable_scenarios::case_1_first",
+  "independent_mutable_scenarios::case_2_second",
+  "owned_fixture_drops_normally",
+  "fixture_dependencies_are_factories",
+  "failure_is_reported_and_resources_unwind::case_1_setup",
+  "failure_is_reported_and_resources_unwind::case_2_body"
+]
+
+[[target]]
+phase = "1"
+package = "storage-contracts"
+kind = "rust-integration"
+name = "ui_workflow_contract"
+tests = [
+  "workflow_contracts_are_object_safe",
+  "workflow_values_are_serde_stable",
+  "desktop_services_are_not_storage_backend_methods",
+  "operation_id_has_deterministic_scenario_constructor",
+  "runtime_adapters_reject_invalid_registration_order"
+]
+
+[[target]]
+phase = "2"
+package = "test-backend"
+kind = "rust-integration"
+name = "contract_surface"
+tests = [
+  "scenario_operation_inventory_matches_contract_surface",
+  "bootstrap_inventory_matches_generated_contract_surface",
+  "scenario_crate_has_no_production_adapter_dependencies",
+  "scenario_store_is_the_only_host_io_boundary",
+  "unsupported_methods_never_succeed_or_touch_host",
+  "native_only_legacy_image_methods_return_unsupported"
+]
+
+[[target]]
+phase = "3"
+package = "cosmic-ext-storage"
+kind = "rust-integration"
+name = "ui_runtime_contract"
+features = ["ui-test"]
+tests = [
+  "runtime_request_parses_explicit_real_backend",
+  "runtime_request_parses_scenario_fixture_without_bootstrapping",
+  "scenario_secret_stdin_requires_explicit_scenario_mode"
+]
+
+[[target]]
+phase = "5"
+package = "test-backend"
+kind = "rust-integration"
+name = "schema"
+tests = [
+  "rejects_unknown_or_unsupported_schema",
+  "rejects_schema_version_that_is_not_first_lexical_key",
+  "rejects_ambiguous_behaviour_rules",
+  "rejects_invalid_cross_references",
+  "scenario_round_trip_is_deterministic",
+  "overlay_write_is_atomic_and_never_rewrites_fixture",
+  "query_snapshot_and_subscription_cutover_are_linearized",
+  "scenario_control_is_actor_serialized"
+]
+
+[[target]]
+phase = "5"
+package = "test-backend"
+kind = "rust-integration"
+name = "physical_state"
+tests = ["partition_transition_emits_ordered_device_event", "busy_unmount_preserves_state"]
+
+[[target]]
+phase = "6"
+package = "test-backend"
+kind = "rust-integration"
+name = "logical_network_state"
+tests = [
+  "logical_confirmation_requires_current_preflight_key",
+  "logical_mutation_emits_one_declared_refresh_event",
+  "btrfs_utility_state_never_uses_host_tools",
+  "network_mutations_follow_declared_schema",
+  "scenario_reload_is_atomic_and_refreshes_once"
+]
+
+[[target]]
+phase = "6"
+package = "test-backend"
+kind = "rust-integration"
+name = "workflow_state"
+tests = [
+  "cancelled_image_operation_cannot_complete_successfully",
+  "same_tick_cancel_order_is_deterministic",
+  "trace_redacts_passphrases_and_descriptors",
+  "generated_cases_cover_success_error_trace_and_transition_for_every_modelled_operation"
+]
+
+[[target]]
+phase = "7"
+package = "cosmic-ext-storage"
+kind = "rust-integration"
+name = "ui_scenario_contract"
+features = ["test-backend"]
+tests = [
+  "scenario_partition_adapter_creates_owned_device",
+  "configured_backend_error_remains_actionable",
+  "scenario_image_and_usage_adapters_issue_operation_ids",
+  "network_scenario_exercises_crud_and_mount_state",
+  "keyboard_case_manifest_is_present",
+  "scenario_factory_never_constructs_production_adapters",
+  "scenario_mode_has_no_real_backend_fallback"
+]
+
+[[target]]
+phase = "7"
+package = "cosmic-ext-storage"
+kind = "rust-integration"
+name = "scenario_feature_disabled_contract"
+tests = ["feature_disabled_scenario_request_fails_before_real_factory"]
+
+[[target]]
+phase = "8"
+package = "ui-e2e-runner"
+kind = "rust-bin"
+name = "ui-e2e-runner"
+tests = [
+  "png_signature_requires_all_eight_bytes",
+  "legacy_case_inventory_is_sorted_and_rejects_duplicate_ids",
+  "long_artifact_paths_have_short_owned_sockets_and_preserve_evidence",
+  "existing_artifact_directory_is_never_removed",
+  "keyboard_keeper_is_reaped_and_early_exit_is_rejected"
+]
+
+[[target]]
+phase = "9"
+kind = "e2e-case"
+name = "tests/ui/cases"
+execution_status = "planned"
+tests = [
+  "physical_partition_format", "busy_unmount", "luks_unlock",
+  "logical_preflight_confirmation", "network_mount", "image_usage_progress",
+  "keyboard_accessibility", "live_scenario_reload"
+]

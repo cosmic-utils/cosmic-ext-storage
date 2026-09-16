@@ -40,10 +40,28 @@ pub async fn mount_filesystem(
     let connection = crate::manager::shared_connection()
         .await
         .map_err(|e| DiskError::ConnectionFailed(e.to_string()))?;
+    mount_filesystem_with_connection(
+        connection.as_ref(),
+        device_path,
+        _mount_point,
+        options,
+        caller_uid,
+    )
+    .await
+}
 
-    let fs_path = crate::disk::resolve::block_object_path_for_device(device_path).await?;
+pub(crate) async fn mount_filesystem_with_connection(
+    connection: &zbus::Connection,
+    device_path: &str,
+    _mount_point: &str,
+    options: MountOptions,
+    caller_uid: Option<u32>,
+) -> Result<String, DiskError> {
+    let fs_path =
+        crate::disk::resolve::block_object_path_for_device_with_connection(connection, device_path)
+            .await?;
 
-    let fs_proxy = FilesystemProxy::builder(&connection)
+    let fs_proxy = FilesystemProxy::builder(connection)
         .path(&fs_path)
         .map_err(|e| DiskError::DBusError(e.to_string()))?
         .build()
@@ -97,13 +115,31 @@ pub async fn unmount_filesystem(device_or_mount: &str, force: bool) -> Result<()
     let connection = crate::manager::shared_connection()
         .await
         .map_err(|e| DiskError::ConnectionFailed(e.to_string()))?;
+    unmount_filesystem_with_connection(connection.as_ref(), device_or_mount, force).await
+}
 
-    let fs_path = match crate::disk::resolve::block_object_path_for_device(device_or_mount).await {
+pub(crate) async fn unmount_filesystem_with_connection(
+    connection: &zbus::Connection,
+    device_or_mount: &str,
+    force: bool,
+) -> Result<(), DiskError> {
+    let fs_path = match crate::disk::resolve::block_object_path_for_device_with_connection(
+        connection,
+        device_or_mount,
+    )
+    .await
+    {
         Ok(p) => p,
-        Err(_) => crate::disk::resolve::block_object_path_for_mount_point(device_or_mount).await?,
+        Err(_) => {
+            crate::disk::resolve::block_object_path_for_mount_point_with_connection(
+                connection,
+                device_or_mount,
+            )
+            .await?
+        }
     };
 
-    let fs_proxy = FilesystemProxy::builder(&connection)
+    let fs_proxy = FilesystemProxy::builder(connection)
         .path(&fs_path)
         .map_err(|e| DiskError::DBusError(e.to_string()))?
         .build()
@@ -125,13 +161,21 @@ pub async fn unmount_filesystem(device_or_mount: &str, force: bool) -> Result<()
 
 /// Get the mount point for a mounted device
 pub async fn get_mount_point(device: &str) -> Result<String, DiskError> {
-    let connection = crate::manager::shared_connection().await.map_err(|e| {
-        DiskError::ConnectionFailed(format!("Failed to connect to system bus: {}", e))
-    })?;
+    let connection = crate::manager::shared_connection()
+        .await
+        .map_err(|e| DiskError::ConnectionFailed(e.to_string()))?;
+    get_mount_point_with_connection(connection.as_ref(), device).await
+}
 
-    let fs_path = crate::disk::resolve::block_object_path_for_device(device).await?;
+pub(crate) async fn get_mount_point_with_connection(
+    connection: &zbus::Connection,
+    device: &str,
+) -> Result<String, DiskError> {
+    let fs_path =
+        crate::disk::resolve::block_object_path_for_device_with_connection(connection, device)
+            .await?;
 
-    let fs_proxy = FilesystemProxy::builder(&connection)
+    let fs_proxy = FilesystemProxy::builder(connection)
         .path(&fs_path)
         .map_err(|e| DiskError::InvalidPath(format!("Invalid filesystem path: {}", e)))?
         .build()

@@ -11,7 +11,6 @@ use anyhow::Result;
 use zbus::zvariant::OwnedValue;
 
 use crate::dbus::bytestring as bs;
-use crate::disk::resolve;
 use crate::infra::options::{
     join_options, remove_prefixed, remove_token, set_prefixed_value, set_token_present,
     split_options, stable_dedup,
@@ -37,11 +36,19 @@ fn find_configuration_item(items: &[ConfigurationItem], kind: &str) -> Option<Co
 /// Returns None if no fstab configuration exists for the device.
 pub async fn get_mount_options(device: &str) -> Result<Option<MountOptionsSettings>> {
     let connection = crate::manager::shared_connection().await?;
-    let object_path = resolve::block_object_path_for_device(device)
-        .await
-        .map_err(|e| anyhow::anyhow!("{}", e))?;
+    get_mount_options_with_connection(connection.as_ref(), device).await
+}
 
-    let proxy = UDisks2BlockConfigurationProxy::builder(&connection)
+pub(crate) async fn get_mount_options_with_connection(
+    connection: &zbus::Connection,
+    device: &str,
+) -> Result<Option<MountOptionsSettings>> {
+    let object_path =
+        crate::disk::resolve::block_object_path_for_device_with_connection(connection, device)
+            .await
+            .map_err(|e| anyhow::anyhow!("{}", e))?;
+
+    let proxy = UDisks2BlockConfigurationProxy::builder(connection)
         .path(&object_path)?
         .build()
         .await?;
@@ -116,6 +123,39 @@ pub async fn set_mount_options(
     identify_as: String,
     filesystem_type: String,
 ) -> Result<()> {
+    let connection = crate::manager::shared_connection().await?;
+    set_mount_options_with_connection(
+        connection.as_ref(),
+        device,
+        mount_at_startup,
+        show_in_ui,
+        require_auth,
+        display_name,
+        icon_name,
+        symbolic_icon_name,
+        options,
+        mount_point,
+        identify_as,
+        filesystem_type,
+    )
+    .await
+}
+
+#[allow(clippy::too_many_arguments)] // Mirrors the retained public mount-settings API.
+pub(crate) async fn set_mount_options_with_connection(
+    connection: &zbus::Connection,
+    device: &str,
+    mount_at_startup: bool,
+    show_in_ui: bool,
+    require_auth: bool,
+    display_name: Option<String>,
+    icon_name: Option<String>,
+    symbolic_icon_name: Option<String>,
+    options: String,
+    mount_point: String,
+    identify_as: String,
+    filesystem_type: String,
+) -> Result<()> {
     if mount_point.trim().is_empty() {
         anyhow::bail!("Mount point must not be empty");
     }
@@ -142,12 +182,12 @@ pub async fn set_mount_options(
         anyhow::bail!("Mount options must not be empty");
     }
 
-    let connection = crate::manager::shared_connection().await?;
-    let object_path = resolve::block_object_path_for_device(device)
-        .await
-        .map_err(|e| anyhow::anyhow!("{}", e))?;
+    let object_path =
+        crate::disk::resolve::block_object_path_for_device_with_connection(connection, device)
+            .await
+            .map_err(|e| anyhow::anyhow!("{}", e))?;
 
-    let proxy = UDisks2BlockConfigurationProxy::builder(&connection)
+    let proxy = UDisks2BlockConfigurationProxy::builder(connection)
         .path(&object_path)?
         .build()
         .await?;
@@ -190,11 +230,19 @@ pub async fn set_mount_options(
 /// Reset mount options to defaults (remove fstab entry)
 pub async fn reset_mount_options(device: &str) -> Result<()> {
     let connection = crate::manager::shared_connection().await?;
-    let object_path = resolve::block_object_path_for_device(device)
-        .await
-        .map_err(|e| anyhow::anyhow!("{}", e))?;
+    reset_mount_options_with_connection(connection.as_ref(), device).await
+}
 
-    let proxy = UDisks2BlockConfigurationProxy::builder(&connection)
+pub(crate) async fn reset_mount_options_with_connection(
+    connection: &zbus::Connection,
+    device: &str,
+) -> Result<()> {
+    let object_path =
+        crate::disk::resolve::block_object_path_for_device_with_connection(connection, device)
+            .await
+            .map_err(|e| anyhow::anyhow!("{}", e))?;
+
+    let proxy = UDisks2BlockConfigurationProxy::builder(connection)
         .path(&object_path)?
         .build()
         .await?;

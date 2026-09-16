@@ -16,10 +16,26 @@ pub async fn change_luks_passphrase(
     let connection = crate::manager::shared_connection()
         .await
         .map_err(|e| DiskError::ConnectionFailed(e.to_string()))?;
+    change_luks_passphrase_with_connection(
+        connection.as_ref(),
+        device_path,
+        old_passphrase,
+        new_passphrase,
+    )
+    .await
+}
 
-    let encrypted_path = crate::disk::resolve::block_object_path_for_device(device_path).await?;
+pub(crate) async fn change_luks_passphrase_with_connection(
+    connection: &zbus::Connection,
+    device_path: &str,
+    old_passphrase: &str,
+    new_passphrase: &str,
+) -> Result<(), DiskError> {
+    let encrypted_path =
+        crate::disk::resolve::block_object_path_for_device_with_connection(connection, device_path)
+            .await?;
 
-    let encrypted_proxy = EncryptedProxy::builder(&connection)
+    let encrypted_proxy = EncryptedProxy::builder(connection)
         .path(&encrypted_path)?
         .build()
         .await

@@ -1,0 +1,62 @@
+schema_version = 2
+id = "workflow-image-usage"
+description = "Virtual-time image copy and usage scan progress with an in-memory deletion result."
+
+[backend]
+id = "ui-scenario"
+capabilities = ["image", "usage"]
+
+[world]
+revision = 0
+
+[[world.disks]]
+id = "disk0"
+device = "/dev/ui-disk0"
+model = "Scenario workflow disk"
+size_bytes = 1073741824
+partition_table = "gpt"
+
+[[world.partitions]]
+id = "disk0p1"
+disk_id = "disk0"
+device = "/dev/ui-disk0p1"
+start_bytes = 1048576
+size_bytes = 536870912
+
+[[world.filesystems]]
+id = "fs0"
+device = "/dev/ui-disk0p1"
+type = "ext4"
+label = "Data"
+mount_points = ["/mnt/ui-data"]
+size_bytes = 536870912
+available_bytes = 268435456
+
+[[world.workflows.images]]
+id = "image"
+size_bytes = 1000
+
+[world.workflows.image_copy]
+total_bytes = 1000
+terminal = "completed"
+effects = [
+  { at_ms = 0, completed_bytes = 0 },
+  { at_ms = 250, completed_bytes = 250 },
+  { at_ms = 500, completed_bytes = 500 },
+  { at_ms = 750, completed_bytes = 750 },
+  { at_ms = 1000, completed_bytes = 1000 },
+]
+
+[world.workflows.usage_scan]
+total_bytes = 1000
+terminal = "completed"
+effects = [
+  { at_ms = 0, completed_bytes = 0 },
+  { at_ms = 500, completed_bytes = 500 },
+  { at_ms = 1000, completed_bytes = 1000 },
+]
+
+[[world.workflows.usage_files]]
+id = "cache-file"
+mount = "/mnt/ui-data"
+bytes = 1000

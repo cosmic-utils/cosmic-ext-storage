@@ -1,0 +1,95 @@
+{
+  "schema_version": 1,
+  "fixture": {
+    "required_first_key": "schema_version",
+    "first_key_lexical_rule": "UTF-8 without BOM; skip blank and whole-line comments; exact `schema_version = 1` line before TOML decoding",
+    "root_keys": ["schema_version", "name", "description", "backend", "state", "behaviour"],
+    "name_pattern": "[a-z0-9][a-z0-9-]{0,62}",
+    "unknown_fields": "reject"
+  },
+  "dto_catalog": {
+    "completion_gate": "Phase 0a must replace every bootstrap domain reference with a closed record before implementation begins",
+    "record_requirements": ["properties", "required", "defaults", "additional_properties", "lexical_constraints", "nested_references"],
+    "generated_from": "the same Phase-1 declarations that generate loader DTOs",
+    "unresolved_domain_reference": "invalid"
+  },
+  "safe_values": {
+    "block_device": "/dev/ui-[A-Za-z0-9._-]+",
+    "mount_point": "/mnt/ui-[A-Za-z0-9._/-]+ (no empty, dot, dot-dot, or NUL component)",
+    "asset": "asset:<safe-id>",
+    "secret": "runtime request only; redact as <redacted>",
+    "host_io": "FixturePath|OverlayPath|TracePath|ArtifactRoot capabilities only"
+  },
+  "state_tables": {
+    "disks": {"form": "array", "identity": ["id", "device"], "dto": "DiskInfoDto", "order": ["id", "device"]},
+    "volumes": {"form": "array", "identity": ["device"], "dto": "VolumeInfoDto", "order": ["parent_device", "offset", "device"]},
+    "partitions": {"form": "array", "identity": ["parent_device", "number"], "dto": "PartitionInfoDto", "order": ["parent_device", "number"]},
+    "filesystems": {"form": "array", "identity": ["device"], "dto": "FilesystemInfoDto", "order": ["device"]},
+    "luks": {"form": "array", "identity": ["device"], "dto": "LuksInfoDto", "order": ["device"]},
+    "smart": {"form": "array", "identity": ["device"], "dto": "SmartInfoDto", "order": ["device"]},
+    "filesystem_tools": {"form": "array", "identity": ["fs_type"], "dto": "FilesystemToolInfoDto", "order": ["fs_type"]},
+    "btrfs": {"form": "array", "identity": ["mount_id"], "dto": "BtrfsMountDto", "order": ["mount_id"]},
+    "logical": {"form": "table", "dto": "LogicalStateDto", "default": {"sources": [], "entities": [], "candidates": [], "preflights": []}},
+    "network": {"form": "table", "dto": "NetworkStateDto", "default": {"backends": []}},
+    "usage": {"form": "table", "dto": "UsageStateDto", "default": {"mounts": [], "files": [], "operations": []}},
+    "images": {"form": "table", "dto": "ImageStateDto", "default": {"assets": [], "attachments": [], "operations": []}},
+    "desktop": {"form": "table", "dto": "DesktopStateDto", "default": {"selections": [], "launches": []}}
+  },
+  "dto_records": {
+    "DiskInfoDto": {"identity": ["id", "device"], "domain": "storage_types::DiskInfo", "references": []},
+    "VolumeInfoDto": {"identity": ["device"], "domain": "storage_types::VolumeInfo", "references": ["parent_device"]},
+    "PartitionInfoDto": {"identity": ["parent_device", "number"], "domain": "storage_types::PartitionInfo", "references": ["parent_device", "device"]},
+    "FilesystemInfoDto": {"identity": ["device"], "domain": "storage_types::FilesystemInfo", "references": ["device"]},
+    "LuksInfoDto": {"identity": ["device"], "domain": "storage_types::LuksInfo", "references": ["device", "cleartext_device"]},
+    "SmartInfoDto": {"identity": ["device"], "domain": "storage_types::SmartInfo", "references": ["device"]},
+    "FilesystemToolInfoDto": {"identity": ["fs_type"], "domain": "storage_types::FilesystemToolInfo", "references": []},
+    "BtrfsMountDto": {"identity": ["mount_id"], "fields": ["mount_id", "mount", "subvolumes", "default_subvolume", "usage", "deleted_subvolumes"], "references": ["mount"]},
+    "LogicalStateDto": {"fields": ["sources", "entities", "candidates", "preflights"], "references": ["logical_entity_id", "candidate_id", "preflight_key"]},
+    "NetworkStateDto": {"fields": ["backends"], "references": ["backend_id", "config_id"]},
+    "UsageStateDto": {"fields": ["mounts", "files", "operations"], "references": ["mount_id", "file_id", "operation_id"]},
+    "ImageStateDto": {"fields": ["assets", "attachments", "operations"], "references": ["asset_id", "attachment_id", "operation_id"]},
+    "DesktopStateDto": {"fields": ["selections", "launches"], "references": ["asset_id"]}
+  },
+  "rule": {
+    "required": ["operation", "match", "outcome", "latency", "events"],
+    "selector_tags": ["any", "device", "mount", "asset", "network_config", "logical_preflight", "operation_id", "request_digest", "all_of"],
+    "selector_forms": {
+      "any": {"required": ["tag"], "allowed": ["tag"]},
+      "device": {"required": ["tag", "device"], "allowed": ["tag", "device"], "device": "BlockDeviceRef"},
+      "mount": {"required": ["tag", "mount"], "allowed": ["tag", "mount"], "mount": "MountId"},
+      "asset": {"required": ["tag", "asset"], "allowed": ["tag", "asset"], "asset": "ImageAssetRef"},
+      "network_config": {"required": ["tag", "backend_id", "config_id"], "allowed": ["tag", "backend_id", "config_id"]},
+      "logical_preflight": {"required": ["tag", "key"], "allowed": ["tag", "key"]},
+      "operation_id": {"required": ["tag", "operation_id"], "allowed": ["tag", "operation_id"], "operation_id": "OperationId"},
+      "request_digest": {"required": ["tag", "sha256"], "allowed": ["tag", "sha256"], "sha256": "64 lowercase hex"},
+      "all_of": {"required": ["tag", "selectors"], "allowed": ["tag", "selectors"], "min_items": 2, "sort": ["tag", "canonical_value"]}
+    },
+    "selector_specificity": {"any": 0, "device": 1, "mount": 2, "asset": 3, "operation_id": 4, "network_config": 5, "logical_preflight": 6, "request_digest": 7},
+    "outcome_tags": ["error", "transition", "unsupported"],
+    "transition_tags": ["disk", "volume", "partition", "filesystem", "luks", "smart", "btrfs", "logical_action", "network", "usage", "image", "desktop"],
+    "transition_catalog": "Phase 0a completion supplies one closed request/result/transition record per active ScenarioOperation; a tag without that record is invalid",
+    "tie_policy": "reject equal-comparator rules whose generated typed selector domains intersect"
+  },
+  "time": {
+    "unit": "u64 tick",
+    "advance": "actor command; must be monotonic",
+    "due_order": ["due_tick", "operation_start_sequence", "schedule_index"],
+    "completion": "only advance command materializes scheduled work"
+  },
+  "overlay": {
+    "required_first_key": "schema_version",
+    "required": ["schema_version", "fixture_sha256", "state", "last_sequence"],
+    "forbidden": ["behaviour"],
+    "write": ["clone_state", "temp", "file_fsync", "rename", "parent_fsync", "publish_after_write"],
+    "write_failure": "return Other; publish no state, generation, event, or success response",
+    "restart_sequence": "last_sequence + 1",
+    "watch": "coalesce duplicate exact bytes and acknowledged sequence; queue reload only",
+    "reload": "actor command; reject stale/invalid; cancel affected work; one generation increment"
+  },
+  "trace": {
+    "format": "canonical JSON with UTF-8 bytewise key order and no insignificant whitespace",
+    "entry": ["sequence", "virtual_tick", "request", "rule", "response_or_error", "generation", "events"],
+    "operation_id": "<fixture-name>:<operation>:<sequence>",
+    "redaction": "replace secrets and descriptor-equivalent fields with <redacted> before recording"
+  }
+}

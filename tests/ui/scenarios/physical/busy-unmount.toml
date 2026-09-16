@@ -1,0 +1,47 @@
+schema_version = 2
+id = "physical-busy-unmount"
+description = "A mounted filesystem with one declared blocking process."
+
+[backend]
+id = "ui-scenario"
+capabilities = ["filesystem"]
+
+[world]
+revision = 0
+
+[[world.disks]]
+id = "disk0"
+device = "/dev/ui-disk0"
+model = "Busy Scenario Disk"
+size_bytes = 1073741824
+partition_table = "gpt"
+
+[[world.partitions]]
+id = "disk0p1"
+disk_id = "disk0"
+device = "/dev/ui-disk0p1"
+start_bytes = 1048576
+size_bytes = 536870912
+
+[[world.filesystems]]
+id = "fs0"
+device = "/dev/ui-disk0p1"
+type = "ext4"
+label = "Data"
+mount_points = ["/mnt/ui-data"]
+size_bytes = 536870912
+available_bytes = 268435456
+
+[[world.processes]]
+id = "writer"
+mount = "/mnt/ui-data"
+pid = 4242
+command = "fixture-writer"
+uid = 1000
+username = "fixture"
+
+[[behaviour.rules]]
+operation = "filesystem.unmount"
+selector = { filesystem_id = "fs0" }
+outcome = { tag = "error", kind = "busy", message = "Fixture user is active" }
+events = []
