@@ -2,6 +2,17 @@
 
 ## Final headless boundary regressions
 
+- `disk::discovery::tests::connection_bus_inference_does_not_depend_on_runner_hardware::case_01_loop_precedence`
+- `disk::discovery::tests::connection_bus_inference_does_not_depend_on_runner_hardware::case_02_nvme_case_insensitive`
+- `disk::discovery::tests::connection_bus_inference_does_not_depend_on_runner_hardware::case_03_mmc`
+- `disk::discovery::tests::connection_bus_inference_does_not_depend_on_runner_hardware::case_04_mmcblk_precedence`
+- `disk::discovery::tests::connection_bus_inference_does_not_depend_on_runner_hardware::case_05_optical_path`
+- `disk::discovery::tests::connection_bus_inference_does_not_depend_on_runner_hardware::case_06_optical_flag`
+- `disk::discovery::tests::connection_bus_inference_does_not_depend_on_runner_hardware::case_07_usb_model`
+- `disk::discovery::tests::connection_bus_inference_does_not_depend_on_runner_hardware::case_08_usb_vendor`
+- `disk::discovery::tests::connection_bus_inference_does_not_depend_on_runner_hardware::case_09_ata`
+- `disk::discovery::tests::connection_bus_inference_does_not_depend_on_runner_hardware::case_10_empty_fallback`
+
 - `update::production_handler_tests::encryption::passphrase_change_validates_redacts_and_rejects_late_completion::case_2_mismatch`
 - `update::production_handler_tests::encryption::passphrase_change_validates_redacts_and_rejects_late_completion::case_1_empty`
 - `update::production_handler_tests::encryption::passphrase_change_validates_redacts_and_rejects_late_completion::case_3_valid`

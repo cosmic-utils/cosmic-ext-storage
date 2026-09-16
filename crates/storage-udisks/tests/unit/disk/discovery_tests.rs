@@ -1,6 +1,31 @@
 use super::flatten_volumes_to_partitions;
 use storage_types::{VolumeInfo, VolumeKind};
 
+#[rstest::rstest]
+#[case::loop_precedence("/dev/nvme0", "USB", "USB", true, true, "loop")]
+#[case::nvme_case_insensitive("/dev/NVME0n1", "USB", "", false, false, "nvme")]
+#[case::mmc("/dev/mmc0", "", "", false, false, "mmc")]
+#[case::mmcblk_precedence("/dev/mmcblk0", "USB", "", false, true, "mmc")]
+#[case::optical_path("/dev/sr0", "USB", "", false, false, "optical")]
+#[case::optical_flag("/dev/sda", "USB", "", false, true, "optical")]
+#[case::usb_model("/dev/sda", "USB enclosure", "", false, false, "usb")]
+#[case::usb_vendor("/dev/sda", "", "Usb storage", false, false, "usb")]
+#[case::ata("/dev/sda", "disk", "vendor", false, false, "ata")]
+#[case::empty_fallback("", "", "", false, false, "ata")]
+fn connection_bus_inference_does_not_depend_on_runner_hardware(
+    #[case] path: &str,
+    #[case] model: &str,
+    #[case] vendor: &str,
+    #[case] is_loop: bool,
+    #[case] optical: bool,
+    #[case] expected: &str,
+) {
+    assert_eq!(
+        super::infer_connection_bus(path, model, vendor, is_loop, optical),
+        expected
+    );
+}
+
 fn volume(
     kind: VolumeKind,
     partition_number: u32,

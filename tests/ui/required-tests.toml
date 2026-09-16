@@ -3,6 +3,24 @@
 schema_version = 1
 
 [[target]]
+phase = "headless-discovery"
+package = "storage-udisks"
+kind = "rust-lib"
+name = "storage_udisks"
+tests = [
+  "disk::discovery::tests::connection_bus_inference_does_not_depend_on_runner_hardware::case_01_loop_precedence",
+  "disk::discovery::tests::connection_bus_inference_does_not_depend_on_runner_hardware::case_02_nvme_case_insensitive",
+  "disk::discovery::tests::connection_bus_inference_does_not_depend_on_runner_hardware::case_03_mmc",
+  "disk::discovery::tests::connection_bus_inference_does_not_depend_on_runner_hardware::case_04_mmcblk_precedence",
+  "disk::discovery::tests::connection_bus_inference_does_not_depend_on_runner_hardware::case_05_optical_path",
+  "disk::discovery::tests::connection_bus_inference_does_not_depend_on_runner_hardware::case_06_optical_flag",
+  "disk::discovery::tests::connection_bus_inference_does_not_depend_on_runner_hardware::case_07_usb_model",
+  "disk::discovery::tests::connection_bus_inference_does_not_depend_on_runner_hardware::case_08_usb_vendor",
+  "disk::discovery::tests::connection_bus_inference_does_not_depend_on_runner_hardware::case_09_ata",
+  "disk::discovery::tests::connection_bus_inference_does_not_depend_on_runner_hardware::case_10_empty_fallback",
+]
+
+[[target]]
 phase = "headless-boundaries"
 package = "storage-types"
 kind = "rust-integration"

@@ -150,3 +150,22 @@ The PR checks are the authoritative result for the pushed head. A documentation-
 only follow-up does not change the recorded build/test inputs; any source, test,
 runner or baseline change requires fresh matching evidence. No main-branch merge
 or repository protection change is part of this pass.
+
+### Deterministic hardware classification follow-up
+
+[CI run 35135871365](https://github.com/cosmic-utils/cosmic-ext-storage/actions/runs/35135871365)
+at `3811033` again passed all tests and provenance, but UDisks/workspace line
+coverage differed by two lines. Comparing LCOV—not guessing from totals—showed
+the runner switched from ATA/unknown-rotation branches to NVMe/nonrotating
+branches, while transient vanished-LVM recovery ran this time.
+
+Rather than lower the baseline again, ten rstest cases now directly exercise
+the existing pure `infer_connection_bus` function: loop precedence, case-insensitive
+NVMe, MMC/MMC block paths, optical paths/flags, USB model/vendor, ATA and empty
+fallback. No production behavior changed. The hardware-dependent classifier is
+now covered deterministically without a disk or D-Bus service. Rstest reuses the
+existing locked workspace version; no dependency version was upgraded.
+These cases are registered in the required-test manifest and validation list.
+Rotation-property and transient-discovery paths remain native variability; the
+baseline remains exactly the previous reviewed three-run floor. Fresh coverage
+and CI must validate it with the additional tests, not relabel earlier evidence.
