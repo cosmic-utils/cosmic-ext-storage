@@ -8,7 +8,6 @@ pub use crate::workflows::{
     EffectRecord, SecretInput,
     image_usage::{ImageUsageIntent, ImageUsageSnapshot, Phase as ImageUsagePhase},
     network::{NetworkIntent, NetworkSnapshot, Phase as NetworkPhase},
-    physical::{Phase as PhysicalPhase, PhysicalIntent, PhysicalSnapshot},
     reload::{Phase as ReloadPhase, ReloadIntent, ReloadSnapshot},
 };
 pub use workflow_harness::{

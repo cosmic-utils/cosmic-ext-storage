@@ -61,7 +61,13 @@ branches = ["open", "busy_error", "cancel", "retry", "refresh"]
 in_process_test = "configured_backend_error_remains_actionable"
 e2e_case = "busy_unmount"
 runtime_field = "AppRuntime.operations"
-application_workflow_tests = ["busy_unmount_keeps_actionable_error_and_does_not_refresh"]
+application_workflow_tests = [
+  "update::production_handler_tests::mount::busy_result_routes_to_dialog_and_retry_preserves_mounted_state::case_1_segment",
+  "update::production_handler_tests::mount::busy_result_routes_to_dialog_and_retry_preserves_mounted_state::case_2_child",
+  "update::production_handler_tests::mount::busy_result_routes_to_dialog_and_retry_preserves_mounted_state::case_3_sidebar",
+  "update::production_handler_tests::mount::unsupported_kill_is_an_error_not_a_fake_unmount_success",
+  "update::production_handler_tests::mount::child_mount_and_unmount_refresh_real_state"
+]
 
 [[flow]]
 id = "luks_unlock"

@@ -35,7 +35,12 @@ tests = [
   "update::production_handler_tests::encryption::wrong_secret_retries_successfully_then_locks_actual_model",
   "update::production_handler_tests::encryption::cancelled_or_missing_target_never_unlocks::case_1_cancel",
   "update::production_handler_tests::encryption::cancelled_or_missing_target_never_unlocks::case_2_missing_partition",
-  "update::production_handler_tests::encryption::cancelled_unlock_failure_cannot_reopen_a_secret_dialog"
+  "update::production_handler_tests::encryption::cancelled_unlock_failure_cannot_reopen_a_secret_dialog",
+  "update::production_handler_tests::mount::busy_result_routes_to_dialog_and_retry_preserves_mounted_state::case_1_segment",
+  "update::production_handler_tests::mount::busy_result_routes_to_dialog_and_retry_preserves_mounted_state::case_2_child",
+  "update::production_handler_tests::mount::busy_result_routes_to_dialog_and_retry_preserves_mounted_state::case_3_sidebar",
+  "update::production_handler_tests::mount::unsupported_kill_is_an_error_not_a_fake_unmount_success",
+  "update::production_handler_tests::mount::child_mount_and_unmount_refresh_real_state"
 ]
 
 [[target]]
@@ -221,7 +226,6 @@ name = "application_workflows"
 features = ["test-backend"]
 tests = [
   "workflow_harness_uses_only_selected_scenario_runtime",
-  "busy_unmount_keeps_actionable_error_and_does_not_refresh",
   "network_create_mount_and_status_are_reduced_from_one_flow",
   "image_progress_cancel_and_terminal_state_are_virtual_clock_driven",
   "image_usage_stale_completion_cannot_replace_newer_workflow_state",

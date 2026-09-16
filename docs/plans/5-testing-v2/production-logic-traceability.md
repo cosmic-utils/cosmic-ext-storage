@@ -173,3 +173,28 @@ remain; rendered transport and its end-to-end claims remain deferred.
 Final slice validation: 86 library tests, 9 remaining workflow integration tests,
 exact required-name execution, strict app Clippy, formatting and scenario-disabled
 build pass (`/tmp/production-encryption-{final,names,clippy,normal}.log`).
+
+### Mount/unmount slice — 2026-09-16
+
+Five production-route cases cover segment/child/sidebar busy errors, retry,
+cancel, a successful mount/unmount round trip with real model refresh, missing
+targets, and unsupported process termination remaining an explicit failure.
+All operation/refresh clients carry the selected runtime; no host process is
+terminated by these tests. Busy-dialog cancellation dismisses the dialog; it
+does not promise cancellation of an already dispatched storage operation.
+
+The tests reproduced an actionable-error bug: a typed `Busy` backend error was
+ignored unless its English message contained "busy" or "in use". The client now
+respects `StorageErrorKind::Busy` (retaining the old text fallback for compatibility).
+Segment, child, sidebar, retry and kill/retry paths share one production unmount
+executor. This also fixes sidebar handling of a failed `UnmountResult` as success.
+Non-busy failures now surface an error dialog rather than disappearing into logs.
+Protected-path checks and backend ownership/authorization remain unchanged.
+
+Removed the remaining parallel `src/workflows/physical.rs`, harness dispatch,
+state and busy test, plus the duplicate production retry/unmount implementations.
+All deletions are tracked/recoverable in Git. Five handler tests pass; temporarily
+disabling the real segment-unmount route made its case fail, then the route was
+restored (`/tmp/production-mount-{red,green,mutation}.log`). Final slice validation
+passed 91 library tests, eight remaining integration workflows, strict Clippy
+and scenario-disabled builds; full coverage and final-head CI remain outstanding.

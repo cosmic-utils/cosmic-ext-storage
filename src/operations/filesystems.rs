@@ -372,7 +372,8 @@ impl FilesystemsClient {
                 } else {
                     device_or_mount.into()
                 };
-                if !(message.to_ascii_lowercase().contains("busy")
+                if !(error.kind == storage_contracts::StorageErrorKind::Busy
+                    || message.to_ascii_lowercase().contains("busy")
                     || message.to_ascii_lowercase().contains("in use"))
                 {
                     return Ok(UnmountResult {

@@ -14,6 +14,9 @@ mod logical;
 #[path = "production_encryption_tests.rs"]
 mod encryption;
 
+#[path = "production_mount_tests.rs"]
+mod mount;
+
 async fn outputs(task: Task<Message>) -> Vec<Message> {
     let Some(mut stream) = cosmic::iced::runtime::task::into_stream(task) else {
         return Vec::new();

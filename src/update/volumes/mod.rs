@@ -9,7 +9,7 @@ mod create;
 mod encryption;
 mod filesystem;
 pub(crate) mod helpers;
-mod mount;
+pub(crate) mod mount;
 mod mount_options;
 mod partition;
 mod selection;
@@ -65,11 +65,13 @@ impl VolumesControl {
                 segment_index,
                 device_path,
             } => selection::select_volume(self, segment_index, device_path, dialog),
-            VolumesControlMessage::Mount => mount::mount(self),
-            VolumesControlMessage::Unmount => mount::unmount(self),
-            VolumesControlMessage::ChildMount(device_path) => mount::child_mount(self, device_path),
+            VolumesControlMessage::Mount => mount::mount(self, operations),
+            VolumesControlMessage::Unmount => mount::unmount(self, operations),
+            VolumesControlMessage::ChildMount(device_path) => {
+                mount::child_mount(self, device_path, operations)
+            }
             VolumesControlMessage::ChildUnmount(device_path) => {
-                mount::child_unmount(self, device_path)
+                mount::child_unmount(self, device_path, operations)
             }
 
             VolumesControlMessage::LockContainer => encryption::lock_container(self, operations),

@@ -166,6 +166,13 @@ Keyboard cases retain an owned virtual keyboard device for the case lifetime;
 its regression rejects early process exit and verifies child termination/reaping.
 # Non-rendered production-handler migration (2026-09-16)
 
+Required mount/unmount production-route cases:
+- `update::production_handler_tests::mount::busy_result_routes_to_dialog_and_retry_preserves_mounted_state::case_1_segment`
+- `update::production_handler_tests::mount::busy_result_routes_to_dialog_and_retry_preserves_mounted_state::case_2_child`
+- `update::production_handler_tests::mount::busy_result_routes_to_dialog_and_retry_preserves_mounted_state::case_3_sidebar`
+- `update::production_handler_tests::mount::unsupported_kill_is_an_error_not_a_fake_unmount_success`
+- `update::production_handler_tests::mount::child_mount_and_unmount_refresh_real_state`
+
 Required encryption production-route cases:
 - `update::production_handler_tests::encryption::wrong_secret_retries_successfully_then_locks_actual_model`
 - `update::production_handler_tests::encryption::cancelled_or_missing_target_never_unlocks::case_1_cancel`

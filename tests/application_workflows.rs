@@ -2,8 +2,8 @@ mod common;
 use std::collections::BTreeMap;
 
 use cosmic_ext_storage::testing::{
-    FixtureSecrets, ImageUsageIntent, ImageUsagePhase, NetworkIntent, NetworkPhase, PhysicalIntent,
-    PhysicalPhase, ReloadIntent, ReloadPhase, WorkflowHarness,
+    FixtureSecrets, ImageUsageIntent, ImageUsagePhase, NetworkIntent, NetworkPhase, ReloadIntent,
+    ReloadPhase, WorkflowHarness,
 };
 use storage_types::ImageAssetRef;
 
@@ -16,35 +16,6 @@ async fn workflow_harness_uses_only_selected_scenario_runtime() {
     assert_eq!(second.selected_block_backend_id(), "ui-scenario");
     assert!(first.global_operations_lookup_is_rejected().await);
     assert!(second.global_operations_lookup_is_rejected().await);
-}
-
-#[rstest::rstest]
-#[tokio::test(flavor = "current_thread")]
-async fn busy_unmount_keeps_actionable_error_and_does_not_refresh(
-    #[from(common::workflow)]
-    #[with("physical/busy-unmount.toml")]
-    #[future(awt)]
-    harness: WorkflowHarness,
-) {
-    let mut harness = harness;
-    harness
-        .dispatch_physical(PhysicalIntent::Unmount {
-            device: "/dev/ui-disk0p1".into(),
-        })
-        .expect("unmount intent");
-    harness.drive_until_idle().await.expect("busy response");
-
-    let snapshot = harness.physical_snapshot();
-    assert_eq!(snapshot.phase, PhysicalPhase::Failed);
-    assert_eq!(snapshot.refresh_generation, 0);
-    assert_eq!(
-        snapshot.error.as_ref().map(|error| error.kind),
-        Some("busy")
-    );
-    assert_eq!(
-        snapshot.error.as_ref().map(|error| error.reason.as_str()),
-        Some("Fixture user is active")
-    );
 }
 
 #[rstest::rstest]

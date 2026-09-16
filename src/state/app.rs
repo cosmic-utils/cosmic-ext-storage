@@ -93,15 +93,6 @@ impl AppModel {
     }
 
     #[cfg(feature = "test-backend")]
-    pub(crate) fn reduce_physical_workflow(
-        &mut self,
-        intent: crate::workflows::physical::PhysicalIntent,
-        generation: u64,
-    ) -> Vec<crate::workflows::physical::Effect> {
-        crate::workflows::physical::reduce_intent(&mut self.workflows.physical, intent, generation)
-    }
-
-    #[cfg(feature = "test-backend")]
     pub(crate) fn reduce_network_workflow(
         &mut self,
         intent: crate::workflows::network::NetworkIntent,
