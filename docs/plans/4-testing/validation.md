@@ -222,3 +222,18 @@ The parallel network workflow is replaced by these real message-handler tests:
 - `update::production_handler_tests::network::invalid_provider_or_missing_schema_field_never_submits::case_1_unsupported`
 - `update::production_handler_tests::network::invalid_provider_or_missing_schema_field_never_submits::case_2_missing_required`
 - `update::production_handler_tests::network::editor_conflict_retry_updates_backend_and_completion_is_once`
+# Production image/usage migration (2026-09-16)
+
+- `update::production_handler_tests::image_usage::image_start_uses_selected_adapter_and_rejects_duplicate`
+- `update::production_handler_tests::image_usage::stale_image_start_cannot_bind_to_replacement_dialog`
+- `update::production_handler_tests::image_usage::image_progress_terminal_and_cleanup_use_actual_subscription_messages::case_1_complete`
+- `update::production_handler_tests::image_usage::image_progress_terminal_and_cleanup_use_actual_subscription_messages::case_2_cancel`
+- `update::production_handler_tests::image_usage::image_cancel_before_start_completion_is_honoured`
+- `update::production_handler_tests::image_usage::image_validation_and_adapter_errors_allow_retry::case_1_missing_path`
+- `update::production_handler_tests::image_usage::image_validation_and_adapter_errors_allow_retry::case_2_unknown_asset`
+- `update::production_handler_tests::image_usage::image_validation_and_adapter_errors_allow_retry::case_3_host_path`
+- `update::production_handler_tests::image_usage::usage_wizard_scan_selection_delete_and_refresh_use_real_state`
+- `update::production_handler_tests::image_usage::usage_old_scan_and_delete_cannot_change_replacement_state`
+- `update::production_handler_tests::image_usage::usage_cancelled_wizard_and_invalid_selection_never_start`
+- `update::production_handler_tests::image_usage::usage_running_adapter_waits_for_virtual_completion`
+- `update::production_handler_tests::image_usage::usage_unsupported_adapter_surfaces_error_without_success`

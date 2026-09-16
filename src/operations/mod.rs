@@ -71,7 +71,10 @@ pub struct StorageOperations {
     pub registry: BackendRegistry,
     pub filesystem_tool_discovery: Arc<dyn FilesystemToolDiscovery>,
     pub usage_operations: Arc<dyn UsageOperations>,
-    pub image_workflows: Arc<dyn ImageWorkflowOperations>,
+    /// Portable image adapter when supplied by the composition root. Native
+    /// path/descriptor I/O is used only when explicitly composed without one;
+    /// an adapter error must never fall back to native storage access.
+    pub image_workflows: Option<Arc<dyn ImageWorkflowOperations>>,
     pub image_manager: image::ImageOperationManager,
 }
 
@@ -141,7 +144,7 @@ impl StorageOperations {
                 filesystems::detect_filesystem_tools(),
             )),
             usage_operations: Arc::new(filesystems::ProductionUsageOperations::default()),
-            image_workflows: Arc::new(crate::runtime::UnavailableWorkflowAdapter),
+            image_workflows: None,
             image_manager: image::ImageOperationManager::default(),
         }))
     }
@@ -164,7 +167,7 @@ impl StorageOperations {
             },
             filesystem_tool_discovery: adapters.filesystem_tools,
             usage_operations: adapters.usage,
-            image_workflows: adapters.image,
+            image_workflows: Some(adapters.image),
             image_manager: image::ImageOperationManager::default(),
         }))
     }

@@ -110,6 +110,7 @@ fn usage_filtered_file_paths(state: &UsageTabState) -> Vec<String> {
 /// Find the segment index and whether the volume is a child for a given device path
 /// Handles messages emitted by the application and its widgets.
 pub(crate) fn update(app: &mut AppModel, message: Message) -> Task<Message> {
+    let filesystems = FilesystemsClient::with_operations(app.runtime.operations());
     match message {
         Message::OpenRepositoryUrl => {
             let desktop = app.runtime.desktop();
@@ -514,19 +515,16 @@ pub(crate) fn update(app: &mut AppModel, message: Message) -> Task<Message> {
         } => {
             return Task::perform(
                 async move {
-                    let result = match FilesystemsClient::new().await {
-                        Ok(client) => client
-                            .get_usage_scan(
-                                &scan_id,
-                                top_files_per_category,
-                                &mount_points,
-                                show_all_files,
-                                parallelism_preset,
-                            )
-                            .await
-                            .map_err(|e| e.to_string()),
-                        Err(e) => Err(e.to_string()),
-                    };
+                    let result = filesystems
+                        .get_usage_scan(
+                            &scan_id,
+                            top_files_per_category,
+                            &mount_points,
+                            show_all_files,
+                            parallelism_preset,
+                        )
+                        .await
+                        .map_err(|e| e.to_string());
 
                     Message::UsageScanLoaded { scan_id, result }
                 },
@@ -610,14 +608,11 @@ pub(crate) fn update(app: &mut AppModel, message: Message) -> Task<Message> {
 
                 return Task::perform(
                     async move {
-                        let result = match FilesystemsClient::new().await {
-                            Ok(client) => client
-                                .authorize_usage_show_all_files()
-                                .await
-                                .map(|_| ())
-                                .map_err(|e| e.to_string()),
-                            Err(e) => Err(e.to_string()),
-                        };
+                        let result = filesystems
+                            .authorize_usage_show_all_files()
+                            .await
+                            .map(|_| ())
+                            .map_err(|e| e.to_string());
 
                         Message::UsageShowAllFilesAuthCompleted { result }
                     },
@@ -659,13 +654,7 @@ pub(crate) fn update(app: &mut AppModel, message: Message) -> Task<Message> {
                     return Task::done(cosmic::Action::App(Message::UsageConfigureRequested));
                 }
 
-                let scan_id = format!(
-                    "usage-{}",
-                    std::time::SystemTime::now()
-                        .duration_since(std::time::UNIX_EPOCH)
-                        .map(|duration| duration.as_millis())
-                        .unwrap_or(0)
-                );
+                let scan_id = format!("usage-{}", uuid::Uuid::new_v4());
 
                 let mount_points = volumes_control.usage_state.scan_mount_points.clone();
                 let show_all_files = volumes_control.usage_state.show_all_files;
@@ -710,13 +699,10 @@ pub(crate) fn update(app: &mut AppModel, message: Message) -> Task<Message> {
 
                 return Task::perform(
                     async move {
-                        let result = match FilesystemsClient::new().await {
-                            Ok(client) => client
-                                .list_usage_mount_points()
-                                .await
-                                .map_err(|e| e.to_string()),
-                            Err(e) => Err(e.to_string()),
-                        };
+                        let result = filesystems
+                            .list_usage_mount_points()
+                            .await
+                            .map_err(|e| e.to_string());
 
                         Message::UsageWizardMountPointsLoaded { result }
                     },
@@ -725,7 +711,9 @@ pub(crate) fn update(app: &mut AppModel, message: Message) -> Task<Message> {
             }
         }
         Message::UsageWizardMountPointsLoaded { result } => {
-            if let Some(volumes_control) = app.nav.active_data_mut::<VolumesControl>() {
+            if let Some(volumes_control) = app.nav.active_data_mut::<VolumesControl>()
+                && volumes_control.usage_state.wizard_open
+            {
                 volumes_control.usage_state.wizard_loading_mounts = false;
                 match result {
                     Ok(mut mount_points) => {
@@ -809,7 +797,10 @@ pub(crate) fn update(app: &mut AppModel, message: Message) -> Task<Message> {
         }
         Message::UsageWizardStartScan => {
             if let Some(volumes_control) = app.nav.active_data_mut::<VolumesControl>() {
-                if volumes_control.usage_state.wizard_loading_mounts {
+                if volumes_control.usage_state.wizard_loading_mounts
+                    || volumes_control.usage_state.loading
+                    || !volumes_control.usage_state.wizard_open
+                {
                     return Task::none();
                 }
 
@@ -830,14 +821,11 @@ pub(crate) fn update(app: &mut AppModel, message: Message) -> Task<Message> {
                 {
                     return Task::perform(
                         async move {
-                            let result = match FilesystemsClient::new().await {
-                                Ok(client) => client
-                                    .authorize_usage_show_all_files()
-                                    .await
-                                    .map(|_| ())
-                                    .map_err(|e| e.to_string()),
-                                Err(e) => Err(e.to_string()),
-                            };
+                            let result = filesystems
+                                .authorize_usage_show_all_files()
+                                .await
+                                .map(|_| ())
+                                .map_err(|e| e.to_string());
 
                             Message::UsageWizardShowAllFilesAuthCompleted { result }
                         },
@@ -845,13 +833,7 @@ pub(crate) fn update(app: &mut AppModel, message: Message) -> Task<Message> {
                     );
                 }
 
-                let scan_id = format!(
-                    "usage-{}",
-                    std::time::SystemTime::now()
-                        .duration_since(std::time::UNIX_EPOCH)
-                        .map(|duration| duration.as_millis())
-                        .unwrap_or(0)
-                );
+                let scan_id = format!("usage-{}", uuid::Uuid::new_v4());
 
                 let mount_points = volumes_control
                     .usage_state
@@ -967,27 +949,35 @@ pub(crate) fn update(app: &mut AppModel, message: Message) -> Task<Message> {
                 }
 
                 volumes_control.usage_state.deleting = true;
+                let operation_id = uuid::Uuid::new_v4();
+                volumes_control.usage_state.delete_operation_id = Some(operation_id);
                 volumes_control.usage_state.operation_status = None;
                 let selected_paths = volumes_control.usage_state.selected_paths.clone();
 
                 return Task::perform(
                     async move {
-                        let result = match FilesystemsClient::new().await {
-                            Ok(client) => client
-                                .delete_usage_files(&selected_paths)
-                                .await
-                                .map_err(|e| e.to_string()),
-                            Err(e) => Err(e.to_string()),
-                        };
+                        let result = filesystems
+                            .delete_usage_files(&selected_paths)
+                            .await
+                            .map_err(|e| e.to_string());
 
-                        Message::UsageDeleteCompleted { result }
+                        Message::UsageDeleteCompleted {
+                            operation_id,
+                            result,
+                        }
                     },
                     |msg| msg.into(),
                 );
             }
         }
-        Message::UsageDeleteCompleted { result } => {
-            if let Some(volumes_control) = app.nav.active_data_mut::<VolumesControl>() {
+        Message::UsageDeleteCompleted {
+            operation_id,
+            result,
+        } => {
+            if let Some(volumes_control) = app.nav.active_data_mut::<VolumesControl>()
+                && volumes_control.usage_state.delete_operation_id == Some(operation_id)
+            {
+                volumes_control.usage_state.delete_operation_id = None;
                 volumes_control.usage_state.deleting = false;
                 match result {
                     Ok(delete_result) => {
@@ -1497,12 +1487,6 @@ pub(crate) fn update(app: &mut AppModel, message: Message) -> Task<Message> {
         }
         Message::ImageOperationDialog(msg) => {
             return image::image_operation_dialog(app, msg);
-        }
-        Message::ImageOperationStarted(operation_id) => {
-            app.image_op_operation_id = Some(operation_id.clone());
-            if let Some(ShowDialog::ImageOperation(state)) = app.dialog.as_mut() {
-                state.operation_id = Some(operation_id);
-            }
         }
         Message::UnmountBusy(msg) => {
             use crate::message::dialogs::UnmountBusyMessage;

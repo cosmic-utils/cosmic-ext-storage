@@ -152,6 +152,7 @@ pub enum Message {
     UsageSelectionClear,
     UsageDeleteStart,
     UsageDeleteCompleted {
+        operation_id: uuid::Uuid,
         result: Result<UsageDeleteResult, String>,
     },
 
@@ -182,7 +183,6 @@ pub enum Message {
     AttachDiskImageDialog(AttachDiskImageDialogMessage),
     ImageOperationDialog(ImageOperationDialogMessage),
     /// Emitted when Phase 1 completes; store operation_id and start progress subscription.
-    ImageOperationStarted(String),
     UnmountBusy(UnmountBusyMessage),
     RetryUnmountAfterKill(String),
     OpenImagePathPicker(ImagePathPickerKind),

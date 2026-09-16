@@ -73,11 +73,15 @@ async fn usage_and_image_progress_render_from_contract_events(
     let asset = ImageAssetRef::new("asset:disk").expect("asset");
     operations
         .image_workflows
+        .as_ref()
+        .expect("selected portable image adapter")
         .create_image_asset(asset.clone(), 0)
         .await
         .expect("asset");
     let copy = operations
         .image_workflows
+        .as_ref()
+        .expect("selected portable image adapter")
         .start_image_copy(ImageCopyRequest {
             kind: ImageCopyKind::Backup,
             device: "/dev/ui-disk0".into(),
@@ -88,6 +92,8 @@ async fn usage_and_image_progress_render_from_contract_events(
     assert_eq!(
         operations
             .image_workflows
+            .as_ref()
+            .expect("selected portable image adapter")
             .image_copy_status(&copy)
             .await
             .expect("copy status")

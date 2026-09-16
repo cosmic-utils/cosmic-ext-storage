@@ -6,14 +6,9 @@ use std::{path::PathBuf, sync::Arc};
 
 use async_trait::async_trait;
 use storage_contracts::{
-    DesktopServices, ImageWorkflowOperations, RuntimeAdapters, ScenarioControl, StorageError,
-    StorageErrorKind, UsageOperations,
+    DesktopServices, RuntimeAdapters, ScenarioControl, StorageError, StorageErrorKind,
 };
-use storage_types::{
-    DesktopImageSelection, ImageAssetRef, ImageAttachment, ImageAttachmentRequest,
-    ImageCopyRequest, ImageWorkflowStatus, UsageDeleteRequest, UsageDeleteResponse,
-    UsageWorkflowRequest, UsageWorkflowStatus,
-};
+use storage_types::DesktopImageSelection;
 
 use crate::operations::{OperationError, StorageOperations};
 
@@ -350,86 +345,5 @@ impl DesktopServices for ProductionDesktopServices {
     async fn open_url(&self, url: &str) -> Result<(), StorageError> {
         open::that_detached(url)
             .map_err(|error| StorageError::new(StorageErrorKind::Other, error.to_string()))
-    }
-}
-
-/// Placeholder production workflow adapter used while legacy UI callers are
-/// migrated.  It makes the boundary explicit and never grants a scenario a
-/// real implementation.
-pub(crate) struct UnavailableWorkflowAdapter;
-
-fn unavailable(operation: &str) -> StorageError {
-    StorageError::new(
-        StorageErrorKind::Unsupported,
-        format!("{operation} is unavailable"),
-    )
-}
-
-#[async_trait]
-impl UsageOperations for UnavailableWorkflowAdapter {
-    async fn list_usage_mounts(&self) -> Result<Vec<String>, StorageError> {
-        Err(unavailable("usage.list_mounts"))
-    }
-    async fn authorize_show_all_files(&self) -> Result<bool, StorageError> {
-        Err(unavailable("usage.authorize_show_all_files"))
-    }
-    async fn start_usage_scan(
-        &self,
-        _request: UsageWorkflowRequest,
-    ) -> Result<String, StorageError> {
-        Err(unavailable("usage.start_scan"))
-    }
-    async fn usage_scan_status(&self, _scan_id: &str) -> Result<UsageWorkflowStatus, StorageError> {
-        Err(unavailable("usage.scan_status"))
-    }
-    async fn wait_for_usage_scan(
-        &self,
-        _scan_id: &str,
-    ) -> Result<UsageWorkflowStatus, StorageError> {
-        Err(unavailable("usage.wait_for_scan"))
-    }
-    async fn delete_usage_files(
-        &self,
-        _request: UsageDeleteRequest,
-    ) -> Result<UsageDeleteResponse, StorageError> {
-        Err(unavailable("usage.delete_files"))
-    }
-}
-
-#[async_trait]
-impl ImageWorkflowOperations for UnavailableWorkflowAdapter {
-    async fn create_image_asset(
-        &self,
-        _asset: ImageAssetRef,
-        _size_bytes: u64,
-    ) -> Result<(), StorageError> {
-        Err(unavailable("image.create"))
-    }
-    async fn attach_image(
-        &self,
-        _request: ImageAttachmentRequest,
-    ) -> Result<ImageAttachment, StorageError> {
-        Err(unavailable("image.attach"))
-    }
-    async fn start_image_copy(&self, _request: ImageCopyRequest) -> Result<String, StorageError> {
-        Err(unavailable("image.start_copy"))
-    }
-    async fn image_copy_status(
-        &self,
-        _operation_id: &str,
-    ) -> Result<ImageWorkflowStatus, StorageError> {
-        Err(unavailable("image.copy_status"))
-    }
-    async fn wait_for_image_copy(
-        &self,
-        _operation_id: &str,
-    ) -> Result<ImageWorkflowStatus, StorageError> {
-        Err(unavailable("image.wait_for_copy"))
-    }
-    async fn cancel_image_copy(&self, _operation_id: &str) -> Result<(), StorageError> {
-        Err(unavailable("image.cancel_copy"))
-    }
-    async fn forget_image_copy(&self, _operation_id: &str) -> Result<(), StorageError> {
-        Err(unavailable("image.forget_copy"))
     }
 }

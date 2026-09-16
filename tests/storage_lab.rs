@@ -86,6 +86,13 @@ async fn production_registry_partition_workflow_and_error_mapping() -> Result<()
         .map_err(|e| e.to_string())?;
     assert_eq!(status.total_bytes, 128 * 1024 * 1024);
     assert_eq!(status.bytes_completed, status.total_bytes);
+    let client_status =
+        cosmic_ext_storage::operations::ImageClient::with_operations(operations.clone())
+            .workflow_status(&copy)
+            .await
+            .map_err(|error| error.to_string())?;
+    assert_eq!(client_status.state, storage_types::WorkflowState::Completed);
+    assert_eq!(client_status.bytes_completed, status.total_bytes);
     assert_eq!(std::fs::metadata(&output)?.len(), status.total_bytes);
     operations
         .image_manager

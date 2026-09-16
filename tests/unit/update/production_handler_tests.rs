@@ -20,6 +20,9 @@ mod mount;
 #[path = "production_network_tests.rs"]
 mod network;
 
+#[path = "production_image_usage_tests.rs"]
+mod image_usage;
+
 async fn outputs(task: Task<Message>) -> Vec<Message> {
     let Some(mut stream) = cosmic::iced::runtime::task::into_stream(task) else {
         return Vec::new();

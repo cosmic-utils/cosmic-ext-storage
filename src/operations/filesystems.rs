@@ -473,12 +473,30 @@ impl FilesystemsClient {
                 parallelism_preset: preset,
             })
             .await?;
-        self.0
-            .usage_operations
-            .wait_for_usage_scan(&scan_id)
-            .await?
-            .result
-            .ok_or_else(|| OperationError::Failed("usage scan completed without a result".into()))
+        loop {
+            let status = self
+                .0
+                .usage_operations
+                .wait_for_usage_scan(&scan_id)
+                .await?;
+            match status.state {
+                WorkflowState::Completed => {
+                    return status.result.ok_or_else(|| {
+                        OperationError::Failed("usage scan completed without a result".into())
+                    });
+                }
+                WorkflowState::Failed | WorkflowState::Cancelled => {
+                    return Err(OperationError::Failed(
+                        status
+                            .message
+                            .unwrap_or_else(|| "Usage scan failed or cancelled".into()),
+                    ));
+                }
+                WorkflowState::Pending | WorkflowState::Running => {
+                    tokio::time::sleep(std::time::Duration::from_millis(100)).await
+                }
+            }
+        }
     }
 
     pub async fn delete_usage_files(

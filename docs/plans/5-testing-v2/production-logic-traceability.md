@@ -222,3 +222,49 @@ production WizardCreate route made the real state assertion fail in
 `/tmp/production-network-mutation.log`; the intentional fault was restored.
 Network delete/rename transactionality and overlapping list reloads remain
 follow-up coverage gaps; these eight tests do not imply complete network coverage.
+
+### Image/usage slice — 2026-09-16
+
+Thirteen real-handler cases replace the parallel image/usage reducer and its
+executor. Coverage includes validation/failure/retry, exactly-once startup,
+progress, cancellation before and after startup, terminal cleanup, discarded
+startup cleanup, stale progress/completion, usage wizard cancellation, scan and
+delete state/results, stale scan/delete responses, and unsupported adapters.
+The existing image/usage scenario now includes a disk and mounted filesystem so
+the normal navigation and usage wizard can operate on declared fixture data.
+
+Caller audit found that ImageClient bypassed the portable image adapter entirely.
+The client now selects its image implementation from the composition root:
+native runs keep the existing descriptor/file copy manager; supplied runtime
+adapters use image-workflow operations and require synthetic asset references.
+No fallback on adapter errors and no dependency changes. The old unused
+UnavailableWorkflowAdapter placeholder was deleted. This is shared application
+orchestration with distinct storage adapters, not another test-only reducer.
+
+The production image subscription uses the app's operations context and the
+same tested status-to-message function. Startup request IDs and completion
+operation IDs prevent replacement dialogs from consuming old work. An early
+cancel is retained until startup returns. Cancel errors are surfaced instead
+of discarded. Restore now respects a failed/busy UnmountResult before copying.
+Terminal operations are explicitly forgotten. The native lab test additionally
+checks the native manager's terminal status through ImageClient.
+
+Usage handlers now use the selected context, UUID scan identities (not colliding
+millisecond timestamps), and delete request identities. Running portable scans
+are awaited rather than misreported as completed-without-result. The waiting
+test uses Tokio's paused clock/test utilities, not a real sleep or custom clock.
+The older create-empty-image/attach dialogs and file picker still have separate
+native I/O paths; they are not covered by these copy/usage claims. Native scan
+progress streaming is also not established by a final-result test.
+
+Initial image tests failed on forbidden global operations access
+(`/tmp/production-image-red.log`); the thirteen replacement cases pass in
+`/tmp/production-image-usage-final.log`. Full fresh coverage and native execution
+are still required before declaring final validation complete.
+
+Deliberately disabling the production image Start and usage WizardStartScan
+routes failed nine real state assertions (`/tmp/production-image-usage-mutation.log`).
+Both intentional faults were restored immediately; no fault was committed.
+
+Exact required-name execution, strict app Clippy, formatting and the
+scenario-disabled build pass (`/tmp/production-image-{names,clippy,normal}.log`).

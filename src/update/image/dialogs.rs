@@ -198,22 +198,39 @@ pub(super) fn image_operation_dialog(
     app: &mut AppModel,
     msg: ImageOperationDialogMessage,
 ) -> Task<Message> {
+    let operations = app.runtime.operations();
+    let client = ImageClient::with_operations(operations.clone());
+    // A discarded start may already have created an operation. Cancel and
+    // release only that owned operation; never bind it to a replacement dialog.
+    if let ImageOperationDialogMessage::Started { request_id, result } = &msg
+        && !matches!(&app.dialog, Some(ShowDialog::ImageOperation(state)) if state.running && state.request_id == Some(*request_id))
+    {
+        if let Ok(operation_id) = result {
+            let operation_id = operation_id.clone();
+            return Task::perform(
+                async move {
+                    client.cancel_operation(&operation_id).await?;
+                    client.forget_operation(&operation_id).await
+                },
+                |result: Result<(), crate::operations::OperationError>| {
+                    if let Err(error) = result {
+                        tracing::warn!(%error, "Discarded image operation cleanup failed");
+                    }
+                    Message::None.into()
+                },
+            );
+        }
+        return Task::none();
+    }
     let Some(ShowDialog::ImageOperation(state)) = app.dialog.as_mut() else {
         return Task::none();
     };
-
     match msg {
         ImageOperationDialogMessage::CancelOperation => {
             if state.running {
+                state.cancel_requested = true;
                 if let Some(operation_id) = state.operation_id.clone() {
-                    return Task::perform(
-                        async move {
-                            let client = ImageClient::new().await?;
-                            client.cancel_operation(&operation_id).await?;
-                            Ok::<(), crate::operations::error::OperationError>(())
-                        },
-                        |_| Message::None.into(),
-                    );
+                    return cancel_image(client, operation_id);
                 }
             } else {
                 app.dialog = None;
@@ -223,70 +240,135 @@ pub(super) fn image_operation_dialog(
             if state.running {
                 return Task::none();
             }
-
             let image_path = state.image_path.clone();
             if image_path.trim().is_empty() {
-                let e = "Image path is required".to_string();
-                tracing::warn!(%e, "image operation dialog validation error");
-                state.error = Some(e);
+                state.error = Some("Image path is required".into());
                 return Task::none();
             }
-
             let kind = state.kind;
             let drive = state.drive.clone();
             let partition = state.partition.clone();
-
+            let request_id = uuid::Uuid::new_v4();
+            state.request_id = Some(request_id);
+            state.cancel_requested = false;
             state.running = true;
             state.error = None;
-
             return Task::perform(
-                async move { start_image_operation(kind, drive, partition, image_path).await },
-                |res: anyhow::Result<String>| match res {
-                    Ok(operation_id) => Message::ImageOperationStarted(operation_id).into(),
-                    Err(e) => Message::ImageOperationDialog(ImageOperationDialogMessage::Complete(
-                        Err(e.to_string()),
-                    ))
-                    .into(),
+                async move {
+                    start_image_operation(operations, kind, drive, partition, image_path)
+                        .await
+                        .map_err(|e| e.to_string())
+                },
+                move |result| {
+                    Message::ImageOperationDialog(ImageOperationDialogMessage::Started {
+                        request_id,
+                        result,
+                    })
+                    .into()
                 },
             );
         }
+        ImageOperationDialogMessage::Started { result, .. } => match result {
+            Ok(operation_id) => {
+                app.image_op_operation_id = Some(operation_id.clone());
+                state.operation_id = Some(operation_id.clone());
+                if state.cancel_requested {
+                    return cancel_image(client, operation_id);
+                }
+            }
+            Err(error) => {
+                state.running = false;
+                state.request_id = None;
+                state.error = Some(error);
+            }
+        },
+        ImageOperationDialogMessage::CancelCompleted {
+            operation_id,
+            result,
+        } => {
+            if state.operation_id.as_ref() == Some(&operation_id)
+                && let Err(error) = result
+            {
+                state.cancel_requested = false;
+                state.error = Some(error);
+            }
+        }
         ImageOperationDialogMessage::Progress(op_id, bytes, total, speed) => {
-            if state.operation_id.as_deref() == Some(op_id.as_str()) {
+            if state.running && state.operation_id.as_deref() == Some(op_id.as_str()) {
                 state.progress = Some((bytes, total, speed));
             }
         }
-        ImageOperationDialogMessage::Complete(res) => {
+        ImageOperationDialogMessage::Complete {
+            operation_id,
+            result,
+        } => {
+            if !state.running || state.operation_id.as_ref() != Some(&operation_id) {
+                return Task::none();
+            }
             state.running = false;
+            state.request_id = None;
             state.operation_id = None;
             state.progress = None;
             app.image_op_operation_id = None;
-
-            match res {
+            let cleanup = Task::perform(
+                async move { client.forget_operation(&operation_id).await },
+                |result| {
+                    if let Err(error) = result {
+                        tracing::warn!(%error, "Image operation cleanup failed");
+                    }
+                    Message::None.into()
+                },
+            );
+            match result {
                 Ok(()) => {
                     app.dialog = Some(ShowDialog::Info {
                         title: fl!("app-title"),
                         body: fl!("ok"),
                     });
-
-                    return Task::perform(async { load_all_drives().await.ok() }, |drives| {
-                        match drives {
-                            None => Message::None.into(),
-                            Some(drives) => Message::UpdateNav(drives, None).into(),
-                        }
-                    });
+                    let refresh = Task::perform(
+                        async move {
+                            crate::models::load::load_all_drives_with_operations(operations).await
+                        },
+                        |result| match result {
+                            Ok(drives) => Message::UpdateNav(drives, None).into(),
+                            Err(error) => Message::Dialog(Box::new(ShowDialog::Info {
+                                title: "Refresh failed".into(),
+                                body: error.to_string(),
+                            }))
+                            .into(),
+                        },
+                    );
+                    return Task::batch([cleanup, refresh]);
                 }
-                Err(e) => {
-                    tracing::error!(%e, "image operation dialog error");
-                    let msg = if e.to_lowercase().contains("cancelled") {
+                Err(error) => {
+                    state.error = Some(if error.to_lowercase().contains("cancelled") {
                         fl!("operation-cancelled")
                     } else {
-                        e
-                    };
-                    state.error = Some(msg);
+                        error
+                    });
+                    return cleanup;
                 }
             }
         }
     }
-
     Task::none()
+}
+
+fn cancel_image(client: ImageClient, operation_id: String) -> Task<Message> {
+    let target = operation_id.clone();
+    Task::perform(
+        async move {
+            client
+                .cancel_operation(&target)
+                .await
+                .map_err(|error| error.to_string())
+        },
+        move |result| {
+            Message::ImageOperationDialog(ImageOperationDialogMessage::CancelCompleted {
+                operation_id: operation_id.clone(),
+                result,
+            })
+            .into()
+        },
+    )
 }

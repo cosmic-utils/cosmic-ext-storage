@@ -256,6 +256,8 @@ pub enum ImageOperationKind {
 
 #[derive(Debug, Clone)]
 pub struct ImageOperationDialog {
+    pub request_id: Option<uuid::Uuid>,
+    pub cancel_requested: bool,
     pub kind: ImageOperationKind,
     pub drive: UiDrive,
     pub partition: Option<VolumeInfo>,

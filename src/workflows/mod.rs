@@ -10,15 +10,13 @@ use std::{fmt, sync::Arc};
 
 use storage_contracts::{DesktopServices, ScenarioControl};
 
-use crate::{operations::StorageOperations, runtime::AppRuntime};
+use crate::runtime::AppRuntime;
 
-pub(crate) mod image_usage;
 pub(crate) mod reload;
 
 /// The only capabilities workflow executors may use.
 #[derive(Clone)]
 pub(crate) struct WorkflowCapabilities {
-    pub(crate) operations: Arc<StorageOperations>,
     #[allow(dead_code)]
     pub(crate) desktop: Arc<dyn DesktopServices>,
     pub(crate) scenario_control: Option<Arc<dyn ScenarioControl>>,
@@ -27,7 +25,6 @@ pub(crate) struct WorkflowCapabilities {
 impl From<&AppRuntime> for WorkflowCapabilities {
     fn from(runtime: &AppRuntime) -> Self {
         Self {
-            operations: runtime.operations(),
             desktop: runtime.desktop(),
             scenario_control: runtime.scenario_control(),
         }
@@ -116,6 +113,5 @@ impl Drop for SecretInput {
 /// harness. It contains no mock backend or parallel application model.
 #[derive(Default)]
 pub(crate) struct ApplicationWorkflowState {
-    pub(crate) image_usage: image_usage::State,
     pub(crate) reload: reload::State,
 }

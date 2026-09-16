@@ -11,7 +11,7 @@ use storage_contracts::ScenarioDiagnostics;
 use crate::{
     AppModel, AppRuntime,
     operations::GlobalOperationsGuard,
-    workflows::{EffectRecord, SecretInput, WorkflowCapabilities, image_usage, reload},
+    workflows::{EffectRecord, SecretInput, WorkflowCapabilities, reload},
 };
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -85,55 +85,36 @@ pub struct TraceProjection {
 }
 
 enum ScheduledEffect {
-    ImageUsage(image_usage::Effect),
     Reload(reload::Effect),
 }
 
 impl ScheduledEffect {
     fn workflow(&self) -> &'static str {
         match self {
-            Self::ImageUsage(_) => "image_usage",
             Self::Reload(_) => "reload",
         }
     }
 
     fn operation(&self) -> &'static str {
         match self {
-            Self::ImageUsage(effect) => effect.operation(),
             Self::Reload(effect) => effect.operation(),
         }
     }
 
     fn generation(&self) -> u64 {
         match self {
-            Self::ImageUsage(effect) => effect.generation(),
             Self::Reload(effect) => effect.generation(),
         }
     }
 }
 
 enum ScheduledCompletion {
-    ImageUsage(image_usage::Completion),
     Reload(reload::Completion),
 }
 
 impl ScheduledCompletion {
     fn status(&self) -> &'static str {
         match self {
-            Self::ImageUsage(image_usage::Completion::ImageStarted { result, .. }) => {
-                status(result)
-            }
-            Self::ImageUsage(image_usage::Completion::ImagePolled { result, .. }) => status(result),
-            Self::ImageUsage(image_usage::Completion::ImageCancelled { result, .. }) => {
-                status(result)
-            }
-            Self::ImageUsage(image_usage::Completion::UsageStarted { result, .. }) => {
-                status(result)
-            }
-            Self::ImageUsage(image_usage::Completion::UsagePolled { result, .. }) => status(result),
-            Self::ImageUsage(image_usage::Completion::UsageDeleted { result, .. }) => {
-                status(result)
-            }
             Self::Reload(reload::Completion::Advanced { result, .. }) => status(result),
             Self::Reload(reload::Completion::Reloaded { result, .. }) => match result {
                 Ok(storage_contracts::ScenarioReload::Applied(_)) => "ok",
@@ -212,16 +193,6 @@ impl WorkflowHarness {
         self.runtime.operations().registry.block.id().0
     }
 
-    pub fn dispatch_image_usage(
-        &mut self,
-        intent: image_usage::ImageUsageIntent,
-    ) -> Result<(), WorkflowHarnessError> {
-        let generation = self.next_generation();
-        let effects = self.model.reduce_image_usage_workflow(intent, generation);
-        self.enqueue_image_usage(effects);
-        Ok(())
-    }
-
     pub fn dispatch_reload(
         &mut self,
         intent: reload::ReloadIntent,
@@ -230,10 +201,6 @@ impl WorkflowHarness {
         let effects = self.model.reduce_reload_workflow(intent, generation);
         self.enqueue_reload(effects);
         Ok(())
-    }
-
-    pub fn image_usage_snapshot(&self) -> image_usage::ImageUsageSnapshot {
-        self.model.workflows.image_usage.snapshot()
     }
 
     pub fn reload_snapshot(&self) -> reload::ReloadSnapshot {
@@ -264,9 +231,6 @@ impl WorkflowHarness {
             has_secret: false,
         });
         let completion = match effect {
-            ScheduledEffect::ImageUsage(effect) => ScheduledCompletion::ImageUsage(
-                image_usage::execute(&self.capabilities, effect).await,
-            ),
             ScheduledEffect::Reload(effect) => {
                 ScheduledCompletion::Reload(reload::execute(&self.capabilities, effect).await)
             }
@@ -281,9 +245,6 @@ impl WorkflowHarness {
             return Ok(false);
         };
         match completion {
-            ScheduledCompletion::ImageUsage(completion) => {
-                image_usage::reduce_completion(&mut self.model.workflows.image_usage, completion);
-            }
             ScheduledCompletion::Reload(completion) => {
                 reload::reduce_completion(&mut self.model.workflows.reload, completion);
             }
@@ -397,11 +358,6 @@ impl WorkflowHarness {
         let bytes = serde_json::to_vec(&entries)
             .map_err(|_| WorkflowHarnessError::TemporaryRootUnavailable)?;
         fs::write(&self.trace, bytes).map_err(|_| WorkflowHarnessError::TemporaryRootUnavailable)
-    }
-
-    fn enqueue_image_usage(&mut self, effects: Vec<image_usage::Effect>) {
-        self.queue
-            .extend(effects.into_iter().map(ScheduledEffect::ImageUsage));
     }
 
     fn enqueue_reload(&mut self, effects: Vec<reload::Effect>) {

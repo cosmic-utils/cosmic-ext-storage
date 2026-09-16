@@ -93,19 +93,6 @@ impl AppModel {
     }
 
     #[cfg(feature = "test-backend")]
-    pub(crate) fn reduce_image_usage_workflow(
-        &mut self,
-        intent: crate::workflows::image_usage::ImageUsageIntent,
-        generation: u64,
-    ) -> Vec<crate::workflows::image_usage::Effect> {
-        crate::workflows::image_usage::reduce_intent(
-            &mut self.workflows.image_usage,
-            intent,
-            generation,
-        )
-    }
-
-    #[cfg(feature = "test-backend")]
     pub(crate) fn reduce_reload_workflow(
         &mut self,
         intent: crate::workflows::reload::ReloadIntent,

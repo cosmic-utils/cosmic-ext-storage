@@ -11,6 +11,9 @@ use std::{
     time::Instant,
 };
 
+use storage_types::{
+    ImageAssetRef, ImageCopyKind, ImageCopyRequest, ImageWorkflowStatus, WorkflowState,
+};
 use tokio::sync::{Mutex, watch};
 
 use super::{OperationError, StorageOperations, shared};
@@ -210,6 +213,37 @@ impl ImageOperationManager {
             .map(|_| ())
             .ok_or_else(|| OperationError::MissingOperation(id.into()))
     }
+
+    pub async fn workflow_status(&self, id: &str) -> Result<ImageWorkflowStatus, OperationError> {
+        let operations = self.operations.lock().await;
+        let operation = operations
+            .get(id)
+            .ok_or_else(|| OperationError::MissingOperation(id.into()))?;
+        let progress = operation.progress.lock().await;
+        let (state, message) = if operation.completion.has_changed().is_err() {
+            match operation.completion.borrow().clone() {
+                Ok(()) => (WorkflowState::Completed, None),
+                Err(message) => (
+                    if operation.cancelled.load(Ordering::Acquire) {
+                        WorkflowState::Cancelled
+                    } else {
+                        WorkflowState::Failed
+                    },
+                    Some(message),
+                ),
+            }
+        } else {
+            (WorkflowState::Running, None)
+        };
+        Ok(ImageWorkflowStatus {
+            operation_id: id.into(),
+            state,
+            message,
+            bytes_completed: progress.bytes_completed,
+            bytes_total: progress.total_bytes,
+            speed_bytes_per_sec: progress.speed_bytes_per_sec,
+        })
+    }
 }
 
 trait Pipe: Sized {
@@ -223,10 +257,23 @@ impl<T> Pipe for T {}
 pub struct ImageClient(Arc<StorageOperations>);
 #[allow(dead_code)]
 impl ImageClient {
+    pub fn with_operations(operations: Arc<StorageOperations>) -> Self {
+        Self(operations)
+    }
     pub async fn new() -> Result<Self, OperationError> {
         Ok(Self(shared().await?))
     }
     pub async fn backup_drive(&self, device: &str, output: &str) -> Result<String, OperationError> {
+        if let Some(adapter) = &self.0.image_workflows {
+            return adapter
+                .start_image_copy(ImageCopyRequest {
+                    kind: ImageCopyKind::Backup,
+                    device: device.into(),
+                    asset: ImageAssetRef::new(output).map_err(OperationError::InvalidInput)?,
+                })
+                .await
+                .map_err(Into::into);
+        }
         self.0
             .image_manager
             .backup(
@@ -244,6 +291,16 @@ impl ImageClient {
         self.backup_drive(device, output).await
     }
     pub async fn restore_drive(&self, device: &str, image: &str) -> Result<String, OperationError> {
+        if let Some(adapter) = &self.0.image_workflows {
+            return adapter
+                .start_image_copy(ImageCopyRequest {
+                    kind: ImageCopyKind::Restore,
+                    device: device.into(),
+                    asset: ImageAssetRef::new(image).map_err(OperationError::InvalidInput)?,
+                })
+                .await
+                .map_err(Into::into);
+        }
         self.0
             .image_manager
             .restore(
@@ -269,15 +326,50 @@ impl ImageClient {
             .map_err(Into::into)
     }
     pub async fn cancel_operation(&self, id: &str) -> Result<(), OperationError> {
+        if let Some(adapter) = &self.0.image_workflows {
+            return adapter.cancel_image_copy(id).await.map_err(Into::into);
+        }
         self.0.image_manager.cancel(id).await
     }
+    pub async fn workflow_status(&self, id: &str) -> Result<ImageWorkflowStatus, OperationError> {
+        if let Some(adapter) = &self.0.image_workflows {
+            return adapter.image_copy_status(id).await.map_err(Into::into);
+        }
+        self.0.image_manager.workflow_status(id).await
+    }
     pub async fn get_operation_status(&self, id: &str) -> Result<OperationStatus, OperationError> {
-        self.0.image_manager.status(id).await
+        let status = self.workflow_status(id).await?;
+        Ok(OperationStatus {
+            bytes_completed: status.bytes_completed,
+            total_bytes: status.bytes_total,
+            speed_bytes_per_sec: status.speed_bytes_per_sec,
+        })
     }
     pub async fn wait_for_operation_completion(&self, id: &str) -> Result<(), OperationError> {
+        if self.0.image_workflows.is_some() {
+            loop {
+                let status = self.workflow_status(id).await?;
+                match status.state {
+                    WorkflowState::Completed => return Ok(()),
+                    WorkflowState::Failed | WorkflowState::Cancelled => {
+                        return Err(OperationError::Failed(
+                            status
+                                .message
+                                .unwrap_or_else(|| "Image operation failed or cancelled".into()),
+                        ));
+                    }
+                    WorkflowState::Pending | WorkflowState::Running => {
+                        tokio::time::sleep(std::time::Duration::from_millis(100)).await
+                    }
+                }
+            }
+        }
         self.0.image_manager.wait(id).await
     }
     pub async fn forget_operation(&self, id: &str) -> Result<(), OperationError> {
+        if let Some(adapter) = &self.0.image_workflows {
+            return adapter.forget_image_copy(id).await.map_err(Into::into);
+        }
         self.0.image_manager.forget(id).await
     }
 }
