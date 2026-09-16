@@ -1,6 +1,9 @@
 # Testing V2 specification: executable storage integration lab
 
-**Status:** proposed design; no implementation in this document.
+**Status (2026-09-16):** non-rendered execution policy and production-handler
+migration implemented; full numerical/support/rendered acceptance incomplete.
+See the [fresh execution record](non-rendered-execution-record.md). The original
+design below is retained; it is not a claim that its full acceptance gates pass.
 
 **Current scope amendment (2026-09-15):** the user has agreed to pause rendered
 UI testing and additional dependency patches, while retaining native backend

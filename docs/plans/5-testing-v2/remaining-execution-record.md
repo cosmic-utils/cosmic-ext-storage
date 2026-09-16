@@ -1,5 +1,13 @@
 # Testing V2 remaining execution
 
+Current direction (2026-09-16): the approved
+[non-rendered regrouping](non-rendered-testing-plan.md) supersedes the earlier
+rendered execution sequence below. Actual application handlers now replace the
+parallel workflow harness; rendered execution is default-off and dependency
+patching is frozen. See [production-logic traceability](production-logic-traceability.md)
+for each app fix, regression and cleanup. Earlier measurements and dependency
+investigations below remain historical, not current acceptance evidence.
+
 Status: deterministic regressions, approved Bash extraction and pinned
 focus/tooltip repairs are implemented. Full form flows require a decision on
 missing custom-widget accessibility support; collector integration and

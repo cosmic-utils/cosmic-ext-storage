@@ -1,10 +1,11 @@
 # Production business-logic audit
 
-2026-09-16, checkpoint `95b4f66`. This is a caller-based migration ledger, not
-an assertion that the migration is complete. No rendered tests are required
-to exercise the state and operation boundaries below.
+2026-09-16. The starting audit below describes checkpoint `95b4f66`, not current
+code. The seven production-handler families have since been migrated and the
+parallel harness removed; per-family changes and validation follow below.
+This is not a claim of complete coverage of every handler or rendered behavior.
 
-## Findings
+## Starting audit findings (historical)
 
 - All five `AppModel::reduce_*_workflow` entry points and the `workflows` model
   field are gated by `test-backend`. Their only dispatch callers are the
@@ -26,7 +27,7 @@ to exercise the state and operation boundaries below.
   desktop/window actions and bound waits; do not simulate a second UI runtime.
   Use small shared production executors where that is clearer.
 
-## Migration matrix
+## Starting migration matrix (historical)
 
 | Family | Actual production route/state/effect | Existing evidence and remaining action |
 | --- | --- | --- |

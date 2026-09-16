@@ -1,7 +1,9 @@
 # Testing V2 regrouping: production logic first, rendered UI opt-in
 
-Status: production-handler migration implemented; final host/native coverage and
-CI verification in progress. Numerical/full-UI acceptance is not complete.
+Status: production-handler migration and default-off rendered execution
+implemented and locally verified. Fresh host/native coverage is recorded in
+[the execution record](non-rendered-execution-record.md). Numerical, complete
+support-source and full-UI acceptance remain incomplete.
 Date: 2026-09-15. Continue on `4-ui-testing`; no new prototype branch.
 
 ## Decision and precedence
@@ -260,18 +262,20 @@ validation; instrumented provenance; and human visual/accessibility review.
 ## Completion checklist for this regrouping
 
 - [x] Checkpoint preserved; dependency work frozen and proposals marked paused.
-- [ ] Default local/CI execution launches no rendered-UI infrastructure.
+- [x] Default local/CI execution launches no rendered-UI infrastructure.
 - [x] Explicit opt-in and disabled/error paths are regression-tested.
-- [ ] Non-rendered coverage has validated provenance and honest unchanged scope.
+- [x] Non-rendered Rust coverage has validated provenance and honest unchanged scope; support measurement remains explicitly unmeasured.
 - [x] Traceability identifies production callers and meaningful behavior tests.
 - [x] Every migrated workflow is shared by production and tests; duplicates removed.
 - [ ] Backend/native and application-logic gaps are tested at the correct layer.
-- [ ] Fresh coverage, build contracts and final-head CI evidence are recorded.
-- [ ] Unmet numerical gates remain failures; rendered/visual acceptance remains deferred.
+- [x] Fresh coverage, build contracts and implementation-head CI evidence are recorded (`1b3aec6`; documentation-only follow-ups use the same build/test inputs).
+- [x] Unmet numerical gates remain failures; rendered/visual acceptance remains deferred.
 
-Next action: finish fresh coverage/CI verification and record remaining uncovered
-obligations. See `production-logic-traceability.md` for actual
-callers, slice evidence and remaining state-ordering gaps.
+Next action: deepen the remaining production/backend coverage and complete
+support-source measurement listed in `non-rendered-execution-record.md`.
+This regrouping is not completion of the original near-100% coverage objective.
+See `production-logic-traceability.md` for actual callers, slice evidence and
+remaining state-ordering gaps. Rendered/dependency work must not restart implicitly.
 
 ### Execution checkpoint — 2026-09-16
 
@@ -303,7 +307,9 @@ describe mapped Rust code, not support-script coverage or full acceptance.
 The 98–100% and changed-code gates remain unchanged and failing. Final-head
 measurement must be regenerated after source changes.
 
-Phase D caller audit is recorded in `production-logic-traceability.md`. The
-create/format slice is being migrated to production handlers and has exposed
-actual validation/adapter gaps; remaining families and final CI are outstanding.
-This is not completion of the plan.
+Phase D's starting caller audit and the completed production-handler migrations
+are recorded in `production-logic-traceability.md`. Create/format, logical,
+encryption, unmount, network, image/usage and reload tests now execute the normal
+handlers; their duplicate reducers/harness have been deleted. These tests exposed
+and fixed real validation, adapter selection and stale-completion defects.
+Numerical, full support-source and rendered acceptance remain separate open gates.

@@ -2,6 +2,12 @@
 
 ## Current execution direction — 2026-09-15
 
+Implementation checkpoint (2026-09-16): the regrouping's UI guards, real-handler
+migrations and duplicate-harness cleanup are implemented and locally verified.
+[Fresh execution evidence](non-rendered-execution-record.md) records passing
+host/native runs, current coverage and remaining gates. Do not resume the
+historical dependency/rendered work below or interpret this as near-100% acceptance.
+
 Follow [the non-rendered testing regrouping plan](non-rendered-testing-plan.md)
 for outstanding work. The user has paused rendered-UI acceptance and further
 dependency patching. Its default-off execution policy, honest host+lab coverage

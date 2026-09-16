@@ -1,9 +1,13 @@
 # Testing V2 remaining gap ledger
 
-Current direction (2026-09-15): [non-rendered testing regrouping](non-rendered-testing-plan.md).
-Rendered-UI and further dependency work are paused. Audit production/test
-workflow sharing before interpreting existing workflow tests as UI business-logic
-coverage. The measurements below remain historical gaps, not a fresh baseline.
+Current direction (2026-09-16): [non-rendered testing regrouping](non-rendered-testing-plan.md).
+The parallel harness is removed; 61 real-handler tests now exercise production
+state and operation routing. Rendered-UI and further dependency work are paused.
+[Fresh execution and remaining gaps](non-rendered-execution-record.md) at
+`1b3aec6` supersede the numerical baseline below: workspace lines 40.04%, app
+lines 25.61%, with 47 unmapped files and support-script measurement incomplete.
+No scope meets its unchanged target. The tables below retain earlier history;
+their scenario-reducer and rendered-test priorities are not current instructions.
 
 Baseline: `5ff5e049756c5389f74a2bb0622b9612c219730f`, fresh run
 `run-eu4hrjun`, 2026-09-14. This ledger directs implementation; it is not
