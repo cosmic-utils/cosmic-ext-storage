@@ -61,7 +61,8 @@ python3 tools/testing/run_coverage.py --report-only --base origin/main
 ```
 
 This checks source inventory, source hashes, executable hashes, and raw profile
-hashes first. It refuses changed sources or a failed underlying test run.
+hashes and the captured PR-base commit first. It refuses changed sources, a
+changed comparison base or a failed underlying test run.
 Regeneration is not another test execution and cannot supply missing UI cases.
 
 For explicitly requested rendered coverage (currently blocked/incomplete):
@@ -80,3 +81,7 @@ Do not lower thresholds, create broad exceptions, or interpret an absent
 profile/package as zero executable code. The exception manifest remains
 empty; final coverage acceptance is still gated by the Testing V2 spec,
 including test-support coverage outside Rust.
+The acceptance report explicitly inventories Python/shell support sources as
+unmeasured and fails that gate until complete line/function collection and
+subprocess/container provenance are integrated. Standalone collector probes
+and Python unit-suite measurements do not satisfy that obligation.

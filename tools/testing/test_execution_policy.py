@@ -11,6 +11,17 @@ from run_coverage import gate
 
 
 class ExecutionPolicyTests(unittest.TestCase):
+    def test_comparison_base_is_bound_to_original_policy(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            path = root / "target/coverage/non-rendered/run-1/execution-policy.json"
+            path.parent.mkdir(parents=True)
+            path.write_text(json.dumps(policy.resolve("non-rendered", {}) | {"comparison_base": "a" * 40}))
+            evidence = dict(mode="non-rendered", execution_policy=dict(
+                path=str(path.relative_to(root)), sha256=hashlib.sha256(path.read_bytes()).hexdigest()))
+            policy.validate(evidence, root, "non-rendered", "a" * 40)
+            with self.assertRaisesRegex(ValueError, "comparison base"):
+                policy.validate(evidence, root, "non-rendered", "b" * 40)
     def test_strict_flag_and_explicit_full_mode(self):
         self.assertEqual(policy.resolve("non-rendered", {})["ui_e2e_enabled"], False)
         for flag in ("", "true", " 1", "2"):

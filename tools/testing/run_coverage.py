@@ -251,11 +251,13 @@ def main() -> int:
     parser.add_argument("--report-only", action="store_true", help="Re-export the last successful host/lab run only if its sources, profiles and ELFs are unchanged")
     args = parser.parse_args()
     policy = execution_policy.resolve(args.mode)
+    args.base = execution_policy.comparison_base(ROOT, args.base)
+    policy["comparison_base"] = args.base
     output = ROOT / "target/coverage" / args.mode
     output.mkdir(parents=True, exist_ok=True)
     if args.report_only:
         evidence = json.loads((output / "evidence.json").read_text())
-        execution_policy.validate(evidence, ROOT, args.mode)
+        execution_policy.validate(evidence, ROOT, args.mode, args.base)
         gate.validate_provenance(evidence, ROOT, args.mode)
         # validate_evidence also requires UI execution. Validate raw bytes here
         # without claiming the incomplete source set passes acceptance.

@@ -307,6 +307,7 @@ def main() -> int:
     args.lcov = args.lcov or output / "lcov.info"
     args.evidence = args.evidence or output / "evidence.json"
     root = Path(__file__).resolve().parents[2]
+    base = execution_policy.comparison_base(root, args.base)
     lines = read_lcov(args.lcov.read_text(), root)
     functions = read_functions(json.loads(args.summary.read_text()), root)
     if set(lines) != set(functions):
@@ -314,7 +315,7 @@ def main() -> int:
     evidence = json.loads(args.evidence.read_text())
     evidence_failures = []
     try:
-        execution_policy.validate(evidence, root, args.mode)
+        execution_policy.validate(evidence, root, args.mode, base)
     except (KeyError, ValueError, OSError) as error:
         evidence_failures.append(str(error))
     for name, path in (("summary.json", args.summary), ("lcov.info", args.lcov)):
@@ -329,7 +330,7 @@ def main() -> int:
         except (KeyError, ValueError, OSError) as error:
             evidence_failures.append(str(error))
     exempt = exceptions(tomllib.loads(args.exceptions.read_text()), lines, functions, tests, dt.date.today())
-    report, failures = evaluate(lines, functions, changed_lines(root, args.base), exempt if not evidence_failures else {})
+    report, failures = evaluate(lines, functions, changed_lines(root, base), exempt if not evidence_failures else {})
     expected_scopes = {scope(path) for path in workspace_sources(root)}
     for missing in sorted(expected_scopes - report.keys()):
         failures.append(f"missing workspace package coverage: {missing}")
@@ -339,7 +340,16 @@ def main() -> int:
     # counts, but expose every absent mapping for review instead of hiding it.
     if unmapped:
         failures.append("unmeasured workspace sources require mapping review: " + ", ".join(unmapped))
-    print(json.dumps({"mode": args.mode, "ui_status": evidence.get("ui_status"),
+    support_sources = sorted(path.relative_to(root).as_posix()
+                             for directory in ("tools/testing", "tools/storage-lab", "tools/ui-testing")
+                             for path in (root / directory).rglob("*")
+                             if path.suffix in {".py", ".sh"} and not path.name.startswith("test_")
+                             and "__pycache__" not in path.parts)
+    support = {"status": "unmeasured", "sources": support_sources,
+               "reason": "Complete Python/shell line and function provenance is not integrated; Rust metrics do not cover these sources."}
+    failures.append("support-source coverage requires complete Python/shell measurement and provenance")
+    print(json.dumps({"mode": args.mode, "comparison_base": base, "ui_status": evidence.get("ui_status"),
+                      "support_coverage": support,
                       "scopes": report, "unmapped_sources": unmapped, "failures": failures}, indent=2))
     return bool(failures)
 

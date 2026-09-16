@@ -2,6 +2,8 @@
 import hashlib
 import json
 import os
+import re
+import subprocess
 
 MODES = ("non-rendered", "full-ui")
 
@@ -18,7 +20,14 @@ def resolve(mode, environment=None):
     return {"schema_version": 1, "mode": mode, "ui_e2e_enabled": flag == "1"}
 
 
-def validate(document, root, expected_mode):
+def comparison_base(root, value):
+    return subprocess.check_output(
+        ["git", "rev-parse", "--verify", "--end-of-options", f"{value}^{{commit}}"],
+        cwd=root, text=True,
+    ).strip()
+
+
+def validate(document, root, expected_mode, expected_base=None):
     """Bind the expected mode to the policy captured before instrumentation."""
     if expected_mode not in MODES or document.get("mode") != expected_mode:
         raise ValueError("coverage execution mode mismatch")
@@ -30,6 +39,11 @@ def validate(document, root, expected_mode):
     if hashlib.sha256(data).hexdigest() != proof.get("sha256"):
         raise ValueError("execution policy changed since instrumentation")
     policy = json.loads(data)
+    captured_base = policy.pop("comparison_base", None)
+    if captured_base is not None and not re.fullmatch(r"[0-9a-f]{40}|[0-9a-f]{64}", captured_base):
+        raise ValueError("invalid captured comparison base")
+    if expected_base is not None and captured_base != expected_base:
+        raise ValueError("coverage comparison base missing or changed since instrumentation")
     if type(policy.get("ui_e2e_enabled")) is not bool:
         raise ValueError("invalid captured UI execution flag")
     if policy != resolve(expected_mode, {"UI_E2E_ENABLED": "1" if policy["ui_e2e_enabled"] else "0"}):
