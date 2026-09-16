@@ -1,6 +1,7 @@
 # Non-rendered closing pass
 
-Date: 2026-09-16. Branch: `4-ui-testing`. Validation in progress.
+Date: 2026-09-16. Branch: `4-ui-testing`. Implementation and baseline calibration complete;
+merge requires green checks on [PR #117](https://github.com/cosmic-utils/cosmic-ext-storage/pull/117).
 
 ## Approved acceptance policy
 
@@ -107,8 +108,9 @@ The target-policy exit code is 1 because those targets are unmet, not a test fai
 The previous workspace/app line results were 40.04% / 25.61%. The repeat adds
 one covered UDisks line (3,243 versus 3,242); all other counters are identical.
 The committed baseline takes the lower observed ratio for each package and
-workspace, with no rounding allowance. `coverage-baseline.json` records every
-scope, source inventory, reviewed hashes and both acceptance-report digests.
+workspace across local and CI runs, with no rounding allowance.
+`coverage-baseline.json` records every scope, source inventory, reviewed hashes
+and all three acceptance-report digests.
 47 unmapped Rust files and 15 unmeasured support scripts remain visible.
 
 Saved local reports: `target/coverage/baseline-evidence/run-3dbfptjx/` and
@@ -117,4 +119,34 @@ respective `run-*` directories. The first is an artifact copy, not a new run.
 Fresh CI will execute using the committed baseline; target-policy evidence is
 not relabeled as a passing baseline-policy run.
 
-Pending implementation-head CI. This checkpoint is not yet a green merge recommendation.
+### CI calibration and merge condition
+
+[CI calibration run 35133799269](https://github.com/cosmic-utils/cosmic-ext-storage/actions/runs/35133799269)
+at `d442432832048de0d3a6cfcd2747d3222d620112` passed every functional check,
+448 instrumented host tests and all 17 native cases. Coverage provenance passed;
+the only acceptance failures were UDisks/workspace line/function floors calibrated
+solely on local runs. App coverage was exactly identical. The CI source and build
+input hashes match both local runs, and report/policy hashes were checked.
+
+CI observed UDisks 3,209/5,231 lines and 369/767 functions; workspace
+12,422/28,518 lines (43.56%) and 1,466/3,358 functions (43.66%). CI exercised more
+fixture device-node/capability setup (897 lab lines versus 869 locally) and three
+additional scanner lines. The local run exercised encrypted-partition discovery,
+NVMe/nonrotating-drive branches and transient vanished-LVM-group recovery absent
+from CI. These are environment/ordering-dependent paths, not a loss of application
+test execution. In particular, incidental host encrypted-partition discovery is
+**not** a substitute for a dedicated owned encrypted-partition discovery test;
+retain that as a follow-up gap.
+
+The baseline now records the lower observed per-scope ratios across these three
+runs. This is explicit initial local/CI calibration, not permission to lower a
+future baseline whenever tests regress. No test failure or provenance error is
+waived, and the historical CI result remains failed. Raw CI profiles/ELFs were
+validated by the checker in CI; the downloaded report artifact is not claimed to
+contain those large raw files for independent local revalidation.
+
+Merge condition: a **fresh** CI run must pass with this final captured baseline.
+The PR checks are the authoritative result for the pushed head. A documentation-
+only follow-up does not change the recorded build/test inputs; any source, test,
+runner or baseline change requires fresh matching evidence. No main-branch merge
+or repository protection change is part of this pass.

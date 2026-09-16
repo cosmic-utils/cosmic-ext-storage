@@ -7,11 +7,12 @@ obligations. Historical figures and stricter blocking statements below describe
 their recorded checkpoints, not the newly approved merge policy.
 
 Current direction (2026-09-16): [non-rendered testing regrouping](non-rendered-testing-plan.md).
-The parallel harness is removed; 61 real-handler tests now exercise production
+The parallel harness is removed; 77 real-handler tests now exercise production
 state and operation routing. Rendered-UI and further dependency work are paused.
-[Fresh execution and remaining gaps](non-rendered-execution-record.md) at
-`1b3aec6` supersede the numerical baseline below: workspace lines 40.04%, app
-lines 25.61%, with 47 unmapped files and support-script measurement incomplete.
+[The closing pass](non-rendered-closing-pass.md) supersedes the numerical baseline
+below: CI workspace lines 43.56%, app lines 30.58%, with 47 unmapped files and
+support-script measurement incomplete. The final baseline combines observed
+local/CI floors; future regressions require investigation, not automatic lowering.
 No scope meets its unchanged target. The tables below retain earlier history;
 their scenario-reducer and rendered-test priorities are not current instructions.
 

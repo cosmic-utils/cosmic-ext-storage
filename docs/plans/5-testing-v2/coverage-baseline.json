@@ -12,6 +12,11 @@
       "revision": "9553a6f9e199304febaba15c9048f76682a0438f",
       "run": "run-7h35tjgf",
       "report_sha256": "6de98b348f0569d89d4099177f71e0d92abbb64a04ee8ab0ae0d710be0f30d92"
+    },
+    {
+      "revision": "d442432832048de0d3a6cfcd2747d3222d620112",
+      "run": "run-wjttxwe1",
+      "report_sha256": "e4a8896b9067ad89726b468eb23d6b5cccd49174c4ddc254e70a21bf2fa81c08"
     }
   ],
   "scopes": {
@@ -52,9 +57,9 @@
       "function_total": 182
     },
     "crates/storage-udisks": {
-      "line_covered": 3242,
+      "line_covered": 3209,
       "line_total": 5231,
-      "function_covered": 370,
+      "function_covered": 369,
       "function_total": 767
     },
     "crates/test-backend": {
@@ -70,9 +75,9 @@
       "function_total": 180
     },
     "workspace": {
-      "line_covered": 12424,
+      "line_covered": 12422,
       "line_total": 28518,
-      "function_covered": 1467,
+      "function_covered": 1466,
       "function_total": 3358
     }
   },

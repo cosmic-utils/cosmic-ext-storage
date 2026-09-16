@@ -273,12 +273,13 @@ validation; instrumented provenance; and human visual/accessibility review.
 - [x] Non-rendered Rust coverage has validated provenance and honest unchanged scope; support measurement remains explicitly unmeasured.
 - [x] Traceability identifies production callers and meaningful behavior tests.
 - [x] Every migrated workflow is shared by production and tests; duplicates removed.
-- [ ] Backend/native and application-logic gaps are tested at the correct layer.
+- [x] Prioritised backend/native and application-logic gaps are tested at the correct layer; remaining gaps are explicitly deferred in the closing pass.
 - [x] Fresh coverage, build contracts and implementation-head CI evidence are recorded (`1b3aec6`; documentation-only follow-ups use the same build/test inputs).
-- [x] Unmet numerical gates remain failures; rendered/visual acceptance remains deferred.
+- [x] Unmet numerical targets remain visible long-term failures; the user-approved measured baseline governs non-rendered merge acceptance. Rendered/visual acceptance remains deferred.
 
-Next action: deepen the remaining production/backend coverage and complete
-support-source measurement listed in `non-rendered-execution-record.md`.
+Current closing evidence and merge condition: `non-rendered-closing-pass.md`.
+Later work: deepen remaining production/backend coverage and complete support-source
+measurement; these are explicit follow-ups, not hidden claims of current coverage.
 This regrouping is not completion of the original near-100% coverage objective.
 See `production-logic-traceability.md` for actual callers, slice evidence and
 remaining state-ordering gaps. Rendered/dependency work must not restart implicitly.
