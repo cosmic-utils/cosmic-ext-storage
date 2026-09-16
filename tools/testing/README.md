@@ -5,7 +5,9 @@ a completed near-100% coverage migration. Default `non-rendered` coverage requir
 real host and native-lab evidence, with rendered UI explicitly deferred.
 Opt-in `full-ui` coverage still requires all eight UI cases and their profiles;
 a capability probe does not satisfy that gate. Both modes retain the same
-production source inventory and numerical thresholds.
+production source inventory. Non-rendered acceptance uses the user-approved,
+committed no-regression baseline; full-ui enforces the long-term 98–100% targets.
+See [the approved closing policy](../../docs/plans/5-testing-v2/non-rendered-closing-pass.md).
 
 ## Run
 
@@ -36,7 +38,7 @@ The checker still reports diagnostic counts when acceptance fails.
 Each run captures a hashed execution policy before instrumentation; report
 reuse validates that policy and the expected mode. UI-off is not a successful
 UI run, and a non-rendered report cannot satisfy full-UI acceptance. Sources
-without LLVM mappings are listed as unmeasured and fail pending mapping review;
+without LLVM mappings are listed as unmeasured and require explicit baseline review;
 this includes distinguishing declaration-only files from missing executable
 code without inventing line counts.
 
@@ -77,11 +79,16 @@ and local recipes independently guard their launch boundaries. `--all-features`
 does not opt in. Default CI keeps the UI check context with a deferred summary;
 manual workflow dispatch offers the explicit rendered diagnostic opt-in.
 
-Do not lower thresholds, create broad exceptions, or interpret an absent
-profile/package as zero executable code. The exception manifest remains
-empty; final coverage acceptance is still gated by the Testing V2 spec,
-including test-support coverage outside Rust.
-The acceptance report explicitly inventories Python/shell support sources as
-unmeasured and fails that gate until complete line/function collection and
-subprocess/container provenance are integrated. Standalone collector probes
-and Python unit-suite measurements do not satisfy that obligation.
+Do not interpret an absent profile/package as zero executable code. The exception
+manifest remains empty. The non-rendered baseline enforces measured per-package
+and workspace line/function ratios, inventories new production sources, and
+requires review when unmapped Rust or unmeasured support files change. It is
+bound by hash before execution and is never automatically updated by CI.
+Python/shell support remains explicitly unmeasured, not counted as covered.
+Standalone probes and Python unit-suite measurements do not satisfy complete
+subprocess/container provenance. The acceptance report retains the strict
+numerical, changed-code and unmeasured-source gaps in `long_term_failures`.
+
+To enforce the long-term gates on a fresh non-rendered run, add `--policy target`
+to `run_coverage.py`. Report-only reuse must select the same policy as execution;
+neither a changed baseline nor target-to-baseline relabeling is accepted.

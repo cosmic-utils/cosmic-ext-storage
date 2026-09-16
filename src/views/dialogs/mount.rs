@@ -15,6 +15,7 @@ use cosmic::{
 
 pub fn edit_mount_options<'a>(state: EditMountOptionsDialog) -> Element<'a, Message> {
     let EditMountOptionsDialog {
+        operation_id: _,
         target: _,
         step,
         use_defaults,

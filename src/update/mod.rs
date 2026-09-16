@@ -1271,6 +1271,21 @@ pub(crate) fn update(app: &mut AppModel, message: Message) -> Task<Message> {
                 Some(ShowDialog::UnlockEncrypted(state)) => {
                     state.running && state.operation_id == Some(operation_id)
                 }
+                Some(ShowDialog::DeletePartition(state)) => {
+                    state.running && state.operation_id == Some(operation_id)
+                }
+                Some(ShowDialog::EditPartition(state)) => {
+                    state.running && state.operation_id == Some(operation_id)
+                }
+                Some(ShowDialog::ResizePartition(state)) => {
+                    state.running && state.operation_id == Some(operation_id)
+                }
+                Some(ShowDialog::EditMountOptions(state)) => {
+                    state.running && state.operation_id == Some(operation_id)
+                }
+                Some(ShowDialog::ChangePassphrase(state)) => {
+                    state.running && state.operation_id == Some(operation_id)
+                }
                 _ => false,
             };
             if active {
@@ -1620,10 +1635,6 @@ pub(crate) fn update(app: &mut AppModel, message: Message) -> Task<Message> {
         Message::LoadNetworkRemotes => {
             app.sidebar.set_network_loading(true);
             return network::handle_network_message(app, NetworkMessage::LoadRemotes);
-        }
-        Message::NetworkRemotesLoaded(result) => {
-            app.sidebar.set_network_loading(false);
-            return network::handle_network_message(app, NetworkMessage::RemotesLoaded(result));
         }
     }
     Task::none()

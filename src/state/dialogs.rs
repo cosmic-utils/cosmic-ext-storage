@@ -70,6 +70,7 @@ impl FormatPartitionStep {
 
 #[derive(Debug, Clone)]
 pub struct EditPartitionDialog {
+    pub operation_id: Option<uuid::Uuid>,
     pub volume: VolumeInfo,
     pub step: EditPartitionStep,
     pub partition_types: Vec<PartitionTypeInfo>,
@@ -100,6 +101,7 @@ impl EditPartitionStep {
 
 #[derive(Debug, Clone)]
 pub struct ResizePartitionDialog {
+    pub operation_id: Option<uuid::Uuid>,
     pub volume: VolumeInfo,
     pub step: ResizePartitionStep,
     pub min_size_bytes: u64,
@@ -152,8 +154,9 @@ pub struct TakeOwnershipDialog {
     pub running: bool,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub struct ChangePassphraseDialog {
+    pub operation_id: Option<uuid::Uuid>,
     pub volume: VolumeInfo,
     pub current_passphrase: String,
     pub new_passphrase: String,
@@ -162,8 +165,18 @@ pub struct ChangePassphraseDialog {
     pub running: bool,
 }
 
+impl std::fmt::Debug for ChangePassphraseDialog {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("ChangePassphraseDialog")
+            .field("operation_id", &self.operation_id)
+            .field("running", &self.running)
+            .finish_non_exhaustive()
+    }
+}
+
 #[derive(Debug, Clone)]
 pub struct EditMountOptionsDialog {
+    pub operation_id: Option<uuid::Uuid>,
     pub target: FilesystemTarget,
     pub step: EditMountOptionsStep,
     pub use_defaults: bool,
@@ -280,6 +293,7 @@ pub struct SmartDataDialog {
 
 #[derive(Debug, Clone)]
 pub struct DeletePartitionDialog {
+    pub operation_id: Option<uuid::Uuid>,
     pub name: String,
     pub running: bool,
 }

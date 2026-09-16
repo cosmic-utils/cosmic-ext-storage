@@ -1,5 +1,11 @@
 # Testing V2 regrouping: production logic first, rendered UI opt-in
 
+Current acceptance policy (2026-09-16): the user approved a measured
+non-rendered no-regression baseline after this pass. See
+[the closing pass](non-rendered-closing-pass.md), which supersedes earlier
+statements below that 98–100% or unmeasured support must block this paused-UI
+merge. Those remain visible long-term obligations, not completed work.
+
 Status: production-handler migration and default-off rendered execution
 implemented and locally verified. Fresh host/native coverage is recorded in
 [the execution record](non-rendered-execution-record.md). Numerical, complete

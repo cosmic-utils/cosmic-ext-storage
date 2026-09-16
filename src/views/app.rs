@@ -1675,6 +1675,7 @@ fn build_partition_info<'a>(
             widget::button::icon(icon::from_name("edit-delete-symbolic")).on_press(
                 Message::Dialog(Box::new(ShowDialog::DeletePartition(
                     DeletePartitionDialog {
+                        operation_id: None,
                         name: segment.name.clone(),
                         running: false,
                     },

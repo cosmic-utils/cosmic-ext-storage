@@ -245,6 +245,7 @@ pub fn section_display_name(section: &str) -> &'static str {
 /// State for the network section of the sidebar
 #[derive(Debug, Default)]
 pub struct NetworkState {
+    pub load_request_id: Option<uuid::Uuid>,
     /// All configured remotes with their state
     pub mounts: HashMap<(String, ConfigScope), NetworkMountState>,
 

@@ -157,6 +157,7 @@ def finish_report(output: Path, run: Path, llvm: Path, groups: list[dict], evide
     evidence["reports"] = {name: digest(output / name) for name in ("summary.json", "lcov.info")}
     (output / "evidence.json").write_text(json.dumps(evidence, indent=2) + "\n")
     acceptance = command(["python3", "tools/testing/coverage.py", "--base", base,
+                          "--policy", evidence["acceptance"]["policy"],
                           "--mode", evidence["mode"], "--summary", output / "summary.json",
                           "--lcov", output / "lcov.info", "--evidence", output / "evidence.json"],
                          output=output / "acceptance.json", check=False)
@@ -248,16 +249,18 @@ def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--base", required=True)
     parser.add_argument("--mode", choices=execution_policy.MODES, default="non-rendered")
+    parser.add_argument("--policy", choices=("baseline", "target"), help="Non-rendered defaults to the reviewed baseline; full-ui always requires target acceptance")
     parser.add_argument("--report-only", action="store_true", help="Re-export the last successful host/lab run only if its sources, profiles and ELFs are unchanged")
     args = parser.parse_args()
     policy = execution_policy.resolve(args.mode)
+    policy["acceptance"] = execution_policy.acceptance(ROOT, args.mode, args.policy)
     args.base = execution_policy.comparison_base(ROOT, args.base)
     policy["comparison_base"] = args.base
     output = ROOT / "target/coverage" / args.mode
     output.mkdir(parents=True, exist_ok=True)
     if args.report_only:
         evidence = json.loads((output / "evidence.json").read_text())
-        execution_policy.validate(evidence, ROOT, args.mode, args.base)
+        execution_policy.validate(evidence, ROOT, args.mode, args.base, policy["acceptance"])
         gate.validate_provenance(evidence, ROOT, args.mode)
         # validate_evidence also requires UI execution. Validate raw bytes here
         # without claiming the incomplete source set passes acceptance.
@@ -300,6 +303,7 @@ def main() -> int:
     groups = [{"profiles": profiles.copy(), "objects": objects.copy()}]
     lab_groups = {}
     evidence = {"profiles": [], "mode": args.mode,
+                "acceptance": policy["acceptance"],
                 "execution_policy": {"path": str(policy_file.relative_to(ROOT)), "sha256": digest(policy_file)}}
     before = set((ROOT / "target/storage-lab-artifacts").glob("run-*"))
     junit = ROOT / "target/nextest/storage-lab/junit.xml"

@@ -54,6 +54,7 @@ pub fn take_ownership<'a>(state: TakeOwnershipDialog) -> Element<'a, Message> {
 
 pub fn change_passphrase<'a>(state: ChangePassphraseDialog) -> Element<'a, Message> {
     let ChangePassphraseDialog {
+        operation_id: _,
         volume: _,
         current_passphrase,
         new_passphrase,

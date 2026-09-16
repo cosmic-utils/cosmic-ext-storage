@@ -26,6 +26,9 @@ mod image_usage;
 #[path = "production_reload_tests.rs"]
 mod reload;
 
+#[path = "production_volume_dialog_tests.rs"]
+mod volume_dialogs;
+
 async fn outputs(task: Task<Message>) -> Vec<Message> {
     let Some(mut stream) = cosmic::iced::runtime::task::into_stream(task) else {
         return Vec::new();

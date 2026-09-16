@@ -10,7 +10,10 @@ pub enum NetworkMessage {
     /// Load all configured remotes
     LoadRemotes,
     /// Remotes loaded from service
-    RemotesLoaded(Result<Vec<RemoteConfig>, String>),
+    RemotesLoaded {
+        request_id: uuid::Uuid,
+        result: Result<Vec<RemoteConfig>, String>,
+    },
     /// Select a remote in the sidebar
     SelectRemote { name: String, scope: ConfigScope },
     /// Start creating a new remote (opens wizard)
@@ -113,6 +116,8 @@ pub enum NetworkMessage {
     /// Delete completed
     DeleteCompleted {
         name: String,
+        scope: ConfigScope,
+        request_id: uuid::Uuid,
         result: Result<(), String>,
     },
 }

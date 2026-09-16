@@ -17,6 +17,7 @@ import subprocess
 import sys
 import tomllib
 import execution_policy
+import coverage_baseline
 
 UI_CASES = {
     "physical_partition_format", "busy_unmount", "luks_unlock",
@@ -297,6 +298,7 @@ def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--base", required=True)
     parser.add_argument("--mode", choices=execution_policy.MODES, default="non-rendered")
+    parser.add_argument("--policy", choices=("baseline", "target"))
     parser.add_argument("--summary", type=Path)
     parser.add_argument("--lcov", type=Path)
     parser.add_argument("--evidence", type=Path)
@@ -307,6 +309,7 @@ def main() -> int:
     args.lcov = args.lcov or output / "lcov.info"
     args.evidence = args.evidence or output / "evidence.json"
     root = Path(__file__).resolve().parents[2]
+    acceptance = execution_policy.acceptance(root, args.mode, args.policy)
     base = execution_policy.comparison_base(root, args.base)
     lines = read_lcov(args.lcov.read_text(), root)
     functions = read_functions(json.loads(args.summary.read_text()), root)
@@ -315,7 +318,7 @@ def main() -> int:
     evidence = json.loads(args.evidence.read_text())
     evidence_failures = []
     try:
-        execution_policy.validate(evidence, root, args.mode, base)
+        execution_policy.validate(evidence, root, args.mode, base, acceptance)
     except (KeyError, ValueError, OSError) as error:
         evidence_failures.append(str(error))
     for name, path in (("summary.json", args.summary), ("lcov.info", args.lcov)):
@@ -332,8 +335,10 @@ def main() -> int:
     exempt = exceptions(tomllib.loads(args.exceptions.read_text()), lines, functions, tests, dt.date.today())
     report, failures = evaluate(lines, functions, changed_lines(root, base), exempt if not evidence_failures else {})
     expected_scopes = {scope(path) for path in workspace_sources(root)}
+    inventory_failures = []
     for missing in sorted(expected_scopes - report.keys()):
-        failures.append(f"missing workspace package coverage: {missing}")
+        inventory_failures.append(f"missing workspace package coverage: {missing}")
+    failures.extend(inventory_failures)
     failures = evidence_failures + failures
     unmapped = sorted(set(workspace_sources(root)) - set(lines))
     # Files can contain only type declarations: do not invent executable line
@@ -348,7 +353,13 @@ def main() -> int:
     support = {"status": "unmeasured", "sources": support_sources,
                "reason": "Complete Python/shell line and function provenance is not integrated; Rust metrics do not cover these sources."}
     failures.append("support-source coverage requires complete Python/shell measurement and provenance")
+    target_failures = failures.copy()
+    if acceptance["policy"] == "baseline":
+        baseline = json.loads((root / execution_policy.BASELINE).read_text())
+        failures = evidence_failures + inventory_failures + coverage_baseline.evaluate(
+            baseline, report, workspace_sources(root), unmapped, support_sources, root)
     print(json.dumps({"mode": args.mode, "comparison_base": base, "ui_status": evidence.get("ui_status"),
+                      "acceptance_policy": acceptance["policy"], "long_term_failures": target_failures,
                       "support_coverage": support,
                       "scopes": report, "unmapped_sources": unmapped, "failures": failures}, indent=2))
     return bool(failures)

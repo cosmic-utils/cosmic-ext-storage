@@ -9,16 +9,17 @@ use crate::operations::RcloneClient;
 use crate::state::app::AppModel;
 use crate::state::dialogs::ShowDialog;
 use cosmic::app::Task;
-use storage_types::rclone::{
-    ConfigScope, MountStatus, RemoteConfig, rclone_provider, supported_remote_types,
-};
+use storage_types::rclone::{MountStatus, RemoteConfig, rclone_provider, supported_remote_types};
 
 /// Handle network-related messages
 pub(crate) fn handle_network_message(app: &mut AppModel, message: NetworkMessage) -> Task<Message> {
     let client = RcloneClient::with_operations(app.runtime.operations());
     match message {
         NetworkMessage::LoadRemotes => {
+            let request_id = uuid::Uuid::new_v4();
+            app.network.load_request_id = Some(request_id);
             app.network.loading = true;
+            app.sidebar.set_network_loading(true);
             return Task::perform(
                 async move {
                     match client.list_remotes().await {
@@ -26,14 +27,22 @@ pub(crate) fn handle_network_message(app: &mut AppModel, message: NetworkMessage
                         Err(e) => Err(format!("Failed to list remotes: {}", e)),
                     }
                 },
-                |result| Message::NetworkRemotesLoaded(result).into(),
+                move |result| {
+                    Message::Network(NetworkMessage::RemotesLoaded { request_id, result }).into()
+                },
             );
         }
 
-        NetworkMessage::RemotesLoaded(result) => {
+        NetworkMessage::RemotesLoaded { request_id, result } => {
+            if app.network.load_request_id != Some(request_id) {
+                return Task::none();
+            }
+            app.network.load_request_id = None;
             app.network.loading = false;
+            app.sidebar.set_network_loading(false);
             match result {
                 Ok(remotes) => {
+                    app.network.error = None;
                     app.network.rclone_available = true;
                     let refresh_tasks: Vec<Task<Message>> = remotes
                         .iter()
@@ -462,17 +471,29 @@ pub(crate) fn handle_network_message(app: &mut AppModel, message: NetworkMessage
                         if let Some(original) = &original_name {
                             let scope_changed = original_scope.is_some_and(|s| s != scope);
                             if original != &name || scope_changed {
+                                // Create first: a conflict or validation failure must
+                                // never destroy the user's original configuration.
                                 client
+                                    .create_remote(&config)
+                                    .await
+                                    .map_err(|e| e.to_string())?;
+                                if let Err(error) = client
                                     .delete_remote(
                                         original,
                                         &original_scope.unwrap_or(scope).to_string(),
                                     )
                                     .await
-                                    .map_err(|e| e.to_string())?;
-                                client
-                                    .create_remote(&config)
-                                    .await
-                                    .map_err(|e| e.to_string())?;
+                                {
+                                    // Compensate only the destination we just created.
+                                    if let Err(cleanup) =
+                                        client.delete_remote(&name, &scope.to_string()).await
+                                    {
+                                        return Err(format!(
+                                            "Rename failed: {error}; destination cleanup failed: {cleanup}"
+                                        ));
+                                    }
+                                    return Err(error.to_string());
+                                }
                             } else {
                                 client
                                     .update_remote(&name, &config)
@@ -522,6 +543,7 @@ pub(crate) fn handle_network_message(app: &mut AppModel, message: NetworkMessage
                         editor.mount_on_boot = Some(false);
                         let name = editor.name.clone();
                         let scope = editor.scope;
+                        app.network.select(Some(name.clone()), Some(scope));
                         return Task::batch(vec![
                             Task::done(Message::Network(NetworkMessage::LoadRemotes).into()),
                             Task::done(
@@ -858,6 +880,13 @@ pub(crate) fn handle_network_message(app: &mut AppModel, message: NetworkMessage
         }
 
         NetworkMessage::ConfirmDeleteRemote { name, scope } => {
+            if !matches!(&app.dialog, Some(ShowDialog::ConfirmDeleteRemote { name: reviewed, scope: reviewed_scope }) if reviewed == &name && reviewed_scope == &scope)
+            {
+                return Task::none();
+            }
+            let Some(request_id) = app.network.begin_mount_request(&name, scope, true) else {
+                return Task::none();
+            };
             // Close the dialog first
             app.dialog = None;
             // Then proceed with the actual delete
@@ -877,6 +906,8 @@ pub(crate) fn handle_network_message(app: &mut AppModel, message: NetworkMessage
                 move |result| {
                     Message::Network(NetworkMessage::DeleteCompleted {
                         name: name.clone(),
+                        scope,
+                        request_id,
                         result,
                     })
                     .into()
@@ -884,22 +915,34 @@ pub(crate) fn handle_network_message(app: &mut AppModel, message: NetworkMessage
             );
         }
 
-        NetworkMessage::DeleteCompleted { name, result } => {
+        NetworkMessage::DeleteCompleted {
+            name,
+            scope,
+            request_id,
+            result,
+        } => {
+            let Some(mount) = app.network.get_mount_mut(&name, scope) else {
+                return Task::none();
+            };
+            if mount.request_id != Some(request_id) {
+                return Task::none();
+            }
+            mount.request_id = None;
+            mount.loading = false;
             match result {
                 Ok(()) => {
+                    // A snapshot captured before deletion must not resurrect it.
+                    app.network.load_request_id = None;
+                    app.network.loading = false;
+                    app.sidebar.set_network_loading(false);
                     // Remove from state
-                    app.network
-                        .mounts
-                        .remove(&(name.clone(), ConfigScope::User));
-                    app.network
-                        .mounts
-                        .remove(&(name.clone(), ConfigScope::System));
+                    app.network.mounts.remove(&(name.clone(), scope));
                     tracing::info!("Deleted remote: {}", name);
                     if app
                         .network
                         .selected
                         .as_ref()
-                        .is_some_and(|(n, _)| n == &name)
+                        .is_some_and(|(n, s)| n == &name && *s == scope)
                     {
                         app.network.select(None, None);
                         app.network.clear_editor();

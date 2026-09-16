@@ -1,5 +1,81 @@
 # Validation
 
+## Final headless boundary regressions
+
+- `update::production_handler_tests::encryption::passphrase_change_validates_redacts_and_rejects_late_completion::case_2_mismatch`
+- `update::production_handler_tests::encryption::passphrase_change_validates_redacts_and_rejects_late_completion::case_1_empty`
+- `update::production_handler_tests::encryption::passphrase_change_validates_redacts_and_rejects_late_completion::case_3_valid`
+- `update::production_handler_tests::network::delete_requires_review_preserves_other_scope_and_rejects_stale_results::case_2_failure`
+- `update::production_handler_tests::network::delete_requires_review_preserves_other_scope_and_rejects_stale_results::case_1_success`
+- `update::production_handler_tests::network::overlapping_loads_reject_stale_success_error_and_duplicate`
+- `update::production_handler_tests::volume_dialogs::missing_volume_does_not_start_or_strand_delete`
+- `update::production_handler_tests::volume_dialogs::real_volume_operations_report_unsupported_and_reject_stale_completion::case_1_delete`
+- `update::production_handler_tests::volume_dialogs::mount_option_form_updates_real_fields_and_cancels`
+- `update::production_handler_tests::volume_dialogs::real_volume_operations_report_unsupported_and_reject_stale_completion::case_3_resize`
+- `update::production_handler_tests::volume_dialogs::real_volume_operations_report_unsupported_and_reject_stale_completion::case_4_mount_defaults`
+- `update::production_handler_tests::volume_dialogs::real_volume_operations_report_unsupported_and_reject_stale_completion::case_5_mount_custom`
+- `update::production_handler_tests::volume_dialogs::edit_and_resize_navigation_validate_bounds_and_cancel`
+- `update::production_handler_tests::volume_dialogs::real_volume_operations_report_unsupported_and_reject_stale_completion::case_2_edit`
+- `update::production_handler_tests::network::failed_rename_preserves_original_remote`
+- `update::production_handler_tests::network::successful_rename_updates_selection_and_rejects_duplicate`
+- `byte_display_numeric_and_spinner_step_agree::case_1`
+- `byte_display_numeric_and_spinner_step_agree::case_2`
+- `byte_display_numeric_and_spinner_step_agree::case_3`
+- `byte_parser_handles_units::case_2`
+- `byte_parser_handles_units::case_3`
+- `byte_display_numeric_and_spinner_step_agree::case_4`
+- `byte_parser_handles_units::case_1`
+- `byte_parser_handles_units::case_5`
+- `byte_parser_handles_units::case_4`
+- `byte_parser_handles_units::case_6`
+- `byte_parser_handles_units::case_7`
+- `byte_parser_rejects_malformed_or_unrepresentable_sizes::case_1`
+- `byte_parser_rejects_malformed_or_unrepresentable_sizes::case_2`
+- `byte_parser_rejects_malformed_or_unrepresentable_sizes::case_3`
+- `byte_parser_rejects_malformed_or_unrepresentable_sizes::case_4`
+- `byte_parser_rejects_malformed_or_unrepresentable_sizes::case_5`
+- `byte_parser_rejects_malformed_or_unrepresentable_sizes::case_6`
+- `byte_parser_rejects_malformed_or_unrepresentable_sizes::case_7`
+- `byte_parser_rejects_malformed_or_unrepresentable_sizes::case_8`
+- `byte_ranges_are_bounded_without_underflow::case_1`
+- `byte_parser_rejects_malformed_or_unrepresentable_sizes::case_9`
+- `byte_ranges_are_bounded_without_underflow::case_2`
+- `byte_ranges_are_bounded_without_underflow::case_3`
+- `byte_ranges_are_bounded_without_underflow::case_4`
+- `byte_ranges_are_bounded_without_underflow::case_5`
+- `filesystem_names_map_to_the_intended_tool::case_1`
+- `filesystem_names_map_to_the_intended_tool::case_2`
+- `filesystem_names_map_to_the_intended_tool::case_3`
+- `filesystem_names_map_to_the_intended_tool::case_4`
+- `filesystem_names_map_to_the_intended_tool::case_5`
+- `filesystem_names_map_to_the_intended_tool::case_6`
+- `filesystem_names_map_to_the_intended_tool::case_7`
+- `filesystem_names_map_to_the_intended_tool::case_8`
+- `luks_versions_are_closed::case_1`
+- `luks_versions_are_closed::case_2`
+- `luks_versions_are_closed::case_3`
+- `luks_versions_are_closed::case_4`
+- `luks_versions_are_closed::case_5`
+- `mount_progress_and_terminal_states_are_distinct::case_1`
+- `mount_progress_and_terminal_states_are_distinct::case_2`
+- `mount_progress_and_terminal_states_are_distinct::case_3`
+- `mount_progress_and_terminal_states_are_distinct::case_4`
+- `mount_progress_and_terminal_states_are_distinct::case_5`
+- `nested_volumes_preserve_identity_and_mount_capability`
+- `partition_flags_preserve_udisks_bit_positions::case_1`
+- `partition_flags_preserve_udisks_bit_positions::case_2`
+- `partition_flags_preserve_udisks_bit_positions::case_3`
+- `partition_flags_preserve_udisks_bit_positions::case_4`
+- `partition_flags_preserve_udisks_bit_positions::case_5`
+- `partition_table_aliases_are_explicit::case_1`
+- `partition_table_aliases_are_explicit::case_2`
+- `partition_table_aliases_are_explicit::case_3`
+- `partition_table_aliases_are_explicit::case_4`
+- `smart_test_names_do_not_allow_arbitrary_commands::case_1`
+- `smart_test_names_do_not_allow_arbitrary_commands::case_2`
+- `smart_test_names_do_not_allow_arbitrary_commands::case_3`
+- `smart_test_names_do_not_allow_arbitrary_commands::case_4`
+
 ### Non-rendered audit correction (2026-09-16)
 
 The current adapter/presence checks are named accurately:

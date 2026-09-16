@@ -78,6 +78,7 @@ pub(super) fn open_change_passphrase(
     }
 
     *dialog = Some(ShowDialog::ChangePassphrase(ChangePassphraseDialog {
+        operation_id: None,
         volume,
         current_passphrase: String::new(),
         new_passphrase: String::new(),
@@ -356,6 +357,7 @@ pub(super) fn change_passphrase_message(
     _control: &mut VolumesControl,
     msg: ChangePassphraseMessage,
     dialog: &mut Option<ShowDialog>,
+    operations: std::sync::Arc<crate::operations::StorageOperations>,
 ) -> Task<cosmic::Action<Message>> {
     let Some(ShowDialog::ChangePassphrase(state)) = dialog.as_mut() else {
         return Task::none();
@@ -393,12 +395,12 @@ pub(super) fn change_passphrase_message(
             let volume = state.volume.clone();
             let current = state.current_passphrase.clone();
             let new = state.new_passphrase.clone();
+            let operation_id = uuid::Uuid::new_v4();
+            state.operation_id = Some(operation_id);
 
             Task::perform(
                 async move {
-                    let luks_client = LuksClient::new()
-                        .await
-                        .map_err(|e| anyhow::anyhow!("Failed to create LUKS client: {}", e))?;
+                    let luks_client = LuksClient::with_operations(operations.clone());
                     let device = volume
                         .device_path
                         .as_ref()
@@ -407,15 +409,26 @@ pub(super) fn change_passphrase_message(
                         .change_passphrase(device, &current, &new)
                         .await
                         .map_err(|e| anyhow::anyhow!("Failed to change passphrase: {}", e))?;
-                    load_all_drives().await.map_err(|e| e.into())
+                    crate::models::load::load_all_drives_with_operations(operations)
+                        .await
+                        .map_err(|e| e.into())
                 },
-                |result: Result<Vec<UiDrive>, anyhow::Error>| match result {
-                    Ok(drives) => Message::UpdateNav(drives, None).into(),
-                    Err(e) => {
-                        let ctx = UiErrorContext::new("change_passphrase");
-                        log_error_and_show_dialog(fl!("change-passphrase").to_string(), e, ctx)
-                            .into()
+                move |result: Result<Vec<UiDrive>, anyhow::Error>| {
+                    Message::VolumeDialogOperationCompleted {
+                        operation_id,
+                        message: Box::new(match result {
+                            Ok(drives) => Message::UpdateNav(drives, None),
+                            Err(e) => {
+                                let ctx = UiErrorContext::new("change_passphrase");
+                                log_error_and_show_dialog(
+                                    fl!("change-passphrase").to_string(),
+                                    e,
+                                    ctx,
+                                )
+                            }
+                        }),
                     }
+                    .into()
                 },
             )
         }

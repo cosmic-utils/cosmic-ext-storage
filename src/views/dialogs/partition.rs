@@ -527,6 +527,7 @@ pub fn format_partition<'a>(state: FormatPartitionDialog) -> Element<'a, Message
 
 pub fn edit_partition<'a>(state: EditPartitionDialog) -> Element<'a, Message> {
     let EditPartitionDialog {
+        operation_id: _,
         volume: _,
         step,
         partition_types,
@@ -685,6 +686,7 @@ pub fn edit_partition<'a>(state: EditPartitionDialog) -> Element<'a, Message> {
 
 pub fn resize_partition<'a>(state: ResizePartitionDialog) -> Element<'a, Message> {
     let ResizePartitionDialog {
+        operation_id: _,
         volume: _,
         step: wizard_step,
         min_size_bytes,

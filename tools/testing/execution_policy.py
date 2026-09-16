@@ -6,6 +6,18 @@ import re
 import subprocess
 
 MODES = ("non-rendered", "full-ui")
+BASELINE = "docs/plans/5-testing-v2/coverage-baseline.json"
+
+
+def acceptance(root, mode, value=None):
+    value = value or ("baseline" if mode == "non-rendered" else "target")
+    if value not in {"baseline", "target"}:
+        raise ValueError("unknown coverage acceptance policy")
+    if value == "baseline":
+        if mode != "non-rendered":
+            raise ValueError("baseline acceptance is only for non-rendered execution")
+        return {"policy": value, "baseline_sha256": hashlib.sha256((root / BASELINE).read_bytes()).hexdigest()}
+    return {"policy": value}
 
 
 def resolve(mode, environment=None):
@@ -27,7 +39,7 @@ def comparison_base(root, value):
     ).strip()
 
 
-def validate(document, root, expected_mode, expected_base=None):
+def validate(document, root, expected_mode, expected_base=None, expected_acceptance=None):
     """Bind the expected mode to the policy captured before instrumentation."""
     if expected_mode not in MODES or document.get("mode") != expected_mode:
         raise ValueError("coverage execution mode mismatch")
@@ -39,6 +51,12 @@ def validate(document, root, expected_mode, expected_base=None):
     if hashlib.sha256(data).hexdigest() != proof.get("sha256"):
         raise ValueError("execution policy changed since instrumentation")
     policy = json.loads(data)
+    captured_acceptance = policy.pop("acceptance", None)
+    if expected_acceptance is not None and captured_acceptance != expected_acceptance:
+        raise ValueError("coverage acceptance policy changed since instrumentation")
+    if captured_acceptance is not None:
+        if document.get("acceptance") != captured_acceptance or captured_acceptance != acceptance(root, expected_mode, captured_acceptance.get("policy")):
+            raise ValueError("coverage baseline or acceptance policy changed since instrumentation")
     captured_base = policy.pop("comparison_base", None)
     if captured_base is not None and not re.fullmatch(r"[0-9a-f]{40}|[0-9a-f]{64}", captured_base):
         raise ValueError("invalid captured comparison base")

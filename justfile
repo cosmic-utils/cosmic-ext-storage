@@ -54,7 +54,7 @@ test-lab:
     cargo nextest run --locked --profile storage-lab -p storage-lab-tests --features outer-bridge --test bridge --run-ignored ignored-only
     STORAGE_SCRIPT_CONTAINER_TESTS=1 python3 -m unittest tools.testing.test_shell_contract.LabContainerShellContractTests
 
-# Host+native coverage by default; unchanged thresholds may still fail.
+# Host+native coverage with reviewed non-rendered baseline; full-ui uses long-term targets.
 coverage base='origin/main' mode='non-rendered':
     python3 tools/testing/run_coverage.py --base {{ quote(base) }} --mode {{ quote(mode) }}
 

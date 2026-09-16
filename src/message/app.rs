@@ -270,7 +270,6 @@ pub enum Message {
     // Network mounts (RClone, Samba, FTP)
     Network(NetworkMessage),
     LoadNetworkRemotes,
-    NetworkRemotesLoaded(Result<Vec<storage_types::rclone::RemoteConfig>, String>),
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

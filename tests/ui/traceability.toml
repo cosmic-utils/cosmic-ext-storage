@@ -2,7 +2,25 @@
 # from contract-surface-v1.toml; this file intentionally never repeats method IDs.
 schema_version = 1
 contract_inventory = "docs/plans/4-testing/contract-surface-v1.toml"
-workflow_v2_cross_cutting_tests = ["update::production_handler_tests::reload::selected_runtimes_remain_isolated_through_real_handlers"]
+workflow_v2_cross_cutting_tests = [
+  "update::production_handler_tests::reload::selected_runtimes_remain_isolated_through_real_handlers",
+  "update::production_handler_tests::encryption::passphrase_change_validates_redacts_and_rejects_late_completion::case_2_mismatch",
+  "update::production_handler_tests::encryption::passphrase_change_validates_redacts_and_rejects_late_completion::case_1_empty",
+  "update::production_handler_tests::encryption::passphrase_change_validates_redacts_and_rejects_late_completion::case_3_valid",
+  "update::production_handler_tests::network::delete_requires_review_preserves_other_scope_and_rejects_stale_results::case_2_failure",
+  "update::production_handler_tests::network::delete_requires_review_preserves_other_scope_and_rejects_stale_results::case_1_success",
+  "update::production_handler_tests::network::overlapping_loads_reject_stale_success_error_and_duplicate",
+  "update::production_handler_tests::volume_dialogs::missing_volume_does_not_start_or_strand_delete",
+  "update::production_handler_tests::volume_dialogs::real_volume_operations_report_unsupported_and_reject_stale_completion::case_1_delete",
+  "update::production_handler_tests::volume_dialogs::mount_option_form_updates_real_fields_and_cancels",
+  "update::production_handler_tests::volume_dialogs::real_volume_operations_report_unsupported_and_reject_stale_completion::case_3_resize",
+  "update::production_handler_tests::volume_dialogs::real_volume_operations_report_unsupported_and_reject_stale_completion::case_4_mount_defaults",
+  "update::production_handler_tests::volume_dialogs::real_volume_operations_report_unsupported_and_reject_stale_completion::case_5_mount_custom",
+  "update::production_handler_tests::volume_dialogs::edit_and_resize_navigation_validate_bounds_and_cancel",
+  "update::production_handler_tests::volume_dialogs::real_volume_operations_report_unsupported_and_reject_stale_completion::case_2_edit",
+  "update::production_handler_tests::network::failed_rename_preserves_original_remote",
+  "update::production_handler_tests::network::successful_rename_updates_selection_and_rejects_duplicate",
+]
 
 [[generated_contract_rows]]
 families = [

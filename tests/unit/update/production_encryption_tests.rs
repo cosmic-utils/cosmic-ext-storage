@@ -40,6 +40,99 @@ fn unlock(app: &mut AppModel, message: UnlockMessage) -> Task<Message> {
 }
 
 #[rstest]
+#[case::empty("", "")]
+#[case::mismatch("next-secret", "different-secret")]
+#[case::valid("next-secret", "next-secret")]
+#[tokio::test(flavor = "current_thread")]
+async fn passphrase_change_validates_redacts_and_rejects_late_completion(
+    #[future(awt)] mut encrypted_app: AppModel,
+    #[case] next: &str,
+    #[case] confirmation: &str,
+) {
+    use crate::message::dialogs::ChangePassphraseMessage as C;
+    let _guard = crate::operations::forbid_global_operations_for_handler_tests();
+    let app = &mut encrypted_app;
+    app.dialog = None;
+    let control = app.nav.active_data_mut::<VolumesControl>().unwrap();
+    control.selected_segment = control
+        .segments
+        .iter()
+        .position(|s| {
+            s.volume
+                .as_ref()
+                .is_some_and(|v| v.device_path.as_deref() == Some("/dev/ui-disk0p1"))
+        })
+        .unwrap();
+    let task = update(
+        app,
+        Message::VolumesMessage(VolumesControlMessage::OpenChangePassphrase),
+    );
+    settle(app, task).await;
+    for msg in [
+        C::CurrentUpdate("fixture-passphrase".into()),
+        C::NewUpdate(next.into()),
+        C::ConfirmUpdate(confirmation.into()),
+    ] {
+        assert!(!format!("{msg:?}").contains("secret"));
+        assert!(!format!("{msg:?}").contains("fixture-passphrase"));
+        assert!(
+            outputs(update(
+                app,
+                Message::VolumesMessage(VolumesControlMessage::ChangePassphraseMessage(msg))
+            ))
+            .await
+            .is_empty()
+        );
+    }
+    let Some(ShowDialog::ChangePassphrase(state)) = &app.dialog else {
+        panic!("actual encryption form")
+    };
+    assert_eq!(state.new_passphrase, next);
+    assert!(!format!("{state:?}").contains("fixture-passphrase"));
+    let messages = outputs(update(
+        app,
+        Message::VolumesMessage(VolumesControlMessage::ChangePassphraseMessage(C::Confirm)),
+    ))
+    .await;
+    if next.is_empty() || next != confirmation {
+        assert!(messages.is_empty());
+        assert!(
+            matches!(&app.dialog, Some(ShowDialog::ChangePassphrase(state)) if state.error.is_some() && !state.running)
+        );
+    } else {
+        assert_eq!(messages.len(), 1);
+        assert!(
+            outputs(update(
+                app,
+                Message::VolumesMessage(VolumesControlMessage::ChangePassphraseMessage(C::Confirm))
+            ))
+            .await
+            .is_empty()
+        );
+        let completion = messages.into_iter().next().unwrap();
+        let task = update(app, completion.clone());
+        settle(app, task).await;
+        assert!(
+            matches!(&app.dialog, Some(ShowDialog::Info { body, .. }) if body.contains("unsupported"))
+        );
+        app.dialog = None;
+        let task = update(
+            app,
+            Message::VolumesMessage(VolumesControlMessage::OpenChangePassphrase),
+        );
+        settle(app, task).await;
+        assert!(outputs(update(app, completion)).await.is_empty());
+        assert!(matches!(&app.dialog, Some(ShowDialog::ChangePassphrase(state)) if !state.running));
+    }
+    let task = update(
+        app,
+        Message::VolumesMessage(VolumesControlMessage::ChangePassphraseMessage(C::Cancel)),
+    );
+    settle(app, task).await;
+    assert!(app.dialog.is_none());
+}
+
+#[rstest]
 #[tokio::test(flavor = "current_thread")]
 async fn wrong_secret_retries_successfully_then_locks_actual_model(
     #[future(awt)] mut encrypted_app: AppModel,

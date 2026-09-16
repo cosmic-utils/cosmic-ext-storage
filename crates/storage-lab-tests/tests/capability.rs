@@ -234,6 +234,38 @@ async fn luks_unlock_rejects_bad_secret_and_locks_cleanly() -> Result<()> {
         .await
         .map_err(|error| error.to_string())?;
 
+    fixture.owned_loop(&loop_path)?;
+    assert!(
+        backend
+            .change_luks_passphrase(&loop_path.to_string_lossy(), "wrong-current", "unused-next")
+            .await
+            .is_err()
+    );
+    backend
+        .change_luks_passphrase(
+            &loop_path.to_string_lossy(),
+            passphrase,
+            "storage-lab-replacement",
+        )
+        .await?;
+    assert!(
+        backend
+            .unlock_luks(&loop_path.to_string_lossy(), passphrase)
+            .await
+            .is_err(),
+        "old secret must no longer unlock after replacement"
+    );
+    let replacement = backend
+        .unlock_luks(&loop_path.to_string_lossy(), "storage-lab-replacement")
+        .await?;
+    fixture.track_mapper(std::path::Path::new(&replacement))?;
+    assert!(
+        std::fs::metadata(&replacement)?
+            .file_type()
+            .is_block_device()
+    );
+    backend.lock_luks(&loop_path.to_string_lossy()).await?;
+
     fixture.cleanup()?;
     Ok(())
 }

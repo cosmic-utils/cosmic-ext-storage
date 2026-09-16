@@ -110,6 +110,9 @@ pub fn bytes_to_pretty(bytes: &u64, add_bytes: bool) -> String {
 /// Parse human-readable format to bytes (e.g., "1.5 GB" -> bytes)
 pub fn pretty_to_bytes(pretty: &str) -> Result<u64> {
     let split = pretty.split_whitespace().collect::<Vec<&str>>();
+    if split.len() != 2 {
+        return Err(anyhow::anyhow!("Expected a number and a byte unit"));
+    }
     let string_value = split
         .first()
         .ok_or_else(|| anyhow::anyhow!("Invalid input"))?;
@@ -135,6 +138,12 @@ pub fn pretty_to_bytes(pretty: &str) -> Result<u64> {
     while steps > 0 {
         val *= 1024.;
         steps -= 1;
+    }
+
+    // Float-to-integer casts saturate: reject invalid user input instead of
+    // turning a negative/NaN size into zero or an overflow into u64::MAX.
+    if !val.is_finite() || !(0.0..18_446_744_073_709_551_616.0).contains(&val) {
+        return Err(anyhow::anyhow!("Byte size is outside the supported range"));
     }
 
     Ok(val as u64)

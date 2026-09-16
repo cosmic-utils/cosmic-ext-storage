@@ -56,13 +56,25 @@ pub enum TakeOwnershipMessage {
     Cancel,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Clone, PartialEq, Eq)]
 pub enum ChangePassphraseMessage {
     CurrentUpdate(String),
     NewUpdate(String),
     ConfirmUpdate(String),
     Confirm,
     Cancel,
+}
+
+impl std::fmt::Debug for ChangePassphraseMessage {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(match self {
+            Self::CurrentUpdate(_) => "CurrentUpdate(<redacted>)",
+            Self::NewUpdate(_) => "NewUpdate(<redacted>)",
+            Self::ConfirmUpdate(_) => "ConfirmUpdate(<redacted>)",
+            Self::Confirm => "Confirm",
+            Self::Cancel => "Cancel",
+        })
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
